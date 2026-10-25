@@ -7,7 +7,7 @@ options:
 packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: "2.6.4"
+    revision: eef1a539a373c1f1a320624b1130fc5de7b2e100  # 2.10.0, pinned to the commit
 settings:
   base:
     SWIFT_VERSION: "5.0"

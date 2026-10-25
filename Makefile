@@ -4,9 +4,17 @@ BUILD := $(shell awk -F. '{print $$1*10000+$$2*100+$$3}' VERSION)
 XB = xcodebuild -project Jauge.xcodeproj -configuration Release -derivedDataPath build -quiet \
 	MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$(BUILD) $(XB_FLAGS)
 
-all:
-	xcodegen generate --quiet
+all: project build
+
+.PHONY: all project build check clean
+
+build:
 	$(XB) -scheme Jauge build
+
+# Generates the Xcode project and fetches packages (CI runs this before loading signing secrets).
+project:
+	xcodegen generate --quiet
+	xcodebuild -resolvePackageDependencies -project Jauge.xcodeproj -scheme Jauge -derivedDataPath build -quiet
 
 check:
 	mkdir -p build/check && cp Tests/LogicCheck.swift build/check/main.swift

@@ -10,6 +10,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - run: brew install xcodegen
+      - run: scripts/install-xcodegen.sh
       - run: make check
       - run: make XB_FLAGS=CODE_SIGNING_ALLOWED=NO

@@ -22,6 +22,8 @@ final class Daemon {
 
     init() {
         s = Daemon.load()
+        // A crash may have left sleep disabled: start from the system default.
+        _ = setSleepDisabled(false)
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
     }
 

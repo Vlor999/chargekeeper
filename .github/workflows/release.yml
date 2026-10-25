@@ -39,6 +39,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: env.HAS_SECRETS == 'true'
 
+      # Third-party code (XcodeGen, Sparkle) is fetched before the certificate is imported.
+      - name: Prepare project
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          scripts/install-xcodegen.sh
+          make check
+          make project
+
       - name: Import Developer ID certificate
         if: env.HAS_SECRETS == 'true'
         env:
@@ -65,9 +73,7 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          brew install xcodegen
-          make check
-          make
+          make build
           scripts/package.sh sign
 
       - name: Notarize
