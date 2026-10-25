@@ -76,7 +76,6 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 .foot{border-top:1px solid var(--line);color:var(--muted);font-size:14px}
 .foot .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;padding-top:2rem;padding-bottom:2rem}
 .foot-links{display:flex;flex-wrap:wrap;gap:8px 20px}
-.legal{flex-basis:100%;max-width:48rem}.legal summary{cursor:pointer;width:fit-content}.legal p{margin:.75rem 0 0}.legal strong{color:var(--fg);font-weight:600}
 /* Hero mock: menu bar + ChargeKeeper popover (static) */
 :root{--flow-a:color-mix(in srgb,#3d7fd6 22%,transparent);--dash:rgb(255 255 255/.45)}
 .desk{border:1px solid var(--line);border-radius:.75rem;background:var(--desk);box-shadow:0 24px 60px -24px var(--shadow);overflow:hidden;padding-bottom:28px}
