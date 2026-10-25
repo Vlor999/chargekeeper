@@ -31,6 +31,8 @@ targets:
           copyFiles:
             destination: wrapper
             subpath: Contents/Library/LaunchDaemons
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
     dependencies:
       - package: Sparkle
       - target: jaugectl
@@ -49,7 +51,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.utilities
-        NSHumanReadableCopyright: MIT License
+        NSHumanReadableCopyright: "© 2026 Vlor999. MIT License."
         SUFeedURL: https://github.com/Vlor999/jauge/releases/latest/download/appcast.xml
         SUPublicEDKey: /3JYrcdyR/CTnv2TUisWNsnPwlNq5gSclgYdnYqMlMg=
         SUEnableAutomaticChecks: true
