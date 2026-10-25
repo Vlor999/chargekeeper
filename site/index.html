@@ -123,6 +123,8 @@
   <div class="wrap">
     <h2 data-i18n="privacy">Privacy</h2>
     <p class="lead" data-i18n="pv">ChargeKeeper only goes online to check for updates on GitHub. No account, no telemetry, no personal data collected.</p>
+    <p data-i18n="pv2">That update check contacts github.com, which sees your IP address and macOS version. Everything else stays on your Mac.</p>
+    <p data-i18n-html="pv3">This website is hosted by GitHub Pages, which logs visitors' IP addresses (see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>). Your browser asks api.github.com for the latest release. No cookies, no analytics: only your language choice is kept in your browser (localStorage). Fonts are served from this site.</p>
     <p><a href="https://github.com/Vlor999/chargekeeper" data-i18n="pvl">Read the code (MIT license)</a></p>
   </div>
 </section>
@@ -162,20 +164,22 @@
     </div>
   </div>
 </section>
+
+<section id="legal" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="legal">Legal notice</h2>
+    <p data-i18n-html="lg1"><strong>Publisher:</strong> Vlor999, private individual, non-commercial. Contact: <a href="https://github.com/Vlor999/chargekeeper/issues">GitHub issues</a>.</p>
+    <p data-i18n-html="lg2"><strong>Host:</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA.</p>
+    <p data-i18n="lg3">ChargeKeeper is provided as is, without warranty (MIT license). It uses undocumented macOS interfaces that may change: use it at your own risk. Not affiliated with or endorsed by Apple.</p>
+    <p data-i18n="lg4">Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions.</p>
+  </div>
+</section>
 </main>
 
 <footer class="foot">
   <div class="wrap">
-    <span data-i18n="indep">ChargeKeeper · independent project, not affiliated with Apple</span>
-    <span class="foot-links"><a href="https://github.com/Vlor999/chargekeeper">GitHub</a><a href="https://github.com/Vlor999/chargekeeper/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/chargekeeper/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/chargekeeper/blob/main/LICENSE" data-i18n="mit">MIT License</a></span>
-    <details class="legal">
-      <summary data-i18n="legal">Legal</summary>
-      <p data-i18n-html="lg1"><strong>Publisher.</strong> Vlor999, an individual, non-professional publisher. Contact: <a href="https://github.com/Vlor999/chargekeeper/issues">GitHub issues</a>.</p>
-      <p data-i18n-html="lg2"><strong>Host.</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA.</p>
-      <p data-i18n-html="lg3"><strong>Privacy.</strong> The app only contacts GitHub, to check for updates: GitHub sees your IP address and macOS version in that request. No account, no telemetry. This site is hosted by GitHub Pages, which logs visits (see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>). It fetches the latest version number from the GitHub API, sets no cookie and keeps your chosen language in your browser's local storage. Fonts are served from this site.</p>
-      <p data-i18n-html="lg4"><strong>Disclaimer.</strong> ChargeKeeper is provided as is, without warranty of any kind (MIT License). It uses undocumented macOS interfaces that may change. Use it at your own risk.</p>
-      <p data-i18n-html="lg5"><strong>Trademarks.</strong> Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions. ChargeKeeper is an independent project, not affiliated with or endorsed by Apple.</p>
-    </details>
+    <span>ChargeKeeper</span>
+    <span class="foot-links"><a href="https://github.com/Vlor999/chargekeeper">GitHub</a><a href="https://github.com/Vlor999/chargekeeper/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/chargekeeper/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/chargekeeper/blob/main/LICENSE" data-i18n="mit">MIT License</a><a href="#legal" data-i18n="legal">Legal notice</a><a href="#privacy" data-i18n="privacy">Privacy</a></span>
   </div>
 </footer>
 <script src="app.js"></script>

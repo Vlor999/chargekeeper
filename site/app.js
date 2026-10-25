@@ -32,6 +32,8 @@
     a7: 'Homebrew l\'ajoute à votre <code>PATH</code>. Avec le .dmg, créez le lien une fois : <code>sudo ln -s /Applications/ChargeKeeper.app/Contents/MacOS/chargekeeperctl /usr/local/bin/chargekeeperctl</code>, puis <code>chargekeeperctl status</code>.',
     privacy: 'Confidentialité',
     pv: 'ChargeKeeper ne va sur Internet que pour chercher les mises à jour sur GitHub. Pas de compte, pas de télémétrie, aucune donnée personnelle collectée.',
+    pv2: 'Cette vérification contacte github.com, qui voit votre adresse IP et votre version de macOS. Tout le reste reste sur votre Mac.',
+    pv3: 'Ce site est hébergé par GitHub Pages, qui enregistre l\'adresse IP des visiteurs (voir la <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">déclaration de confidentialité de GitHub</a>). Votre navigateur demande la dernière version à api.github.com. Aucun cookie, aucune mesure d\'audience : seule la langue choisie est gardée dans votre navigateur (localStorage). Les polices sont servies par ce site.',
     pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes',
     q1: 'Pourquoi ChargeKeeper a-t-il besoin d\'un service en arrière-plan ?',
     a1: 'Modifier la charge de la batterie demande des droits administrateur. Un petit service tourne en root et ne fait que ça ; l\'app de la barre des menus lui parle par un socket local réservé aux administrateurs. Vous l\'autorisez une seule fois dans Réglages Système.',
@@ -41,13 +43,12 @@
     q4: 'Comment se font les mises à jour ?',
     a4: 'ChargeKeeper vérifie la dernière version GitHub au démarrage, puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature, l\'installe et redémarre son service.',
     q5: 'Comment le désinstaller ?', a5: 'Quittez ChargeKeeper et mettez-le à la corbeille. Avec Homebrew : <code>brew uninstall --zap chargekeeper</code>.',
-    indep: 'ChargeKeeper · projet indépendant, non affilié à Apple', rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT',
+    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT',
     legal: 'Mentions légales',
-    lg1: '<strong>Éditeur.</strong> Vlor999, particulier, éditeur non professionnel. Contact : <a href="https://github.com/Vlor999/chargekeeper/issues">tickets GitHub</a>.',
-    lg2: '<strong>Hébergeur.</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
-    lg3: '<strong>Confidentialité.</strong> L\'app ne contacte que GitHub, pour chercher les mises à jour : GitHub voit votre adresse IP et votre version de macOS dans cette requête. Pas de compte, pas de télémétrie. Ce site est hébergé par GitHub Pages, qui journalise les visites (voir la <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">déclaration de confidentialité de GitHub</a>). Il récupère le dernier numéro de version auprès de l\'API GitHub, ne dépose aucun cookie et garde la langue choisie dans le stockage local de votre navigateur. Les polices sont servies par ce site.',
-    lg4: '<strong>Avertissement.</strong> ChargeKeeper est fourni tel quel, sans aucune garantie (licence MIT). Il utilise des interfaces de macOS non documentées, susceptibles de changer. Utilisation à vos risques.',
-    lg5: '<strong>Marques.</strong> Apple, Mac, MacBook, MagSafe et macOS sont des marques d\'Apple Inc., déposées aux États-Unis et dans d\'autres pays et régions. ChargeKeeper est un projet indépendant, ni affilié à Apple ni approuvé par Apple.'
+    lg1: '<strong>Éditeur :</strong> Vlor999, particulier, à titre non professionnel. Contact : <a href="https://github.com/Vlor999/chargekeeper/issues">issues GitHub</a>.',
+    lg2: '<strong>Hébergeur :</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
+    lg3: 'ChargeKeeper est fourni tel quel, sans garantie (licence MIT). Il utilise des interfaces de macOS non documentées, susceptibles de changer : utilisation à vos risques. Non affilié à Apple ni approuvé par Apple.',
+    lg4: 'Apple, Mac, MacBook, MagSafe et macOS sont des marques d\'Apple Inc., déposées aux États-Unis et dans d\'autres pays et régions.'
   };
   var lang, EN = {};
   try { lang = localStorage.getItem('lang'); } catch (e) {}
