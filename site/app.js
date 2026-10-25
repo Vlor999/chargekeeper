@@ -1,7 +1,8 @@
 (function () {
   var REPO = 'Vlor999/jauge';
   var BREW = 'brew install --cask vlor999/tap/jauge';
-  var APPLE = '<path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.9zM14.1 5.8c.6-.8 1.1-1.9.9-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1.1.1 2.2-.5 2.8-1.3z"/>';
+  var DOWNLOAD = '<path d="M11 3h2v9.6l3.3-3.3 1.4 1.4-5.7 5.7-5.7-5.7 1.4-1.4 3.3 3.3zM4 18h16v2H4z"/>';
+  var LAPTOP = '<path fill-rule="evenodd" d="M5 4h14a1 1 0 0 1 1 1v10H4V5a1 1 0 0 1 1-1zm1 2v7h12V6zM1 16h22v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z"/>';
   // FR strings; English stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
   var FR = {
     skip: 'Aller au téléchargement', features: 'Fonctions', dl: 'Télécharger', nav: 'Principal', lang: 'Langue',
@@ -30,7 +31,7 @@
     q7: 'Comment utiliser jaugectl dans le Terminal ?',
     a7: 'Homebrew l\'ajoute à votre <code>PATH</code>. Avec le .dmg, créez le lien une fois : <code>sudo ln -s /Applications/Jauge.app/Contents/MacOS/jaugectl /usr/local/bin/jaugectl</code>, puis <code>jaugectl status</code>.',
     privacy: 'Confidentialité',
-    pv: 'Jauge ne va sur Internet que pour chercher les mises à jour sur GitHub. Pas de compte, pas de télémétrie, rien ne quitte votre Mac.',
+    pv: 'Jauge ne va sur Internet que pour chercher les mises à jour sur GitHub. Pas de compte, pas de télémétrie, aucune donnée personnelle collectée.',
     pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes',
     q1: 'Pourquoi Jauge a-t-elle besoin d\'un service en arrière-plan ?',
     a1: 'Modifier la charge de la batterie demande des droits administrateur. Un petit service tourne en root et ne fait que ça ; l\'app de la barre des menus lui parle par un socket local réservé aux administrateurs. Vous l\'autorisez une seule fois dans Réglages Système.',
@@ -40,7 +41,13 @@
     q4: 'Comment se font les mises à jour ?',
     a4: 'Jauge vérifie la dernière version GitHub au démarrage, puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature, l\'installe et redémarre son service.',
     q5: 'Comment la désinstaller ?', a5: 'Quittez Jauge et mettez-la à la corbeille. Avec Homebrew : <code>brew uninstall --zap jauge</code>.',
-    indep: 'Jauge · projet indépendant, non affilié à Apple', rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT'
+    indep: 'Jauge · projet indépendant, non affilié à Apple', rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT',
+    legal: 'Mentions légales',
+    lg1: '<strong>Éditeur.</strong> Vlor999, particulier, éditeur non professionnel. Contact : <a href="https://github.com/Vlor999/jauge/issues">tickets GitHub</a>.',
+    lg2: '<strong>Hébergeur.</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
+    lg3: '<strong>Confidentialité.</strong> L\'app ne contacte que GitHub, pour chercher les mises à jour : GitHub voit votre adresse IP et votre version de macOS dans cette requête. Pas de compte, pas de télémétrie. Ce site est hébergé par GitHub Pages, qui journalise les visites (voir la <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">déclaration de confidentialité de GitHub</a>). Il récupère le dernier numéro de version auprès de l\'API GitHub, ne dépose aucun cookie et garde la langue choisie dans le stockage local de votre navigateur. Les polices sont servies par ce site.',
+    lg4: '<strong>Avertissement.</strong> Jauge est fournie telle quelle, sans aucune garantie (licence MIT). Elle utilise des interfaces de macOS non documentées, susceptibles de changer. Utilisation à vos risques.',
+    lg5: '<strong>Marques.</strong> Apple, Mac, MacBook, MagSafe et macOS sont des marques d\'Apple Inc., déposées aux États-Unis et dans d\'autres pays et régions. Jauge est un projet indépendant, ni affilié à Apple ni approuvé par Apple.'
   };
   var lang, EN = {};
   try { lang = localStorage.getItem('lang'); } catch (e) {}
@@ -108,7 +115,7 @@
     box.innerHTML = '';
     var d = document.createElement('div');
     d.className = 'dl on';
-    d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + APPLE + '</svg>macOS</h3>';
+    d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + LAPTOP + '</svg>macOS</h3>';
     var a = document.createElement('a');
     a.className = 'btn primary';
     a.href = dmg.browser_download_url;
@@ -120,7 +127,7 @@
     d.appendChild(brew());
     box.appendChild(d);
     heroDl.href = dmg.browser_download_url;
-    heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + APPLE + '</svg>';
+    heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + DOWNLOAD + '</svg>';
     heroDl.appendChild(document.createTextNode(t('Télécharger pour macOS', 'Download for macOS')));
   }
 

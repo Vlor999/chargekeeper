@@ -1,3 +1,10 @@
+/* fonts: self-hosted, latin subset (SIL OFL 1.1, see fonts/OFL-*.txt) */
+@font-face{font-family:Inter;font-style:normal;font-weight:400;font-display:swap;src:url(fonts/inter-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:Inter;font-style:normal;font-weight:500;font-display:swap;src:url(fonts/inter-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(fonts/inter-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:Inter;font-style:normal;font-weight:700;font-display:swap;src:url(fonts/inter-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2')}
 :root{--bg:#f8f9fb;--fg:#1a1e26;--muted:#545c6a;--line:#d0d6e0;--card:#fff;--accent:#2b66bf;--accent-fg:#fff;--warn:#b7791f;--code:#edf1f7;--chip:#eaeff7;--ok:#1d7f55;--ok-bg:#e1f3ea;--warn-bg:#fbf0dc;--danger:#c4372c;--danger-bg:#fbe6e3;--add-bg:#e3f5ea;--del-bg:#fbe7e5;--shadow:rgb(20 30 50/.18);--desk:linear-gradient(135deg,#c4d9f5,#dcd6f2 60%,#f3e3c4)}
 @media (prefers-color-scheme:dark){:root{--bg:#0e131b;--fg:#e7ebf2;--muted:#a1abbb;--line:#2e3644;--card:#161c26;--accent:#7fb2f2;--accent-fg:#0b1220;--warn:#e0a84a;--code:#1c2330;--chip:#222a37;--ok:#5fd09a;--ok-bg:#183326;--warn-bg:#3a2c14;--danger:#f08a80;--danger-bg:#3d1c19;--add-bg:#163323;--del-bg:#3a1b19;--shadow:rgb(0 0 0/.55);--desk:linear-gradient(135deg,#1d4a8f,#2a2a5a 60%,#4a3a14)}}
 *{box-sizing:border-box}
@@ -68,6 +75,7 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 .foot{border-top:1px solid var(--line);color:var(--muted);font-size:14px}
 .foot .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;padding-top:2rem;padding-bottom:2rem}
 .foot-links{display:flex;flex-wrap:wrap;gap:8px 20px}
+.legal{flex-basis:100%;max-width:48rem}.legal summary{cursor:pointer;width:fit-content}.legal p{margin:.75rem 0 0}.legal strong{color:var(--fg);font-weight:600}
 /* Hero mock: menu bar + Jauge popover (static) */
 :root{--flow-a:color-mix(in srgb,#3d7fd6 22%,transparent);--dash:rgb(255 255 255/.45)}
 .desk{border:1px solid var(--line);border-radius:.75rem;background:var(--desk);box-shadow:0 24px 60px -24px var(--shadow);overflow:hidden;padding-bottom:28px}
