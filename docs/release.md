@@ -9,7 +9,7 @@ The app was renamed from Jauge (1.0.7 and earlier). What stays and what moves:
 - Internal identifiers keep the old name so installs keep working: bundle ids `com.vlor999.jauge` and `com.vlor999.jauge.service`, daemon label and plist `com.vlor999.jauge.daemon`, `/var/run/jauge.sock`, `/Library/Application Support/Jauge`, `/var/log/jauge.log`, the PowerUI client name, the Sparkle key and its keychain account `jauge`. Changing one breaks existing installs.
 - Old installs poll `https://github.com/Vlor999/jauge/releases/latest/download/appcast.xml`. GitHub redirects it to `Vlor999/chargekeeper` after the repository rename, as long as no new repository is created under the name `jauge`.
 - Sparkle installs over the existing bundle path, so an updated install keeps the file name `Jauge.app` (`SUNormalizeInstalledApplicationName` is a build-time option of Sparkle, off in the release binary, and would take the name from the old bundle anyway). New installs get `ChargeKeeper.app`.
-- The service program moved from `jaugectl` to `chargekeeperctl`. launchd keeps the old registration until reboot, so the app registers the service again when its bundle path or build changes (`AppModel.init`).
+- The service program moved from `jaugectl` to `chargekeeperctl`. launchd keeps the old registration (and its `jaugectl` path) until reboot: after the update from Jauge, restart the Mac once.
 - Homebrew: the cask is `chargekeeper`; `cask_renames.json` in the tap maps `jauge` to it.
 
 Never paste secret values (passwords, .p12, base64, keys) into a chat or a commit.

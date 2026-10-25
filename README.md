@@ -27,7 +27,7 @@
 - Signed and notarized by Apple. Drag ChargeKeeper to Applications and open it.
 - On first launch, allow ChargeKeeper's background service in System Settings > General > Login Items. That root service is what talks to the battery controller.
 - Updates install on their own (Sparkle, checked every 6 hours, EdDSA-signed).
-- Formerly named Jauge. An existing install updates in place and keeps its file name `Jauge.app`; the CLI is now `chargekeeperctl`.
+- Formerly named Jauge. An existing install updates in place and keeps its file name `Jauge.app`; the CLI is now `chargekeeperctl`. Restart the Mac once after that update so the service runs the new program.
 
 Command line: `chargekeeperctl status`, `chargekeeperctl limit 70`, `chargekeeperctl discharge on`… With Homebrew it is on your `PATH`; otherwise it lives in `/Applications/ChargeKeeper.app/Contents/MacOS/chargekeeperctl`.
 
