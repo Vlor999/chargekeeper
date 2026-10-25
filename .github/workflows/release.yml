@@ -55,6 +55,10 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$PW" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/cert.p12"
+          # Developer ID G2 intermediate is not preinstalled on runners: without it the identity is invalid
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/g2.cer"
+          security import "$RUNNER_TEMP/g2.cer" -k "$KC"
+          security find-identity -v -p codesigning "$KC" | grep -q "Developer ID Application" || { security find-identity -p codesigning "$KC"; exit 1; }
 
       - name: Build and sign
         if: env.HAS_SECRETS == 'true'
