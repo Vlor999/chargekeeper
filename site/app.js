@@ -1,7 +1,8 @@
 (function () {
   var REPO = 'Vlor999/jauge';
   var BREW = 'brew install --cask vlor999/tap/jauge';
-  var APPLE = '<path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.9zM14.1 5.8c.6-.8 1.1-1.9.9-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1.1.1 2.2-.5 2.8-1.3z"/>';
+  var DOWNLOAD = '<path d="M11 3h2v9.6l3.3-3.3 1.4 1.4-5.7 5.7-5.7-5.7 1.4-1.4 3.3 3.3zM4 18h16v2H4z"/>';
+  var LAPTOP = '<path fill-rule="evenodd" d="M5 4h14a1 1 0 0 1 1 1v10H4V5a1 1 0 0 1 1-1zm1 2v7h12V6zM1 16h22v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z"/>';
   // FR strings; English stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
   var FR = {
     skip: 'Aller au téléchargement', features: 'Fonctions', dl: 'Télécharger', nav: 'Principal', lang: 'Langue',
@@ -108,7 +109,7 @@
     box.innerHTML = '';
     var d = document.createElement('div');
     d.className = 'dl on';
-    d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + APPLE + '</svg>macOS</h3>';
+    d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + LAPTOP + '</svg>macOS</h3>';
     var a = document.createElement('a');
     a.className = 'btn primary';
     a.href = dmg.browser_download_url;
@@ -120,7 +121,7 @@
     d.appendChild(brew());
     box.appendChild(d);
     heroDl.href = dmg.browser_download_url;
-    heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + APPLE + '</svg>';
+    heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + DOWNLOAD + '</svg>';
     heroDl.appendChild(document.createTextNode(t('Télécharger pour macOS', 'Download for macOS')));
   }
 
