@@ -54,11 +54,17 @@ Releases: bump `VERSION`, push to `main`. See [docs/release.md](docs/release.md)
 
 ## Privacy
 
-No account, no telemetry. The only network request is the update check to GitHub.
+No account, no telemetry, no personal data collected. The only network request is the update check to GitHub (every 6 hours), which shows GitHub your IP address and macOS version. The [website](https://vlor999.github.io/jauge/) is hosted on GitHub Pages, sets no cookie and serves its own fonts.
 
 ## Disclaimer
 
-Jauge is an independent project. It is not affiliated with or endorsed by Apple, or by the makers of any other battery tool. It uses undocumented macOS interfaces that may change with any update.
+Jauge is provided as is, without warranty of any kind (see the license). Use it at your own risk. It uses undocumented macOS interfaces that may change with any update.
+
+Jauge is an independent project. It is not affiliated with or endorsed by Apple, or by the makers of any other battery tool. Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
+
+## Third-party software
+
+Sparkle and the website fonts: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
