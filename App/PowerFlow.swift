@@ -4,6 +4,7 @@ import SwiftUI
 struct PowerFlow: View {
     let s: Status
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
 
     struct Node { let name: String; let icon: String; let watts: Double; let color: Color }
 
@@ -29,9 +30,12 @@ struct PowerFlow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Power flow")).font(.caption).foregroundStyle(.secondary)
-            TimelineView(.animation(paused: reduceMotion)) { tl in
+            // 30 fps, and only while on screen: a hidden menu must not keep redrawing.
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || !shown)) { tl in
                 Canvas { ctx, size in draw(&ctx, size, phase: reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate) }
             }
+            .onAppear { shown = true }
+            .onDisappear { shown = false }
             if underpowered {
                 Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
                       systemImage: "exclamationmark.triangle.fill")
@@ -126,5 +130,7 @@ struct DashboardView: View {
         }
         .padding(20)
         .frame(width: 560)
+        .onAppear { m.visible += 1 }
+        .onDisappear { m.visible -= 1 }
     }
 }

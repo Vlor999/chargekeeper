@@ -33,13 +33,17 @@ final class AppModel: ObservableObject {
     let service = SMAppService.daemon(plistName: "com.vlor999.jauge.daemon.plist")
     let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private var timer: Timer?
+    /// Open windows showing live data; polling and animation only run while > 0.
+    var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
     init() {
         // First launch: register the root service; macOS then asks for approval in Login Items.
         if service.status == .notRegistered { enableService() }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refresh() }
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            if let self, self.visible > 0 { self.refresh() }
+        }
     }
 
     func refresh() {
@@ -114,6 +118,8 @@ struct MenuView: View {
         }
         .padding()
         .frame(width: 320)
+        .onAppear { m.visible += 1 }
+        .onDisappear { m.visible -= 1 }
     }
 
     /// The root service controls charging; without it the app is only a remote control.

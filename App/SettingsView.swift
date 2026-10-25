@@ -13,7 +13,8 @@ struct SettingsView: View {
             ScheduleView().tabItem { Label(tr("Schedule"), systemImage: "calendar") }
         }
         .frame(width: 560, height: 440)
-        .onAppear { NSApp.activate(ignoringOtherApps: true) }
+        .onAppear { NSApp.activate(ignoringOtherApps: true); m.visible += 1 }
+        .onDisappear { m.visible -= 1 }
     }
 
     @AppStorage(languageKey) private var language = "system"
