@@ -79,8 +79,8 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 .slider{position:relative;height:4px;border-radius:2px;background:var(--chip)}.slider i{position:absolute;inset:0 calc(100% - var(--v)) 0 0;border-radius:2px;background:var(--accent)}.slider i::after{content:'';position:absolute;right:-8px;top:-6px;width:16px;height:16px;border-radius:50%;background:var(--card);border:1px solid var(--line);box-shadow:0 1px 3px var(--shadow)}
 .p-btns{display:flex;flex-wrap:wrap;gap:6px}.pb{padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-size:12px}
 .flow{width:100%;height:auto}.flow text{fill:var(--fg);font:11px 'JetBrains Mono',monospace}
-.flow .dash{fill:none;stroke:var(--dash);stroke-dasharray:2 12;stroke-linecap:round;animation:flow 1.2s linear infinite}
-@keyframes flow{to{stroke-dashoffset:-14}}
+.flow .dash{fill:none;stroke:var(--dash);stroke-width:1.5;stroke-dasharray:8 10;animation:flow .75s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-18}}
 @media (prefers-reduced-motion:reduce){.flow .dash{animation:none}}
 /* Feature cards */
 .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:1rem}

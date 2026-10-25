@@ -62,12 +62,19 @@
           <div class="p-btns"><span class="pb" data-i18n="calib">Start calibration</span><span class="pb" data-i18n="pause">Pause</span></div>
           <small class="muted" data-i18n="flow">Power flow</small>
           <svg class="flow" viewBox="0 0 280 90">
-            <path d="M80 10 C140 10 140 10 200 10 L200 70 C140 70 140 70 80 70 Z" fill="var(--flow-a)"/>
-            <path class="dash" d="M80 40 C140 40 140 40 200 40" stroke-width="22"/>
+            <defs><linearGradient id="fl" x1="0" x2="1"><stop offset="0" stop-color="#f5c400" stop-opacity=".45"/><stop offset="1" stop-color="#3d7fd6" stop-opacity=".45"/></linearGradient></defs>
+            <rect x="80" y="10" width="120" height="60" fill="url(#fl)"/>
+            <path class="dash" d="M80 16 H200"/>
+            <path class="dash" d="M80 24 H200"/>
+            <path class="dash" d="M80 32 H200"/>
+            <path class="dash" d="M80 40 H200"/>
+            <path class="dash" d="M80 48 H200"/>
+            <path class="dash" d="M80 56 H200"/>
+            <path class="dash" d="M80 64 H200"/>
             <rect x="74" y="10" width="5" height="60" rx="2" fill="#e0b000"/>
             <rect x="201" y="10" width="5" height="60" rx="2" fill="#3d7fd6"/>
-            <text x="68" y="44" text-anchor="end">AC 10.6 W</text>
-            <text x="212" y="44">Mac 10.6 W</text>
+            <text x="68" y="44" text-anchor="end">AC 11.8 W</text>
+            <text x="212" y="44">Mac 11.2 W</text>
           </svg>
         </div>
       </div>
@@ -109,6 +116,8 @@
       <li data-i18n="c4">Freeze the level during sleep</li>
       <li data-i18n="c5">Hardware battery percentage</li>
       <li data-i18n="c6">Works for every user account</li>
+      <li data-i18n="c7">English and French</li>
+      <li data-i18n="c8">0% CPU when the menu is closed</li>
     </ul>
   </div>
 </section>
@@ -140,6 +149,14 @@
       <details>
         <summary data-i18n="q4">How do updates work?</summary>
         <p data-i18n="a4">Jauge checks the latest GitHub release on startup, then every 6 hours. Each update is signed: the app checks the signature, installs it and restarts its service.</p>
+      </details>
+      <details>
+        <summary data-i18n="q6">How much does it use?</summary>
+        <p data-i18n="a6">With the menu closed, the app uses no CPU and about 20 to 30 MB of memory; the service about 30 MB. The power flow animation only runs while it is on screen.</p>
+      </details>
+      <details>
+        <summary data-i18n="q7">How do I use jaugectl from the Terminal?</summary>
+        <p data-i18n-html="a7">Homebrew puts it on your <code>PATH</code>. With the .dmg, link it once: <code>sudo ln -s /Applications/Jauge.app/Contents/MacOS/jaugectl /usr/local/bin/jaugectl</code>, then <code>jaugectl status</code>.</p>
       </details>
       <details>
         <summary data-i18n="q5">How do I uninstall it?</summary>

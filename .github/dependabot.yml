@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Sparkle is pinned by commit in project.yml (XcodeGen), which Dependabot can't read: bump it by hand.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
