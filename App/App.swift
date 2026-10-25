@@ -36,17 +36,9 @@ final class AppModel: ObservableObject {
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
-    /// This bundle's path and build: the service registration they were last made with.
-    private let serviceKey = "\(Bundle.main.bundlePath) \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "")"
-
     init() {
         // First launch: register the root service; macOS then asks for approval in Login Items.
         if service.status == .notRegistered { enableService() }
-        // launchd keeps running the plist of the registration (old program path) until reboot:
-        // after an update or a move, register again so it runs this bundle's service.
-        else if UserDefaults.standard.string(forKey: "serviceRegistration") != serviceKey {
-            service.unregister { _ in DispatchQueue.main.async { self.enableService() } }
-        }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -60,10 +52,7 @@ final class AppModel: ObservableObject {
     }
 
     func enableService() {
-        do {
-            try service.register()
-            UserDefaults.standard.set(serviceKey, forKey: "serviceRegistration")
-        } catch { self.error = error.localizedDescription }
+        do { try service.register() } catch { self.error = error.localizedDescription }
         if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
         serviceStatus = service.status
     }
