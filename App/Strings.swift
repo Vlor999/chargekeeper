@@ -69,6 +69,9 @@ private let french: [String: String] = [
     "Version %@": "Version %@",
     "Last check: %@": "Dernière vérification : %@",
     "Never checked": "Jamais vérifié",
+    "About": "À propos",
+    "Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple.":
+        "Fourni tel quel, sans garantie (licence MIT). ChargeKeeper utilise des interfaces de macOS non documentées, susceptibles de changer : utilisation à vos risques. Projet indépendant, ni affilié à Apple ni approuvé par Apple.",
     "System": "Système",
     "Automatic discharge": "Décharge automatique",
     "Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration.":

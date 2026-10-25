@@ -45,6 +45,10 @@ struct SettingsView: View {
                     Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
                 }
             }
+            Section(tr("About")) {
+                Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Button(tr("Quit Jauge")) { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
