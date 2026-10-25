@@ -31,7 +31,7 @@
     q7: 'Comment utiliser jaugectl dans le Terminal ?',
     a7: 'Homebrew l\'ajoute à votre <code>PATH</code>. Avec le .dmg, créez le lien une fois : <code>sudo ln -s /Applications/Jauge.app/Contents/MacOS/jaugectl /usr/local/bin/jaugectl</code>, puis <code>jaugectl status</code>.',
     privacy: 'Confidentialité',
-    pv: 'Jauge ne va sur Internet que pour chercher les mises à jour sur GitHub. Pas de compte, pas de télémétrie, rien ne quitte votre Mac.',
+    pv: 'Jauge ne va sur Internet que pour chercher les mises à jour sur GitHub. Pas de compte, pas de télémétrie, aucune donnée personnelle collectée.',
     pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes',
     q1: 'Pourquoi Jauge a-t-elle besoin d\'un service en arrière-plan ?',
     a1: 'Modifier la charge de la batterie demande des droits administrateur. Un petit service tourne en root et ne fait que ça ; l\'app de la barre des menus lui parle par un socket local réservé aux administrateurs. Vous l\'autorisez une seule fois dans Réglages Système.',
@@ -41,7 +41,13 @@
     q4: 'Comment se font les mises à jour ?',
     a4: 'Jauge vérifie la dernière version GitHub au démarrage, puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature, l\'installe et redémarre son service.',
     q5: 'Comment la désinstaller ?', a5: 'Quittez Jauge et mettez-la à la corbeille. Avec Homebrew : <code>brew uninstall --zap jauge</code>.',
-    indep: 'Jauge · projet indépendant, non affilié à Apple', rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT'
+    indep: 'Jauge · projet indépendant, non affilié à Apple', rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT',
+    legal: 'Mentions légales',
+    lg1: '<strong>Éditeur.</strong> Vlor999, particulier, éditeur non professionnel. Contact : <a href="https://github.com/Vlor999/jauge/issues">tickets GitHub</a>.',
+    lg2: '<strong>Hébergeur.</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
+    lg3: '<strong>Confidentialité.</strong> L\'app ne contacte que GitHub, pour chercher les mises à jour : GitHub voit votre adresse IP et votre version de macOS dans cette requête. Pas de compte, pas de télémétrie. Ce site est hébergé par GitHub Pages, qui journalise les visites (voir la <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">déclaration de confidentialité de GitHub</a>). Il récupère le dernier numéro de version auprès de l\'API GitHub, ne dépose aucun cookie et garde la langue choisie dans le stockage local de votre navigateur. Les polices sont servies par ce site.',
+    lg4: '<strong>Avertissement.</strong> Jauge est fournie telle quelle, sans aucune garantie (licence MIT). Elle utilise des interfaces de macOS non documentées, susceptibles de changer. Utilisation à vos risques.',
+    lg5: '<strong>Marques.</strong> Apple, Mac, MacBook, MagSafe et macOS sont des marques d\'Apple Inc., déposées aux États-Unis et dans d\'autres pays et régions. Jauge est un projet indépendant, ni affilié à Apple ni approuvé par Apple.'
   };
   var lang, EN = {};
   try { lang = localStorage.getItem('lang'); } catch (e) {}
