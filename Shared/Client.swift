@@ -2,7 +2,7 @@ import Foundation
 
 enum ClientError: Error, LocalizedError {
     case unavailable
-    var errorDescription: String? { "Jauge service not running: open Jauge and enable it in System Settings > Login Items" }
+    var errorDescription: String? { "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items" }
 }
 
 /// One request per connection: JSON Command + "\n" in, JSON Status + "\n" out.

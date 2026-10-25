@@ -265,9 +265,9 @@ func cli(_ a: [String]) -> Int32 {
 
 func usage() -> Int32 {
     print("""
-    usage: jaugectl daemon
-           jaugectl status | limit <20-100> | pause | discharge on|off|<n> | full on|off | calibrate on|off
-           jaugectl led auto|system|off|green|orange|orangeBlink | lowpower on|off | highpower on|off
+    usage: chargekeeperctl daemon
+           chargekeeperctl status | limit <20-100> | pause | discharge on|off|<n> | full on|off | calibrate on|off
+           chargekeeperctl led auto|system|off|green|orange|orangeBlink | lowpower on|off | highpower on|off
     """)
     return 1
 }

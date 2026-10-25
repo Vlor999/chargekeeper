@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Implement one feature or fix of Jauge in an isolated git worktree, from branch to GitHub PR on dev (checks, local validation, logical commits, push, PR). Use when asked to implement something in a worktree or to start a worktree for a task.
+description: Implement one feature or fix of ChargeKeeper in an isolated git worktree, from branch to GitHub PR on dev (checks, local validation, logical commits, push, PR). Use when asked to implement something in a worktree or to start a worktree for a task.
 user-invocable: true
 ---
 

@@ -3,7 +3,7 @@ import Sparkle
 import SwiftUI
 
 @main
-struct JaugeApp: App {
+struct ChargeKeeperApp: App {
     @StateObject var model = AppModel()
     // Changing it rebuilds every view (`.id`) so all tr() strings switch at once.
     @AppStorage(languageKey) var language = "system"
@@ -123,13 +123,13 @@ struct MenuView: View {
             Text(tr("Charging service is off")).font(.headline)
             switch m.serviceStatus {
             case .requiresApproval:
-                Text(tr("Allow “Jauge” in System Settings > General > Login Items > Allow in the Background."))
+                Text(tr("Allow “ChargeKeeper” in System Settings > General > Login Items > Allow in the Background."))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(tr("Open System Settings")) { SMAppService.openSystemSettingsLoginItems() }
             case .enabled:
                 Text(tr("Starting the service…")).font(.caption).foregroundStyle(.secondary)
             default:
-                Text(tr("Jauge needs a system service to control charging.")).font(.caption).foregroundStyle(.secondary)
+                Text(tr("ChargeKeeper needs a system service to control charging.")).font(.caption).foregroundStyle(.secondary)
                 Button(tr("Turn On Service")) { m.enableService() }
             }
         }

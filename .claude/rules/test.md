@@ -1,5 +1,5 @@
 ---
-description: "Jauge tests: assert-based self-checks of the pure logic, run by make check."
+description: "ChargeKeeper tests: assert-based self-checks of the pure logic, run by make check."
 paths:
   - "Shared/**"
   - "Tests/**"

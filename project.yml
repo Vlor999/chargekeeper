@@ -1,4 +1,4 @@
-name: Jauge
+name: ChargeKeeper
 options:
   bundleIdPrefix: com.vlor999
   developmentLanguage: en
@@ -20,7 +20,7 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "10000"
 targets:
-  Jauge:
+  ChargeKeeper:
     type: application
     platform: macOS
     sources:
@@ -35,29 +35,30 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
-      - target: jaugectl
+      - target: chargekeeperctl
         copy:
           destination: executables
     settings:
       base:
+        # Former name kept: existing installs update in place (Sparkle, defaults, service approval).
         PRODUCT_BUNDLE_IDENTIFIER: com.vlor999.jauge
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Jauge
+        CFBundleDisplayName: ChargeKeeper
         CFBundleLocalizations: [en, fr]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "© 2026 Vlor999. MIT License."
-        SUFeedURL: https://github.com/Vlor999/jauge/releases/latest/download/appcast.xml
+        SUFeedURL: https://github.com/Vlor999/chargekeeper/releases/latest/download/appcast.xml
         SUPublicEDKey: /3JYrcdyR/CTnv2TUisWNsnPwlNq5gSclgYdnYqMlMg=
         SUEnableAutomaticChecks: true
         SUAutomaticallyUpdate: true
         SUScheduledCheckInterval: 21600
-  jaugectl:
+  chargekeeperctl:
     type: tool
     platform: macOS
     sources:

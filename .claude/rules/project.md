@@ -1,5 +1,5 @@
 ---
-description: "Jauge project rules: branches, commits, PRs, validation, release, security."
+description: "ChargeKeeper project rules: branches, commits, PRs, validation, release, security."
 ---
 
 # Project

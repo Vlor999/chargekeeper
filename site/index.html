@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jauge: battery charge limiter for Apple silicon MacBooks</title>
+<title>ChargeKeeper: battery charge limiter for Apple silicon MacBooks</title>
 <meta name="description" content="Free, open source menu bar app that keeps your MacBook battery at the level you choose: charge limit, discharge while plugged in, calibration, heat protection, scheduling, Shortcuts. Signed and notarized, automatic updates.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Jauge: your MacBook battery, at the right level">
+<meta property="og:title" content="ChargeKeeper: your MacBook battery, at the right level">
 <meta property="og:description" content="Charge limit, discharge, calibration and scheduling from the menu bar. Free, open source, for Apple silicon MacBooks.">
 <meta property="og:locale" content="en_US">
 <meta property="og:locale:alternate" content="fr_FR">
-<meta property="og:url" content="https://vlor999.github.io/jauge/">
-<meta property="og:site_name" content="Jauge">
-<meta property="og:image" content="https://vlor999.github.io/jauge/og-image.png">
+<meta property="og:url" content="https://vlor999.github.io/chargekeeper/">
+<meta property="og:site_name" content="ChargeKeeper">
+<meta property="og:image" content="https://vlor999.github.io/chargekeeper/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Jauge: gauge logo and the tagline Your MacBook battery, at the right level.">
+<meta property="og:image:alt" content="ChargeKeeper: gauge logo and the tagline Your MacBook battery, at the right level.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://vlor999.github.io/jauge/og-image.png">
+<meta name="twitter:image" content="https://vlor999.github.io/chargekeeper/og-image.png">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <meta name="color-scheme" content="light dark">
@@ -27,11 +27,11 @@
 <a class="skip" href="#download" data-i18n="skip">Skip to download</a>
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#top"><img src="logo.svg" width="28" height="28" alt="" aria-hidden="true">Jauge</a>
+    <a class="brand" href="#top"><img src="logo.svg" width="28" height="28" alt="" aria-hidden="true">ChargeKeeper</a>
     <nav aria-label="Main" data-i18n-attr="aria-label:nav">
       <a class="nl" href="#features" data-i18n="features">Features</a>
       <a class="nl" href="#faq">FAQ</a>
-      <a class="gh" href="https://github.com/Vlor999/jauge" aria-label="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg></a>
+      <a class="gh" href="https://github.com/Vlor999/chargekeeper" aria-label="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg></a>
       <span class="lang" role="group" aria-label="Language" data-i18n-attr="aria-label:lang"><button type="button" lang="en" aria-pressed="true">EN</button><button type="button" lang="fr" aria-pressed="false">FR</button></span>
       <a class="btn primary nav-dl" href="#download" data-i18n="dl">Download</a>
     </nav>
@@ -48,7 +48,7 @@
       <p class="meta"><span id="hero-ver"></span><span data-i18n="heroMeta">Apple silicon · macOS 14 or later · MIT License</span></p>
     </div>
     <figure class="shot">
-      <p class="sr" data-i18n="heroSr">Preview of the Jauge menu: battery at 80%, charging paused at the limit, the limit slider, discharge and full charge buttons, and the power flow from the adapter to the MacBook.</p>
+      <p class="sr" data-i18n="heroSr">Preview of the ChargeKeeper menu: battery at 80%, charging paused at the limit, the limit slider, discharge and full charge buttons, and the power flow from the adapter to the MacBook.</p>
       <div class="desk" aria-hidden="true">
         <div class="menubar"><span class="mb-ic"><svg viewBox="0 0 24 24"><path d="M6.34 17.66A8 8 0 1 1 17.66 17.66" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".35"/><path d="M6.34 17.66A8 8 0 1 1 19.9 10.75" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M13 7.2 9.4 12.6h2.7l-1 4.2 3.6-5.4H12z" fill="currentColor"/></svg></span><span data-i18n="clock">Sun Oct 25 9:41 AM</span></div>
         <div class="pop">
@@ -85,16 +85,16 @@
     <h2 data-i18n="dl">Download</h2>
     <p id="release-meta" class="lead" aria-live="polite">Looking up the latest release…</p>
     <div id="downloads" class="dl-grid">
-      <noscript><a class="btn" href="https://github.com/Vlor999/jauge/releases/latest">See releases on GitHub</a></noscript>
+      <noscript><a class="btn" href="https://github.com/Vlor999/chargekeeper/releases/latest">See releases on GitHub</a></noscript>
     </div>
-    <p class="dl-note muted" data-i18n-html="first">On first launch, macOS asks you to allow Jauge's <strong>background service</strong> in System Settings &gt; General &gt; Login Items. That service is what talks to the battery.</p>
+    <p class="dl-note muted" data-i18n-html="first">On first launch, macOS asks you to allow ChargeKeeper's <strong>background service</strong> in System Settings &gt; General &gt; Login Items. That service is what talks to the battery.</p>
   </div>
 </section>
 
 <section id="features">
   <div class="wrap">
     <h2 data-i18n="features">Features</h2>
-    <p class="lead" data-i18n="flead">Keeping a battery between 50 and 80% slows its wear. Jauge does it for you, even when the app is closed.</p>
+    <p class="lead" data-i18n="flead">Keeping a battery between 50 and 80% slows its wear. ChargeKeeper does it for you, even when the app is closed.</p>
     <div class="feat">
       <article><h3 data-i18n="f1t">Charge limit</h3><p data-i18n="f1">Pick a limit from 20 to 100%. On macOS 26 and later, the Mac's own charge limit does the work from 80%.</p></article>
       <article><h3 data-i18n="f2t">Discharge</h3><p data-i18n="f2">Run from the battery while plugged in, down to your limit. Start it by hand or let it start on its own.</p></article>
@@ -103,7 +103,7 @@
       <article><h3 data-i18n="f5t">Heat protection</h3><p data-i18n="f5">Charging pauses above the temperature you set, checked in five-minute windows.</p></article>
       <article><h3 data-i18n="f6t">Power flow</h3><p data-i18n="f6">Watts from the adapter and the battery to the Mac, live. Warns you when the adapter is too weak.</p></article>
       <article><h3 data-i18n="f7t">Schedule</h3><p data-i18n="f7">Set a limit, calibrate, charge to 100% or toggle Low Power Mode at set times. Missed tasks can run on wake.</p></article>
-      <article><h3 data-i18n="f8t">Shortcuts and Terminal</h3><p data-i18n-html="f8">Every action in the Shortcuts app, and <code>jaugectl</code> on the command line.</p></article>
+      <article><h3 data-i18n="f8t">Shortcuts and Terminal</h3><p data-i18n-html="f8">Every action in the Shortcuts app, and <code>chargekeeperctl</code> on the command line.</p></article>
     </div>
     <h3 class="more" data-i18n="more">And also</h3>
     <ul class="chips">
@@ -122,8 +122,8 @@
 <section id="privacy" class="alt">
   <div class="wrap">
     <h2 data-i18n="privacy">Privacy</h2>
-    <p class="lead" data-i18n="pv">Jauge only goes online to check for updates on GitHub. No account, no telemetry, no personal data collected.</p>
-    <p><a href="https://github.com/Vlor999/jauge" data-i18n="pvl">Read the code (MIT license)</a></p>
+    <p class="lead" data-i18n="pv">ChargeKeeper only goes online to check for updates on GitHub. No account, no telemetry, no personal data collected.</p>
+    <p><a href="https://github.com/Vlor999/chargekeeper" data-i18n="pvl">Read the code (MIT license)</a></p>
   </div>
 </section>
 
@@ -132,7 +132,7 @@
     <h2 data-i18n="faq">Frequently asked questions</h2>
     <div class="faq">
       <details>
-        <summary data-i18n="q1">Why does Jauge need a background service?</summary>
+        <summary data-i18n="q1">Why does ChargeKeeper need a background service?</summary>
         <p data-i18n="a1">Changing how the battery charges requires administrator rights. A small service runs as root and does only that; the menu bar app talks to it through a local socket that only administrators can use. You approve it once in System Settings.</p>
       </details>
       <details>
@@ -141,23 +141,23 @@
       </details>
       <details>
         <summary data-i18n="q3">How does a limit below 80% work on macOS 26 and later?</summary>
-        <p data-i18n="a3">macOS's built-in limit stops at 80%. Below that, Jauge switches between battery and adapter around your limit, so the level moves by about 1%.</p>
+        <p data-i18n="a3">macOS's built-in limit stops at 80%. Below that, ChargeKeeper switches between battery and adapter around your limit, so the level moves by about 1%.</p>
       </details>
       <details>
         <summary data-i18n="q4">How do updates work?</summary>
-        <p data-i18n="a4">Jauge checks the latest GitHub release on startup, then every 6 hours. Each update is signed: the app checks the signature, installs it and restarts its service.</p>
+        <p data-i18n="a4">ChargeKeeper checks the latest GitHub release on startup, then every 6 hours. Each update is signed: the app checks the signature, installs it and restarts its service.</p>
       </details>
       <details>
         <summary data-i18n="q6">How much does it use?</summary>
         <p data-i18n="a6">With the menu closed, the app uses no CPU and about 20 to 30 MB of memory; the service about 30 MB. The power flow animation only runs while it is on screen.</p>
       </details>
       <details>
-        <summary data-i18n="q7">How do I use jaugectl from the Terminal?</summary>
-        <p data-i18n-html="a7">Homebrew puts it on your <code>PATH</code>. With the .dmg, link it once: <code>sudo ln -s /Applications/Jauge.app/Contents/MacOS/jaugectl /usr/local/bin/jaugectl</code>, then <code>jaugectl status</code>.</p>
+        <summary data-i18n="q7">How do I use chargekeeperctl from the Terminal?</summary>
+        <p data-i18n-html="a7">Homebrew puts it on your <code>PATH</code>. With the .dmg, link it once: <code>sudo ln -s /Applications/ChargeKeeper.app/Contents/MacOS/chargekeeperctl /usr/local/bin/chargekeeperctl</code>, then <code>chargekeeperctl status</code>.</p>
       </details>
       <details>
         <summary data-i18n="q5">How do I uninstall it?</summary>
-        <p data-i18n-html="a5">Quit Jauge and move it to the Trash. With Homebrew: <code>brew uninstall --zap jauge</code>.</p>
+        <p data-i18n-html="a5">Quit ChargeKeeper and move it to the Trash. With Homebrew: <code>brew uninstall --zap chargekeeper</code>.</p>
       </details>
     </div>
   </div>
@@ -166,15 +166,15 @@
 
 <footer class="foot">
   <div class="wrap">
-    <span data-i18n="indep">Jauge · independent project, not affiliated with Apple</span>
-    <span class="foot-links"><a href="https://github.com/Vlor999/jauge">GitHub</a><a href="https://github.com/Vlor999/jauge/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/jauge/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/jauge/blob/main/LICENSE" data-i18n="mit">MIT License</a></span>
+    <span data-i18n="indep">ChargeKeeper · independent project, not affiliated with Apple</span>
+    <span class="foot-links"><a href="https://github.com/Vlor999/chargekeeper">GitHub</a><a href="https://github.com/Vlor999/chargekeeper/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/chargekeeper/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/chargekeeper/blob/main/LICENSE" data-i18n="mit">MIT License</a></span>
     <details class="legal">
       <summary data-i18n="legal">Legal</summary>
-      <p data-i18n-html="lg1"><strong>Publisher.</strong> Vlor999, an individual, non-professional publisher. Contact: <a href="https://github.com/Vlor999/jauge/issues">GitHub issues</a>.</p>
+      <p data-i18n-html="lg1"><strong>Publisher.</strong> Vlor999, an individual, non-professional publisher. Contact: <a href="https://github.com/Vlor999/chargekeeper/issues">GitHub issues</a>.</p>
       <p data-i18n-html="lg2"><strong>Host.</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA.</p>
       <p data-i18n-html="lg3"><strong>Privacy.</strong> The app only contacts GitHub, to check for updates: GitHub sees your IP address and macOS version in that request. No account, no telemetry. This site is hosted by GitHub Pages, which logs visits (see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>). It fetches the latest version number from the GitHub API, sets no cookie and keeps your chosen language in your browser's local storage. Fonts are served from this site.</p>
-      <p data-i18n-html="lg4"><strong>Disclaimer.</strong> Jauge is provided as is, without warranty of any kind (MIT License). It uses undocumented macOS interfaces that may change. Use it at your own risk.</p>
-      <p data-i18n-html="lg5"><strong>Trademarks.</strong> Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions. Jauge is an independent project, not affiliated with or endorsed by Apple.</p>
+      <p data-i18n-html="lg4"><strong>Disclaimer.</strong> ChargeKeeper is provided as is, without warranty of any kind (MIT License). It uses undocumented macOS interfaces that may change. Use it at your own risk.</p>
+      <p data-i18n-html="lg5"><strong>Trademarks.</strong> Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions. ChargeKeeper is an independent project, not affiliated with or endorsed by Apple.</p>
     </details>
   </div>
 </footer>
