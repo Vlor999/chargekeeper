@@ -55,7 +55,7 @@ Releases: bump `VERSION`, push to `main`. See [docs/release.md](docs/release.md)
 
 ## Privacy
 
-No account, no telemetry, no personal data collected. The only network request is the update check to GitHub (every 6 hours), which shows GitHub your IP address and macOS version. The [website](https://vlor999.github.io/chargekeeper/) is hosted on GitHub Pages, sets no cookie and serves its own fonts.
+No account, no telemetry, no personal data collected. The only network request is the update check to GitHub (every 6 hours), which shows GitHub your IP address and the app version. The [website](https://vlor999.github.io/chargekeeper/) is hosted on GitHub Pages, sets no cookie and serves its own fonts.
 
 ## Disclaimer
 
