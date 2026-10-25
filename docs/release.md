@@ -1,6 +1,16 @@
 # Release
 
-Push to `main` with a `VERSION` that has no release yet → `release.yml` builds, signs, notarizes, publishes `Jauge-<version>.dmg` + `appcast.xml`, then updates the Homebrew cask.
+Push to `main` with a `VERSION` that has no release yet → `release.yml` builds, signs, notarizes, publishes `ChargeKeeper-<version>.dmg` + `appcast.xml`, then updates the Homebrew cask.
+
+## Former name (Jauge)
+
+The app was renamed from Jauge (1.0.7 and earlier). What stays and what moves:
+
+- Internal identifiers keep the old name so installs keep working: bundle ids `com.vlor999.jauge` and `com.vlor999.jauge.service`, daemon label and plist `com.vlor999.jauge.daemon`, `/var/run/jauge.sock`, `/Library/Application Support/Jauge`, `/var/log/jauge.log`, the PowerUI client name, the Sparkle key and its keychain account `jauge`. Changing one breaks existing installs.
+- Old installs poll `https://github.com/Vlor999/jauge/releases/latest/download/appcast.xml`. GitHub redirects it to `Vlor999/chargekeeper` after the repository rename, as long as no new repository is created under the name `jauge`.
+- Sparkle installs over the existing bundle path, so an updated install keeps the file name `Jauge.app` (`SUNormalizeInstalledApplicationName` is a build-time option of Sparkle, off in the release binary, and would take the name from the old bundle anyway). New installs get `ChargeKeeper.app`.
+- The service program moved from `jaugectl` to `chargekeeperctl`. launchd keeps the old registration until reboot, so the app registers the service again when its bundle path or build changes (`AppModel.init`).
+- Homebrew: the cask is `chargekeeper`; `cask_renames.json` in the tap maps `jauge` to it.
 
 Never paste secret values (passwords, .p12, base64, keys) into a chat or a commit.
 
@@ -48,8 +58,8 @@ gh workflow run release.yml
 ## Check a release
 
 ```sh
-hdiutil attach -nobrowse -readonly Jauge-*.dmg
-spctl --assess --type execute -v /Volumes/Jauge/Jauge.app   # accepted, Notarized Developer ID
-xcrun stapler validate /Volumes/Jauge/Jauge.app
-hdiutil detach /Volumes/Jauge
+hdiutil attach -nobrowse -readonly ChargeKeeper-*.dmg
+spctl --assess --type execute -v /Volumes/ChargeKeeper/ChargeKeeper.app   # accepted, Notarized Developer ID
+xcrun stapler validate /Volumes/ChargeKeeper/ChargeKeeper.app
+hdiutil detach /Volumes/ChargeKeeper
 ```

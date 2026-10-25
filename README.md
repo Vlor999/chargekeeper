@@ -1,10 +1,10 @@
-<p align="center"><img src="site/logo.svg" width="96" alt="Jauge"></p>
+<p align="center"><img src="site/logo.svg" width="96" alt="ChargeKeeper"></p>
 
-<h1 align="center">Jauge</h1>
+<h1 align="center">ChargeKeeper</h1>
 
 <p align="center">Keeps your MacBook battery at the level you choose: charge limit, discharge while plugged in, calibration, heat protection, scheduling. A menu bar app for Apple silicon Macs.</p>
 
-<p align="center"><a href="https://vlor999.github.io/jauge/">Website</a> · <a href="https://github.com/Vlor999/jauge/releases/latest">Download</a> · <code>brew install --cask vlor999/tap/jauge</code></p>
+<p align="center"><a href="https://vlor999.github.io/chargekeeper/">Website</a> · <a href="https://github.com/Vlor999/chargekeeper/releases/latest">Download</a> · <code>brew install --cask vlor999/tap/chargekeeper</code></p>
 
 ## Features
 
@@ -18,24 +18,25 @@
 - Schedule: limit, calibration, full charge, pause, discharge, Low Power Mode; missed tasks on wake; history
 - MagSafe LED colors
 - Keep awake until the limit, freeze the level during sleep
-- Shortcuts actions and a CLI (`jaugectl`)
+- Shortcuts actions and a CLI (`chargekeeperctl`)
 - English and French UI (Settings > General > Language)
 
 ## Install
 
-- Download the `.dmg` from the [website](https://vlor999.github.io/jauge/) or the [releases](https://github.com/Vlor999/jauge/releases), or `brew install --cask vlor999/tap/jauge`.
-- Signed and notarized by Apple. Drag Jauge to Applications and open it.
-- On first launch, allow Jauge's background service in System Settings > General > Login Items. That root service is what talks to the battery controller.
+- Download the `.dmg` from the [website](https://vlor999.github.io/chargekeeper/) or the [releases](https://github.com/Vlor999/chargekeeper/releases), or `brew install --cask vlor999/tap/chargekeeper`.
+- Signed and notarized by Apple. Drag ChargeKeeper to Applications and open it.
+- On first launch, allow ChargeKeeper's background service in System Settings > General > Login Items. That root service is what talks to the battery controller.
 - Updates install on their own (Sparkle, checked every 6 hours, EdDSA-signed).
+- Formerly named Jauge. An existing install updates in place and keeps its file name `Jauge.app`; the CLI is now `chargekeeperctl`.
 
-Command line: `jaugectl status`, `jaugectl limit 70`, `jaugectl discharge on`… With Homebrew it is on your `PATH`; otherwise it lives in `/Applications/Jauge.app/Contents/MacOS/jaugectl`.
+Command line: `chargekeeperctl status`, `chargekeeperctl limit 70`, `chargekeeperctl discharge on`… With Homebrew it is on your `PATH`; otherwise it lives in `/Applications/ChargeKeeper.app/Contents/MacOS/chargekeeperctl`.
 
 ## How it works
 
 | Part | Role |
 |---|---|
 | `App/` | SwiftUI menu bar app, settings, Shortcuts actions, Sparkle updater |
-| `Daemon/` | `jaugectl daemon`: root service registered with `SMAppService`, owns all charging logic, talks to the SMC and to macOS's charge limit |
+| `Daemon/` | `chargekeeperctl daemon`: root service registered with `SMAppService`, owns all charging logic, talks to the SMC and to macOS's charge limit |
 | `Shared/` | Model, charging policy (pure, tested by `make check`), socket client |
 
 - macOS 26+: Apple's Manual Charge Limit (80–100%) through the private `PowerUI` framework; below 80%, the SMC discharge key `CHIE` alternates battery and adapter.
@@ -47,20 +48,20 @@ Command line: `jaugectl status`, `jaugectl limit 70`, `jaugectl discharge on`…
 ```sh
 brew install xcodegen
 make check   # charging policy self-test
-make         # build/Build/Products/Release/Jauge.app (Developer ID identity required)
+make         # build/Build/Products/Release/ChargeKeeper.app (Developer ID identity required)
 ```
 
 Releases: bump `VERSION`, push to `main`. See [docs/release.md](docs/release.md).
 
 ## Privacy
 
-No account, no telemetry, no personal data collected. The only network request is the update check to GitHub (every 6 hours), which shows GitHub your IP address and macOS version. The [website](https://vlor999.github.io/jauge/) is hosted on GitHub Pages, sets no cookie and serves its own fonts.
+No account, no telemetry, no personal data collected. The only network request is the update check to GitHub (every 6 hours), which shows GitHub your IP address and macOS version. The [website](https://vlor999.github.io/chargekeeper/) is hosted on GitHub Pages, sets no cookie and serves its own fonts.
 
 ## Disclaimer
 
-Jauge is provided as is, without warranty of any kind (see the license). Use it at your own risk. It uses undocumented macOS interfaces that may change with any update.
+ChargeKeeper is provided as is, without warranty of any kind (see the license). Use it at your own risk. It uses undocumented macOS interfaces that may change with any update.
 
-Jauge is an independent project. It is not affiliated with or endorsed by Apple, or by the makers of any other battery tool. Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
+ChargeKeeper is an independent project. It is not affiliated with or endorsed by Apple, or by the makers of any other battery tool. Apple, Mac, MacBook, MagSafe and macOS are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
 
 ## Third-party software
 

@@ -1,10 +1,10 @@
 # Third-party notices
 
-Jauge includes the third-party software below. Each is used under its own license.
+ChargeKeeper includes the third-party software below. Each is used under its own license.
 
 ## Sparkle 2.10.0
 
-Software update framework, bundled in `Jauge.app`. <https://github.com/sparkle-project/Sparkle>
+Software update framework, bundled in `ChargeKeeper.app`. <https://github.com/sparkle-project/Sparkle>
 
 ```text
 Copyright (c) 2006-2013 Andy Matuschak.

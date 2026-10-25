@@ -1,6 +1,6 @@
 ---
 name: mr-review
-description: Review a GitHub pull request of Jauge against the project rules and docs, and report findings ranked by severity. Use when the user explicitly requests a review of a pull request (by number or the current branch).
+description: Review a GitHub pull request of ChargeKeeper against the project rules and docs, and report findings ranked by severity. Use when the user explicitly requests a review of a pull request (by number or the current branch).
 disable-model-invocation: false
 ---
 
@@ -24,7 +24,7 @@ Reviews a GitHub pull request and produces findings prioritized by importance an
 
 ## Step 1 — Preflight
 
-- Identify the pull request: `gh pr view <number> -R Vlor999/jauge` gives its source and target branches and its body; `gh pr diff <number>` gives the diff. Without a number, assume the source branch is the current branch and the target is `dev` (or `main` when the source is `dev`), and confirm with the user (AskUserQuestion).
+- Identify the pull request: `gh pr view <number> -R Vlor999/chargekeeper` gives its source and target branches and its body; `gh pr diff <number>` gives the diff. Without a number, assume the source branch is the current branch and the target is `dev` (or `main` when the source is `dev`), and confirm with the user (AskUserQuestion).
 - Run `git fetch` to make sure the local repository is up to date with the remote branches. NEVER overwrite an existing review file without user confirmation.
 - Check the working tree. If modified or staged files exist, determine whether they affect the PR review. If they do not affect the review, continue without modifying them. If they affect the reviewed changes or prevent reliable comparison, ask the user to resolve the state before proceeding.
 
