@@ -109,11 +109,6 @@ struct MenuView: View {
                 Button(tr("Dashboard")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }
                 SettingsLink { Text(tr("Settings…")) }
                 Spacer()
-                Menu {
-                    Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
-                    Button(tr("Quit Jauge")) { NSApp.terminate(nil) }
-                } label: { Image(systemName: "ellipsis.circle") }
-                .menuStyle(.borderlessButton).fixedSize()
             }
         }
         .padding()
@@ -142,7 +137,7 @@ struct MenuView: View {
 
     @ViewBuilder func content(_ s: Status) -> some View {
         let r = s.runtime
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center) {
             Text("\(s.percent) %").font(.system(size: 34, weight: .semibold))
             VStack(alignment: .leading) {
                 Text(r.state.label).font(.headline)

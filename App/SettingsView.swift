@@ -1,4 +1,5 @@
 import ServiceManagement
+import Sparkle
 import SwiftUI
 
 struct SettingsView: View {
@@ -29,6 +30,25 @@ struct SettingsView: View {
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
+            Section(tr("Updates")) {
+                let u = m.updater.updater
+                Toggle(tr("Install updates automatically"), isOn: Binding(
+                    get: { u.automaticallyChecksForUpdates && u.automaticallyDownloadsUpdates },
+                    set: { u.automaticallyChecksForUpdates = $0; u.automaticallyDownloadsUpdates = $0 }))
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
+                        Text(u.lastUpdateCheckDate.map { tr("Last check: %@", $0.formatted(date: .abbreviated, time: .shortened)) } ?? tr("Never checked"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
+                }
+            }
+            Section {
+                Button(tr("Quit Jauge")) { NSApp.terminate(nil) }
+                    .keyboardShortcut("q")
+            }
         }
         .formStyle(.grouped)
     }

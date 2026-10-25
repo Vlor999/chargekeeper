@@ -64,6 +64,11 @@ private let french: [String: String] = [
     "Schedule": "Planification",
     "General": "Général",
     "Language": "Langue",
+    "Updates": "Mises à jour",
+    "Install updates automatically": "Installer les mises à jour automatiquement",
+    "Version %@": "Version %@",
+    "Last check: %@": "Dernière vérification : %@",
+    "Never checked": "Jamais vérifié",
     "System": "Système",
     "Automatic discharge": "Décharge automatique",
     "Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration.":
