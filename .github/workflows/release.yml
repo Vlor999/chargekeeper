@@ -15,7 +15,7 @@ jobs:
     outputs:
       new: ${{ steps.check.outputs.new }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,7 +36,7 @@ jobs:
         if: env.HAS_SECRETS != 'true'
         run: echo "::notice::Apple / Sparkle secrets not set (docs/release.md); release skipped."
 
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_SECRETS == 'true'
 
       # Third-party code (XcodeGen, Sparkle) is fetched before the certificate is imported.
