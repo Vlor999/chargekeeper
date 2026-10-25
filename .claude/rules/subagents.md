@@ -1,5 +1,5 @@
 ---
-description: "Protocol for implementation and review subagents on Jauge: model, worktree, skills, output."
+description: "Protocol for implementation and review subagents on ChargeKeeper: model, worktree, skills, output."
 ---
 
 # Subagents

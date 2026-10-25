@@ -20,13 +20,13 @@ private let french: [String: String] = [
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",
     "Check for Updates…": "Rechercher des mises à jour…",
-    "Quit Jauge": "Quitter Jauge",
+    "Quit ChargeKeeper": "Quitter ChargeKeeper",
     "Charging service is off": "Service de charge inactif",
-    "Allow “Jauge” in System Settings > General > Login Items > Allow in the Background.":
-        "Autorisez « Jauge » dans Réglages Système > Général > Ouverture > Autoriser en arrière-plan.",
+    "Allow “ChargeKeeper” in System Settings > General > Login Items > Allow in the Background.":
+        "Autorisez « ChargeKeeper » dans Réglages Système > Général > Ouverture > Autoriser en arrière-plan.",
     "Open System Settings": "Ouvrir Réglages Système",
     "Starting the service…": "Démarrage du service…",
-    "Jauge needs a system service to control charging.": "Jauge a besoin d'un service système pour piloter la charge.",
+    "ChargeKeeper needs a system service to control charging.": "ChargeKeeper a besoin d'un service système pour piloter la charge.",
     "Turn On Service": "Activer le service",
     "Hardware %@ · %@": "Matériel %@ · %@",
     "Hardware %@ · %@ · Limit %d %%": "Matériel %@ · %@ · Limite %d %%",
@@ -69,6 +69,9 @@ private let french: [String: String] = [
     "Version %@": "Version %@",
     "Last check: %@": "Dernière vérification : %@",
     "Never checked": "Jamais vérifié",
+    "About": "À propos",
+    "Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple.":
+        "Fourni tel quel, sans garantie (licence MIT). ChargeKeeper utilise des interfaces de macOS non documentées, susceptibles de changer : utilisation à vos risques. Projet indépendant, ni affilié à Apple ni approuvé par Apple.",
     "System": "Système",
     "Automatic discharge": "Décharge automatique",
     "Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration.":

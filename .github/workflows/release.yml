@@ -88,9 +88,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           notarize() { xcrun notarytool submit "$1" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait; }
-          APP=build/Build/Products/Release/Jauge.app
-          ditto -c -k --keepParent "$APP" build/Jauge.zip
-          notarize build/Jauge.zip
+          APP=build/Build/Products/Release/ChargeKeeper.app
+          ditto -c -k --keepParent "$APP" build/ChargeKeeper.zip
+          notarize build/ChargeKeeper.zip
           xcrun stapler staple "$APP"
           DMG=$(scripts/package.sh dmg)
           notarize "$DMG"
@@ -104,14 +104,14 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           V=$(cat VERSION)
-          mkdir -p build/updates && cp "build/Jauge-$V.dmg" build/updates/
+          mkdir -p build/updates && cp "build/ChargeKeeper-$V.dmg" build/updates/
           printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/ed.key"
           build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast --ed-key-file "$RUNNER_TEMP/ed.key" \
             --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/v$V/" \
-            --link https://vlor999.github.io/jauge/ build/updates
+            --link https://vlor999.github.io/chargekeeper/ build/updates
           rm "$RUNNER_TEMP/ed.key"
-          gh release create "v$V" "build/Jauge-$V.dmg" build/updates/appcast.xml --title "Jauge v$V" --notes \
-            "Download: https://vlor999.github.io/jauge/
+          gh release create "v$V" "build/ChargeKeeper-$V.dmg" build/updates/appcast.xml --title "ChargeKeeper v$V" --notes \
+            "Download: https://vlor999.github.io/chargekeeper/
 
           - Signed and notarized by Apple. Apple silicon Macs, macOS 14 or later.
           - Already installed: the update arrives on its own."
@@ -136,33 +136,39 @@ jobs:
           [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           V=${TAG#v}
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p '*.dmg'
-          SHA=$(sha256sum "Jauge-$V.dmg" | cut -d' ' -f1)
+          SHA=$(sha256sum "ChargeKeeper-$V.dmg" | cut -d' ' -f1)
           gh auth setup-git
           gh repo clone Vlor999/homebrew-tap tap
           mkdir -p tap/Casks
-          cat > tap/Casks/jauge.rb <<RUBY
-          cask "jauge" do
+          cat > tap/Casks/chargekeeper.rb <<RUBY
+          cask "chargekeeper" do
             version "$V"
             sha256 "$SHA"
 
-            url "https://github.com/Vlor999/jauge/releases/download/v#{version}/Jauge-#{version}.dmg"
-            name "Jauge"
+            url "https://github.com/Vlor999/chargekeeper/releases/download/v#{version}/ChargeKeeper-#{version}.dmg"
+            name "ChargeKeeper"
             desc "Battery charge limiter for Apple silicon MacBooks"
-            homepage "https://vlor999.github.io/jauge/"
+            homepage "https://vlor999.github.io/chargekeeper/"
 
             depends_on arch: :arm64
             depends_on macos: ">= :sonoma"
             auto_updates true
 
-            app "Jauge.app"
-            binary "#{appdir}/Jauge.app/Contents/MacOS/jaugectl"
+            app "ChargeKeeper.app"
+            binary "#{appdir}/ChargeKeeper.app/Contents/MacOS/chargekeeperctl"
 
+            # Internal ids keep the former name Jauge.
             uninstall launchctl: "com.vlor999.jauge.daemon", quit: "com.vlor999.jauge"
             zap trash: ["/Library/Application Support/Jauge", "~/Library/Preferences/com.vlor999.jauge.plist"]
           end
           RUBY
           cd tap
-          git add Casks/jauge.rb
+          # Former token: brew migrates existing "jauge" installs to "chargekeeper".
+          git rm -q --ignore-unmatch Casks/jauge.rb
+          [ -f cask_renames.json ] || echo '{}' > cask_renames.json
+          jq '. + {"jauge": "chargekeeper"}' cask_renames.json > "$RUNNER_TEMP/renames.json"
+          mv "$RUNNER_TEMP/renames.json" cask_renames.json
+          git add Casks/chargekeeper.rb cask_renames.json
           git diff --cached --quiet && exit 0
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "jauge $V"
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "chargekeeper $V"
           git push
