@@ -6,38 +6,50 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            charge.tabItem { Label("Contrôle de la charge", systemImage: "bolt") }
-            sleep.tabItem { Label("Suspension", systemImage: "moon") }
-            led.tabItem { Label("LED MagSafe", systemImage: "lightbulb") }
-            ScheduleView().tabItem { Label("Planification", systemImage: "calendar") }
+            general.tabItem { Label(tr("General"), systemImage: "gearshape") }
+            charge.tabItem { Label(tr("Charge control"), systemImage: "bolt") }
+            sleep.tabItem { Label(tr("Sleep"), systemImage: "moon") }
+            led.tabItem { Label(tr("MagSafe LED"), systemImage: "lightbulb") }
+            ScheduleView().tabItem { Label(tr("Schedule"), systemImage: "calendar") }
         }
         .frame(width: 560, height: 440)
         .onAppear { NSApp.activate(ignoringOtherApps: true) }
     }
 
+    @AppStorage(languageKey) private var language = "system"
+
+    var general: some View {
+        Form {
+            Picker(tr("Language"), selection: $language) {
+                Text(tr("System")).tag("system")
+                Text("English").tag("en")
+                Text("Français").tag("fr")
+            }
+            Toggle(tr("Open at login"), isOn: Binding(
+                get: { SMAppService.mainApp.status == .enabled },
+                set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
+        }
+        .formStyle(.grouped)
+    }
+
     var charge: some View {
         Form {
-            Section("Décharge") {
-                Toggle("Décharge automatique", isOn: m.config(\.autoDischarge))
-                Text("Au-dessus de la limite, la batterie se décharge jusqu'à la limite même branchée. En pause pendant la calibration.")
+            Section(tr("Discharge")) {
+                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge))
+                Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Plage de repos") {
-                Toggle("Ne recharger que sous la plage de repos", isOn: m.config(\.idle))
-                Stepper("Plage : \(m.config(\.idleRange).wrappedValue) %", value: m.config(\.idleRange), in: 1...30)
+            Section(tr("Idle range")) {
+                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle))
+                Stepper(tr("Range: %d %%", m.config(\.idleRange).wrappedValue), value: m.config(\.idleRange), in: 1...30)
             }
-            Section("Protection thermique") {
-                Toggle("Arrêter la charge si la batterie est trop chaude", isOn: m.config(\.heatProtect))
-                Stepper(String(format: "Temp. max : %.0f °C", m.config(\.maxTemp).wrappedValue), value: m.config(\.maxTemp), in: 25...50, step: 1)
+            Section(tr("Heat protection")) {
+                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect))
+                Stepper(tr("Max temp: %.0f °C", m.config(\.maxTemp).wrappedValue), value: m.config(\.maxTemp), in: 25...50, step: 1)
             }
-            Section("Démarrage") {
-                Toggle("Ouvrir à la connexion", isOn: Binding(
-                    get: { SMAppService.mainApp.status == .enabled },
-                    set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
-            }
-            Section("Arrêt") {
-                Toggle("Garder la limite quand le service s'arrête", isOn: m.config(\.keepLimitWhenStopped))
-                Text("Le service système applique la limite pour tous les comptes. Cette option la garde active s'il s'arrête.")
+            Section(tr("Shutdown")) {
+                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped))
+                Text(tr("The system service applies the limit for every user account. This keeps it active if the service stops."))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -46,18 +58,18 @@ struct SettingsView: View {
 
     var sleep: some View {
         Form {
-            Toggle("Figer le niveau de charge pendant la veille", isOn: m.config(\.stopChargingDuringSleep))
-            Toggle("Empêcher la veille tant que la limite n'est pas atteinte", isOn: m.config(\.disableSleepUntilLimit))
-            Text("La suspension est aussi désactivée pendant la Décharge sur secteur (mode clamshell).")
+            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep))
+            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit))
+            Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
-            Section("Mode d'énergie macOS") {
+            Section(tr("macOS energy mode")) {
                 HStack {
-                    Button("Économie d'énergie : activer") { m.run(.lowPower(true)) }
-                    Button("désactiver") { m.run(.lowPower(false)) }
+                    Button(tr("Low Power Mode: on")) { m.run(.lowPower(true)) }
+                    Button(tr("off")) { m.run(.lowPower(false)) }
                 }
                 HStack {
-                    Button("Mode Performance : activer") { m.run(.highPower(true)) }
-                    Button("désactiver") { m.run(.highPower(false)) }
+                    Button(tr("Performance mode: on")) { m.run(.highPower(true)) }
+                    Button(tr("off")) { m.run(.highPower(false)) }
                 }
             }
         }
@@ -66,13 +78,13 @@ struct SettingsView: View {
 
     var led: some View {
         Form {
-            Picker("LED MagSafe", selection: m.config(\.led)) {
-                Text("Contrôle système").tag(LEDSetting.system)
-                Text("Couleur selon la charge").tag(LEDSetting.indicate)
-                Text("Toujours éteinte").tag(LEDSetting.alwaysOff)
+            Picker(tr("MagSafe LED"), selection: m.config(\.led)) {
+                Text(tr("System control")).tag(LEDSetting.system)
+                Text(tr("Color by charge state")).tag(LEDSetting.indicate)
+                Text(tr("Always off")).tag(LEDSetting.alwaysOff)
             }
-            Toggle("Orange clignotant pendant la décharge", isOn: m.config(\.ledBlinkDischarge))
-            Text("Vert : limite atteinte · Orange : charge ou décharge vers la limite.")
+            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge))
+            Text(tr("Green: limit reached · Orange: charging or discharging toward the limit."))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
@@ -82,13 +94,13 @@ struct SettingsView: View {
 extension TaskAction {
     var label: String {
         switch self {
-        case .setLimit: "Définir la limite de recharge"
-        case .calibrate: "Démarrer la calibration"
-        case .topUp: "Charger à 100 %"
-        case .pause: "Suspendre la charge"
-        case .dischargeTo: "Décharger jusqu'à"
-        case .lowPowerOn: "Activer l'Économie d'énergie"
-        case .lowPowerOff: "Désactiver l'Économie d'énergie"
+        case .setLimit: tr("Set charge limit")
+        case .calibrate: tr("Start Calibration")
+        case .topUp: tr("Charge to 100%")
+        case .pause: tr("Pause charging")
+        case .dischargeTo: tr("Discharge to")
+        case .lowPowerOn: tr("Turn on Low Power Mode")
+        case .lowPowerOff: tr("Turn off Low Power Mode")
         }
     }
 }
@@ -96,13 +108,13 @@ extension TaskAction {
 extension Repeat {
     var label: String {
         switch self {
-        case .never: "Ne pas répéter"
-        case .daily: "Quotidienne"
-        case .weekdays: "En semaine"
-        case .weekly: "Hebdomadaire"
-        case .biweekly: "Toutes les 2 semaines"
-        case .monthly: "Mensuelle"
-        case .yearly: "Annuelle"
+        case .never: tr("Never")
+        case .daily: tr("Daily")
+        case .weekdays: tr("Weekdays")
+        case .weekly: tr("Weekly")
+        case .biweekly: tr("Every 2 weeks")
+        case .monthly: tr("Monthly")
+        case .yearly: tr("Yearly")
         }
     }
 }
@@ -118,13 +130,13 @@ struct ScheduleView: View {
                     if let i = tasks.wrappedValue.firstIndex(of: t) { TaskRow(task: tasks[i]) { tasks.wrappedValue.remove(at: i) } }
                 }
                 HStack {
-                    Button("+ Tâche") { tasks.wrappedValue.append(ScheduledTask(action: .setLimit, repeatRule: .daily, start: nextNine())) }
-                    Button("Calibration mensuelle") { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
-                    Button("Calibration toutes les 2 semaines") { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
+                    Button(tr("+ Task")) { tasks.wrappedValue.append(ScheduledTask(action: .setLimit, repeatRule: .daily, start: nextNine())) }
+                    Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
+                    Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
-                Toggle("Exécuter au réveil les tâches manquées", isOn: m.config(\.catchUpMissedTasks))
+                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
             }
-            Section("Historique") {
+            Section(tr("History")) {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
                     HStack {
                         Text(h.date, style: .date); Text(h.date, style: .time)
@@ -148,16 +160,16 @@ struct TaskRow: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Picker("Action", selection: $task.action) { ForEach(TaskAction.allCases, id: \.self) { Text($0.label).tag($0) } }
+                Picker(tr("Action"), selection: $task.action) { ForEach(TaskAction.allCases, id: \.self) { Text($0.label).tag($0) } }
                 Toggle("", isOn: $task.enabled).toggleStyle(.switch)
                 Button(role: .destructive, action: delete) { Image(systemName: "trash") }.buttonStyle(.borderless)
             }
             HStack {
-                Picker("Répétition", selection: $task.repeatRule) { ForEach(Repeat.allCases, id: \.self) { Text($0.label).tag($0) } }
+                Picker(tr("Repeat"), selection: $task.repeatRule) { ForEach(Repeat.allCases, id: \.self) { Text($0.label).tag($0) } }
                 DatePicker("", selection: $task.start).labelsHidden()
             }
             if task.action == .setLimit || task.action == .dischargeTo {
-                Stepper("Valeur : \(task.value) %", value: $task.value, in: 20...100)
+                Stepper(tr("Value: %d %%", task.value), value: $task.value, in: 20...100)
             }
         }
     }

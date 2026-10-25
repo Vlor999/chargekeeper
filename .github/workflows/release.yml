@@ -98,10 +98,10 @@ jobs:
             --link https://vlor999.github.io/jauge/ build/updates
           rm "$RUNNER_TEMP/ed.key"
           gh release create "v$V" "build/Jauge-$V.dmg" build/updates/appcast.xml --title "Jauge v$V" --notes \
-            "Téléchargement : https://vlor999.github.io/jauge/
+            "Download: https://vlor999.github.io/jauge/
 
-          - App signée et notarisée par Apple. Mac Apple silicon, macOS 14 ou plus.
-          - Déjà installée : la mise à jour arrive toute seule."
+          - Signed and notarized by Apple. Apple silicon Macs, macOS 14 or later.
+          - Already installed: the update arrives on its own."
 
       - name: Remove keychain
         if: always() && env.HAS_SECRETS == 'true'

@@ -19,7 +19,7 @@
 - MagSafe LED colors
 - Keep awake until the limit, freeze the level during sleep
 - Shortcuts actions and a CLI (`jaugectl`)
-- French UI
+- English and French UI (Settings > General > Language)
 
 ## Install
 

@@ -90,7 +90,7 @@ final class Backend {
         }
     }
 
-    /// Called when the daemon stops ("Garder la limite à l'arrêt").
+    /// Called when the daemon stops ("Keep the limit when the service stops").
     func shutdown(keepLimit: Bool, limit: Int) {
         setDischarge(false)
         if keepLimit {

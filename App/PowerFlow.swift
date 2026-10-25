@@ -9,14 +9,14 @@ struct PowerFlow: View {
 
     var sources: [Node] {
         var n: [Node] = []
-        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: "Adaptateur", icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
-        if s.batteryWatts < -0.1 { n.append(Node(name: "Batterie", icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
+        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: "Adapter", icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
+        if s.batteryWatts < -0.1 { n.append(Node(name: "Battery", icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
         return n
     }
 
     var sinks: [Node] {
         var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(s.systemWatts, 0.1), color: .blue)]
-        if s.batteryWatts > 0.1 { n.append(Node(name: "Batterie", icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
+        if s.batteryWatts > 0.1 { n.append(Node(name: "Battery", icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
         return n
     }
 
@@ -28,12 +28,12 @@ struct PowerFlow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Flux de puissance").font(.caption).foregroundStyle(.secondary)
+            Text(tr("Power flow")).font(.caption).foregroundStyle(.secondary)
             TimelineView(.animation(paused: reduceMotion)) { tl in
                 Canvas { ctx, size in draw(&ctx, size, phase: reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate) }
             }
             if underpowered {
-                Label("Adaptateur trop faible : la batterie complète \(String(format: "%.1f W", -s.batteryWatts))\(s.adapterRatedWatts.map { " (adaptateur \($0) W)" } ?? "")",
+                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
@@ -108,15 +108,15 @@ struct DashboardView: View {
                     Text("\(s.percent) %").font(.system(size: 40, weight: .semibold))
                     VStack(alignment: .leading) {
                         Text(s.runtime.state.label).font(.headline)
-                        Text("Matériel \(s.hardwarePercent.map { "\($0) %" } ?? "--") · \(s.temperature.map { String(format: "%.1f °C", $0) } ?? "--") · Limite \(s.config.limit) %")
+                        Text(tr("Hardware %@ · %@ · Limit %d %%", s.hardwarePercent.map { "\($0) %" } ?? "--", s.temperature.map { String(format: "%.1f °C", $0) } ?? "--", s.config.limit))
                             .foregroundStyle(.secondary)
                     }
                 }
                 PowerFlow(s: s).frame(height: 220)
             } else {
-                Text(m.error ?? "Connexion…").foregroundStyle(.secondary)
+                Text(m.error ?? tr("Connecting…")).foregroundStyle(.secondary)
             }
-            Toggle("Afficher dans le menu", isOn: $flowInMenu)
+            Toggle(tr("Show in menu"), isOn: $flowInMenu)
         }
         .padding(20)
         .frame(width: 560)

@@ -1,6 +1,7 @@
 name: Jauge
 options:
   bundleIdPrefix: com.vlor999
+  developmentLanguage: en
   deploymentTarget:
     macOS: "14.0"
 packages:
@@ -43,6 +44,7 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Jauge
+        CFBundleLocalizations: [en, fr]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true

@@ -5,10 +5,12 @@ import SwiftUI
 @main
 struct JaugeApp: App {
     @StateObject var model = AppModel()
+    // Changing it rebuilds every view (`.id`) so all tr() strings switch at once.
+    @AppStorage(languageKey) var language = "system"
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView().environmentObject(model)
+            MenuView().environmentObject(model).localized(language)
         } label: {
             Image(nsImage: {
                 let i = NSImage(named: "MenuIcon")!
@@ -18,9 +20,9 @@ struct JaugeApp: App {
             }())
         }
         .menuBarExtraStyle(.window)
-        Window("Tableau de bord", id: "dashboard") { DashboardView().environmentObject(model) }
+        Window(tr("Dashboard"), id: "dashboard") { DashboardView().environmentObject(model).localized(language) }
             .windowResizability(.contentSize)
-        Settings { SettingsView().environmentObject(model) }
+        Settings { SettingsView().environmentObject(model).localized(language) }
     }
 }
 
@@ -65,14 +67,14 @@ final class AppModel: ObservableObject {
 extension ChargeState {
     var label: String {
         switch self {
-        case .charging: "En charge"
-        case .pause: "Charge suspendue"
-        case .idle: "Au repos"
-        case .discharging: "Décharge"
-        case .topup: "Charge à 100 %"
-        case .heatProtect: "Protection thermique"
-        case .calibration: "Calibration"
-        case .exit: "Arrêté"
+        case .charging: tr("Charging")
+        case .pause: tr("Charging paused")
+        case .idle: tr("Idle")
+        case .discharging: tr("Discharging")
+        case .topup: tr("Charge to 100%")
+        case .heatProtect: tr("Heat protection")
+        case .calibration: tr("Calibration")
+        case .exit: tr("Stopped")
         }
     }
 }
@@ -80,11 +82,11 @@ extension ChargeState {
 extension CalibrationPhase {
     var label: String {
         switch self {
-        case .chargeFull: "1/5 Charge à 100 %"
-        case .dischargeTo10: "2/5 Décharge à 10 %"
-        case .rechargeFull: "3/5 Recharge à 100 %"
-        case .hold: "4/5 Pause 1 h à 100 %"
-        case .returnToLimit: "5/5 Retour à la limite"
+        case .chargeFull: tr("1/5 Charging to 100%")
+        case .dischargeTo10: tr("2/5 Discharging to 10%")
+        case .rechargeFull: tr("3/5 Recharging to 100%")
+        case .hold: tr("4/5 Resting 1 h at 100%")
+        case .returnToLimit: tr("5/5 Back to the limit")
         }
     }
 }
@@ -100,12 +102,12 @@ struct MenuView: View {
             if let s = m.status, m.error == nil { content(s) } else { serviceSetup }
             Divider()
             HStack {
-                Button("Tableau de bord") { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }
-                SettingsLink { Text("Réglages…") }
+                Button(tr("Dashboard")) { openWindow(id: "dashboard"); NSApp.activate(ignoringOtherApps: true) }
+                SettingsLink { Text(tr("Settings…")) }
                 Spacer()
                 Menu {
-                    Button("Rechercher des mises à jour…") { m.updater.checkForUpdates(nil) }
-                    Button("Quitter Jauge") { NSApp.terminate(nil) }
+                    Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
+                    Button(tr("Quit Jauge")) { NSApp.terminate(nil) }
                 } label: { Image(systemName: "ellipsis.circle") }
                 .menuStyle(.borderlessButton).fixedSize()
             }
@@ -117,17 +119,17 @@ struct MenuView: View {
     /// The root service controls charging; without it the app is only a remote control.
     @ViewBuilder var serviceSetup: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Service de charge inactif").font(.headline)
+            Text(tr("Charging service is off")).font(.headline)
             switch m.serviceStatus {
             case .requiresApproval:
-                Text("Autorisez « Jauge » dans Réglages Système > Général > Ouverture > Autoriser en arrière-plan.")
+                Text(tr("Allow “Jauge” in System Settings > General > Login Items > Allow in the Background."))
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Ouvrir Réglages Système") { SMAppService.openSystemSettingsLoginItems() }
+                Button(tr("Open System Settings")) { SMAppService.openSystemSettingsLoginItems() }
             case .enabled:
-                Text("Démarrage du service…").font(.caption).foregroundStyle(.secondary)
+                Text(tr("Starting the service…")).font(.caption).foregroundStyle(.secondary)
             default:
-                Text("Jauge a besoin d'un service système pour piloter la charge.").font(.caption).foregroundStyle(.secondary)
-                Button("Activer le service") { m.enableService() }
+                Text(tr("Jauge needs a system service to control charging.")).font(.caption).foregroundStyle(.secondary)
+                Button(tr("Turn On Service")) { m.enableService() }
             }
         }
     }
@@ -138,7 +140,7 @@ struct MenuView: View {
             Text("\(s.percent) %").font(.system(size: 34, weight: .semibold))
             VStack(alignment: .leading) {
                 Text(r.state.label).font(.headline)
-                Text("Matériel \(s.hardwarePercent.map { "\($0) %" } ?? "--") · \(s.temperature.map { String(format: "%.1f °C", $0) } ?? "--")")
+                Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", s.temperature.map { String(format: "%.1f °C", $0) } ?? "--"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -146,7 +148,7 @@ struct MenuView: View {
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Limite de recharge")
+                Text(tr("Charge limit"))
                 Spacer()
                 TextField("", value: Binding(get: { s.config.limit }, set: { m.run(.setLimit($0)) }), format: .number)
                     .frame(width: 44).multilineTextAlignment(.trailing)
@@ -156,25 +158,32 @@ struct MenuView: View {
                 if !editing, let l = limit { m.run(.setLimit(Int(l))); limit = nil }
             }
             if s.config.idle {
-                Text("Repos : \(max(s.config.limit - s.config.idleRange, 0))–\(s.config.limit) %")
+                Text(tr("Idle: %d–%d %%", max(s.config.limit - s.config.idleRange, 0), s.config.limit))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
 
         HStack {
             if !s.config.autoDischarge {
-                Toggle("Décharge", isOn: Binding(get: { r.discharge }, set: { m.run(.discharge($0)) }))
+                Toggle(tr("Discharge"), isOn: Binding(get: { r.discharge }, set: { m.run(.discharge($0)) }))
                     .disabled(s.percent <= s.config.limit && !r.discharge)
             }
-            Toggle("Charger à 100 %", isOn: Binding(get: { r.topUp }, set: { m.run(.topUp($0)) }))
+            Toggle(tr("Charge to 100%"), isOn: Binding(get: { r.topUp }, set: { m.run(.topUp($0)) }))
         }
         .toggleStyle(.button)
         HStack {
-            Button(r.calibration == nil ? "Démarrer la calibration" : "Arrêter la calibration") { m.run(.calibrate(r.calibration == nil)) }
-            Button("Suspendre") { m.run(.pause) }
+            Button(r.calibration == nil ? tr("Start Calibration") : tr("Stop Calibration")) { m.run(.calibrate(r.calibration == nil)) }
+            Button(tr("Pause")) { m.run(.pause) }
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
-        if !s.nativeLimit { Text("Limite native indisponible : contrôle SMC uniquement").font(.caption2).foregroundStyle(.secondary) }
+        if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
+    }
+}
+
+extension View {
+    /// Rebuilds the view tree when the language changes and formats dates in that language.
+    func localized(_ language: String) -> some View {
+        id(language).environment(\.locale, Locale(identifier: appLanguage))
     }
 }
