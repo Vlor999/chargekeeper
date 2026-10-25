@@ -40,10 +40,13 @@ jobs:
         if: env.HAS_SECRETS == 'true'
 
       # Third-party code (XcodeGen, Sparkle) is fetched before the certificate is imported.
+      - name: Install XcodeGen
+        if: env.HAS_SECRETS == 'true'
+        run: scripts/install-xcodegen.sh
+
       - name: Prepare project
         if: env.HAS_SECRETS == 'true'
         run: |
-          scripts/install-xcodegen.sh
           make check
           make project
 
