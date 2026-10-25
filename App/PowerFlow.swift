@@ -12,6 +12,11 @@ struct PowerFlow: View {
         var n: [Node] = []
         if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: "Adapter", icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
         if s.batteryWatts < -0.1 { n.append(Node(name: "Battery", icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
+        // Right after wake the gauge can report 0 W for a while: show the obvious source with the Mac's load.
+        if n.isEmpty {
+            n.append(s.adapter ? Node(name: "Adapter", icon: "bolt.fill", watts: max(s.systemWatts, 0.1), color: .yellow)
+                               : Node(name: "Battery", icon: "battery.50percent", watts: max(s.systemWatts, 0.1), color: .orange))
+        }
         return n
     }
 
@@ -83,19 +88,17 @@ struct PowerFlow: View {
                 band.closeSubpath()
                 ctx.fill(band, with: .linearGradient(Gradient(colors: [src[i].color.opacity(0.45), dst[j].color.opacity(0.45)]),
                                                      startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x1, y: 0)))
-                // Thin moving dashes, one every ~10 pt across the band, show the direction of flow.
-                // Keep the phase within one dash period: the renderer works in Float, and the raw
-                // clock (~1e9 s × 24) loses every fraction, which freezes the dashes.
-                let shift = (phase * 24).truncatingRemainder(dividingBy: 18)
-                let lines = max(1, Int(ha / 10))
-                for k in 0..<lines {
-                    let f = (CGFloat(k) + 0.5) / CGFloat(lines)
-                    var p = Path()
-                    p.move(to: CGPoint(x: x0 + bar, y: a + ha * f))
-                    p.addCurve(to: CGPoint(x: x1 - bar, y: b + hb * f), control1: CGPoint(x: (x0 + x1) / 2, y: a + ha * f), control2: CGPoint(x: (x0 + x1) / 2, y: b + hb * f))
-                    ctx.stroke(p, with: .color(.white.opacity(0.5)),
-                               style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [8, 10], dashPhase: -CGFloat(shift + Double(k) * 6)))
-                }
+                // A soft bright crest travels from source to consumer every 1.4 s, clipped to the band.
+                // Position from the clock modulo the period: no state, and no Float precision loss.
+                let crest = CGFloat((phase / 1.4).truncatingRemainder(dividingBy: 1)) * 1.3 - 0.15
+                let x = x0 + (x1 - x0) * crest, w = (x1 - x0) * 0.25
+                var g = ctx
+                g.clip(to: band)
+                g.fill(Path(CGRect(x: x - w, y: 0, width: 2 * w, height: size.height)),
+                       with: .linearGradient(Gradient(stops: [.init(color: .white.opacity(0), location: 0),
+                                                              .init(color: .white.opacity(0.6), location: 0.5),
+                                                              .init(color: .white.opacity(0), location: 1)]),
+                                             startPoint: CGPoint(x: x - w, y: 0), endPoint: CGPoint(x: x + w, y: 0)))
             }
             offS[i] += ha; offD[j] += hb
             remS[i] -= w; remD[j] -= w
@@ -123,7 +126,7 @@ struct DashboardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let s = m.status {
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                HStack(alignment: .center, spacing: 16) {
                     Text("\(s.percent) %").font(.system(size: 40, weight: .semibold))
                     VStack(alignment: .leading) {
                         Text(s.runtime.state.label).font(.headline)
