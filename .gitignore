@@ -2,3 +2,6 @@ build/
 Jauge.xcodeproj/
 App/Info.plist
 .DS_Store
+.claude/worktrees/
+.claude/settings.local.json
+*_review.md
