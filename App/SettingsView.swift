@@ -50,7 +50,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Button(tr("Quit Jauge")) { NSApp.terminate(nil) }
+                Button(tr("Quit ChargeKeeper")) { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }
         }

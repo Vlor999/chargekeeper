@@ -20,13 +20,13 @@ private let french: [String: String] = [
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",
     "Check for Updates…": "Rechercher des mises à jour…",
-    "Quit Jauge": "Quitter Jauge",
+    "Quit ChargeKeeper": "Quitter ChargeKeeper",
     "Charging service is off": "Service de charge inactif",
-    "Allow “Jauge” in System Settings > General > Login Items > Allow in the Background.":
-        "Autorisez « Jauge » dans Réglages Système > Général > Ouverture > Autoriser en arrière-plan.",
+    "Allow “ChargeKeeper” in System Settings > General > Login Items > Allow in the Background.":
+        "Autorisez « ChargeKeeper » dans Réglages Système > Général > Ouverture > Autoriser en arrière-plan.",
     "Open System Settings": "Ouvrir Réglages Système",
     "Starting the service…": "Démarrage du service…",
-    "Jauge needs a system service to control charging.": "Jauge a besoin d'un service système pour piloter la charge.",
+    "ChargeKeeper needs a system service to control charging.": "ChargeKeeper a besoin d'un service système pour piloter la charge.",
     "Turn On Service": "Activer le service",
     "Hardware %@ · %@": "Matériel %@ · %@",
     "Hardware %@ · %@ · Limit %d %%": "Matériel %@ · %@ · Limite %d %%",

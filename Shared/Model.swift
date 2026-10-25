@@ -1,5 +1,6 @@
 import Foundation
 
+// Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
 let socketPath = "/var/run/jauge.sock"
 
 enum ChargeState: String, Codable {
