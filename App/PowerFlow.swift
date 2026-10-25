@@ -71,12 +71,16 @@ struct PowerFlow: View {
                 band.closeSubpath()
                 ctx.fill(band, with: .linearGradient(Gradient(colors: [src[i].color.opacity(0.45), dst[j].color.opacity(0.45)]),
                                                      startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x1, y: 0)))
-                // Moving dashes along the band's centre line show the direction of flow.
-                var mid = Path()
-                mid.move(to: CGPoint(x: x0 + bar, y: a + h / 2))
-                mid.addCurve(to: CGPoint(x: x1 - bar, y: b + h / 2), control1: CGPoint(x: (x0 + x1) / 2, y: a + h / 2), control2: CGPoint(x: (x0 + x1) / 2, y: b + h / 2))
-                ctx.stroke(mid, with: .color(.white.opacity(0.35)),
-                           style: StrokeStyle(lineWidth: max(1, h * 0.5), lineCap: .round, dash: [2, 12], dashPhase: -CGFloat(phase * 24)))
+                // Thin moving dashes, one every ~10 pt across the band, show the direction of flow.
+                let lines = max(1, Int(h / 10))
+                for k in 0..<lines {
+                    let f = (CGFloat(k) + 0.5) / CGFloat(lines)
+                    var p = Path()
+                    p.move(to: CGPoint(x: x0 + bar, y: a + h * f))
+                    p.addCurve(to: CGPoint(x: x1 - bar, y: b + h * f), control1: CGPoint(x: (x0 + x1) / 2, y: a + h * f), control2: CGPoint(x: (x0 + x1) / 2, y: b + h * f))
+                    ctx.stroke(p, with: .color(.white.opacity(0.5)),
+                               style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [8, 10], dashPhase: -CGFloat(phase * 24 + Double(k) * 6)))
+                }
             }
             offS[i] += h; offD[j] += h
             remS[i] -= w; remD[j] -= w
