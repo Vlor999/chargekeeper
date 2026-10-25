@@ -1,0 +1,155 @@
+name: Release
+
+# push to main: release if the VERSION is not published yet
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new: ${{ steps.check.outputs.new }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$(cat VERSION)" >/dev/null 2>&1; then echo new=false; else echo new=true; fi >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: version
+    # workflow_dispatch: manual rerun of a failed release
+    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      HAS_SECRETS: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.SPARKLE_PRIVATE_KEY != '' }}
+    steps:
+      - name: Secrets missing
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::Apple / Sparkle secrets not set (docs/release.md); release skipped."
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: env.HAS_SECRETS == 'true'
+
+      - name: Import Developer ID certificate
+        if: env.HAS_SECRETS == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KC=$RUNNER_TEMP/build.keychain-db
+          PW=$(openssl rand -hex 16)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$PW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$PW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Build and sign
+        if: env.HAS_SECRETS == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          brew install xcodegen
+          make check
+          make
+          scripts/package.sh sign
+
+      - name: Notarize
+        if: env.HAS_SECRETS == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          notarize() { xcrun notarytool submit "$1" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait; }
+          APP=build/Build/Products/Release/Jauge.app
+          ditto -c -k --keepParent "$APP" build/Jauge.zip
+          notarize build/Jauge.zip
+          xcrun stapler staple "$APP"
+          DMG=$(scripts/package.sh dmg)
+          notarize "$DMG"
+          xcrun stapler staple "$DMG"
+          spctl --assess --type execute -v "$APP"
+
+      - name: Publish release and appcast
+        if: env.HAS_SECRETS == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          V=$(cat VERSION)
+          mkdir -p build/updates && cp "build/Jauge-$V.dmg" build/updates/
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/ed.key"
+          build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast --ed-key-file "$RUNNER_TEMP/ed.key" \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/v$V/" \
+            --link https://vlor999.github.io/jauge/ build/updates
+          rm "$RUNNER_TEMP/ed.key"
+          gh release create "v$V" "build/Jauge-$V.dmg" build/updates/appcast.xml --title "Jauge v$V" --notes \
+            "Téléchargement : https://vlor999.github.io/jauge/
+
+          - App signée et notarisée par Apple. Mac Apple silicon, macOS 14 ou plus.
+          - Déjà installée : la mise à jour arrive toute seule."
+
+      - name: Remove keychain
+        if: always() && env.HAS_SECRETS == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+
+  # Homebrew cask (Vlor999/homebrew-tap): written only when the HOMEBREW_TAP_TOKEN secret exists
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      HAS_TAP: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Update cask
+        if: env.HAS_TAP == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          V=${TAG#v}
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p '*.dmg'
+          SHA=$(sha256sum "Jauge-$V.dmg" | cut -d' ' -f1)
+          gh auth setup-git
+          gh repo clone Vlor999/homebrew-tap tap
+          mkdir -p tap/Casks
+          cat > tap/Casks/jauge.rb <<RUBY
+          cask "jauge" do
+            version "$V"
+            sha256 "$SHA"
+
+            url "https://github.com/Vlor999/jauge/releases/download/v#{version}/Jauge-#{version}.dmg"
+            name "Jauge"
+            desc "Battery charge limiter for Apple silicon MacBooks"
+            homepage "https://vlor999.github.io/jauge/"
+
+            depends_on arch: :arm64
+            depends_on macos: ">= :sonoma"
+            auto_updates true
+
+            app "Jauge.app"
+            binary "#{appdir}/Jauge.app/Contents/MacOS/jaugectl"
+
+            uninstall launchctl: "com.vlor999.jauge.daemon", quit: "com.vlor999.jauge"
+            zap trash: ["/Library/Application Support/Jauge", "~/Library/Preferences/com.vlor999.jauge.plist"]
+          end
+          RUBY
+          cd tap
+          git add Casks/jauge.rb
+          git diff --cached --quiet && exit 0
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "jauge $V"
+          git push

@@ -1,0 +1,4 @@
+build/
+Jauge.xcodeproj/
+App/Info.plist
+.DS_Store

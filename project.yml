@@ -1,0 +1,70 @@
+name: Jauge
+options:
+  bundleIdPrefix: com.vlor999
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.4"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: 4WTQGGKVHL
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Developer ID Application"
+    ENABLE_HARDENED_RUNTIME: YES
+    OTHER_CODE_SIGN_FLAGS: --timestamp
+    ARCHS: arm64
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "10000"
+targets:
+  Jauge:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+      - path: Daemon/com.vlor999.jauge.daemon.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
+    dependencies:
+      - package: Sparkle
+      - target: jaugectl
+        copy:
+          destination: executables
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vlor999.jauge
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Jauge
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: MIT License
+        SUFeedURL: https://github.com/Vlor999/jauge/releases/latest/download/appcast.xml
+        SUPublicEDKey: /3JYrcdyR/CTnv2TUisWNsnPwlNq5gSclgYdnYqMlMg=
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
+        SUScheduledCheckInterval: 21600
+  jaugectl:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Daemon
+        excludes: ["*.plist"]
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vlor999.jauge.service
+        SWIFT_OBJC_BRIDGING_HEADER: Daemon/Native.h
+        CLANG_ENABLE_OBJC_ARC: YES
+        SKIP_INSTALL: YES
+        # launchd identifies the daemon by its signed identifier
+        OTHER_CODE_SIGN_FLAGS: --timestamp --identifier com.vlor999.jauge.service

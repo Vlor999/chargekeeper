@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jauge: battery charge limiter for Apple silicon MacBooks</title>
+<meta name="description" content="Free, open source menu bar app that keeps your MacBook battery at the level you choose: charge limit, discharge while plugged in, calibration, heat protection, scheduling, Shortcuts. Signed and notarized, automatic updates.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Jauge: your MacBook battery, at the right level">
+<meta property="og:description" content="Charge limit, discharge, calibration and scheduling from the menu bar. Free, open source, for Apple silicon MacBooks.">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta property="og:url" content="https://vlor999.github.io/jauge/">
+<meta property="og:site_name" content="Jauge">
+<meta property="og:image" content="https://vlor999.github.io/jauge/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Jauge: gauge logo and the tagline Your MacBook battery, at the right level.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://vlor999.github.io/jauge/og-image.png">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#download" data-i18n="skip">Skip to download</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="logo.svg" width="28" height="28" alt="" aria-hidden="true">Jauge</a>
+    <nav aria-label="Main" data-i18n-attr="aria-label:nav">
+      <a class="nl" href="#features" data-i18n="features">Features</a>
+      <a class="nl" href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/Vlor999/jauge" aria-label="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg></a>
+      <span class="lang" role="group" aria-label="Language" data-i18n-attr="aria-label:lang"><button type="button" lang="en" aria-pressed="true">EN</button><button type="button" lang="fr" aria-pressed="false">FR</button></span>
+      <a class="btn primary nav-dl" href="#download" data-i18n="dl">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section id="top">
+  <div class="wrap hero">
+    <div>
+      <h1 data-i18n-html="tagline">Your MacBook battery, <span class="accent">at the right level.</span></h1>
+      <p class="lead" data-i18n="lead">Charge limit, discharge, calibration and scheduling, from the menu bar. Free, open source, no account.</p>
+      <p class="actions"><a id="hero-dl" class="btn primary" href="#download">Download</a><a class="btn" href="#features" data-i18n="how">How it works</a></p>
+      <p class="meta"><span id="hero-ver"></span><span data-i18n="heroMeta">Apple silicon · macOS 14 or later · MIT License</span></p>
+    </div>
+    <figure class="shot">
+      <p class="sr" data-i18n="heroSr">Preview of the Jauge menu: battery at 80%, charging paused at the limit, the limit slider, discharge and full charge buttons, and the power flow from the adapter to the MacBook.</p>
+      <div class="desk" aria-hidden="true">
+        <div class="menubar"><span class="mb-ic"><svg viewBox="0 0 24 24"><path d="M6.34 17.66A8 8 0 1 1 17.66 17.66" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".35"/><path d="M6.34 17.66A8 8 0 1 1 19.9 10.75" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M13 7.2 9.4 12.6h2.7l-1 4.2 3.6-5.4H12z" fill="currentColor"/></svg></span><span data-i18n="clock">Sun Oct 25 9:41 AM</span></div>
+        <div class="pop">
+          <div class="p-head"><b class="pct">80 %</b><div><b data-i18n="paused">Charging paused</b><small data-i18n="hw">Hardware 79 % · 29.1 °C</small></div></div>
+          <div class="p-row"><span data-i18n="limit">Charge limit</span><span class="mono">80 %</span></div>
+          <div class="slider"><i style="--v:75%"></i></div>
+          <div class="p-btns"><span class="pb" data-i18n="discharge">Discharge</span><span class="pb" data-i18n="full">Charge to 100 %</span></div>
+          <div class="p-btns"><span class="pb" data-i18n="calib">Start calibration</span><span class="pb" data-i18n="pause">Pause</span></div>
+          <small class="muted" data-i18n="flow">Power flow</small>
+          <svg class="flow" viewBox="0 0 280 90">
+            <path d="M80 10 C140 10 140 10 200 10 L200 70 C140 70 140 70 80 70 Z" fill="var(--flow-a)"/>
+            <path class="dash" d="M80 40 C140 40 140 40 200 40" stroke-width="22"/>
+            <rect x="74" y="10" width="5" height="60" rx="2" fill="#e0b000"/>
+            <rect x="201" y="10" width="5" height="60" rx="2" fill="#3d7fd6"/>
+            <text x="68" y="44" text-anchor="end">AC 10.6 W</text>
+            <text x="212" y="44">Mac 10.6 W</text>
+          </svg>
+        </div>
+      </div>
+      <figcaption data-i18n="mockcap">Preview, sample data.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="download" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="dl">Download</h2>
+    <p id="release-meta" class="lead" aria-live="polite">Looking up the latest release…</p>
+    <div id="downloads" class="dl-grid">
+      <noscript><a class="btn" href="https://github.com/Vlor999/jauge/releases/latest">See releases on GitHub</a></noscript>
+    </div>
+    <p class="dl-note muted" data-i18n-html="first">On first launch, macOS asks you to allow Jauge's <strong>background service</strong> in System Settings &gt; General &gt; Login Items. That service is what talks to the battery.</p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2 data-i18n="features">Features</h2>
+    <p class="lead" data-i18n="flead">Keeping a battery between 50 and 80% slows its wear. Jauge does it for you, even when the app is closed.</p>
+    <div class="feat">
+      <article><h3 data-i18n="f1t">Charge limit</h3><p data-i18n="f1">Pick a limit from 20 to 100%. On macOS 26 and later, the Mac's own charge limit does the work from 80%.</p></article>
+      <article><h3 data-i18n="f2t">Discharge</h3><p data-i18n="f2">Run from the battery while plugged in, down to your limit. Start it by hand or let it start on its own.</p></article>
+      <article><h3 data-i18n="f3t">Idle range</h3><p data-i18n="f3">Recharge only once the level drops below a range, instead of topping up after every percent.</p></article>
+      <article><h3 data-i18n="f4t">Calibration</h3><p data-i18n="f4">A full cycle: 100%, down to 10%, back to 100%, one hour of rest, then your limit.</p></article>
+      <article><h3 data-i18n="f5t">Heat protection</h3><p data-i18n="f5">Charging pauses above the temperature you set, checked in five-minute windows.</p></article>
+      <article><h3 data-i18n="f6t">Power flow</h3><p data-i18n="f6">Watts from the adapter and the battery to the Mac, live. Warns you when the adapter is too weak.</p></article>
+      <article><h3 data-i18n="f7t">Schedule</h3><p data-i18n="f7">Set a limit, calibrate, charge to 100% or toggle Low Power Mode at set times. Missed tasks can run on wake.</p></article>
+      <article><h3 data-i18n="f8t">Shortcuts and Terminal</h3><p data-i18n-html="f8">Every action in the Shortcuts app, and <code>jaugectl</code> on the command line.</p></article>
+    </div>
+    <h3 class="more" data-i18n="more">And also</h3>
+    <ul class="chips">
+      <li data-i18n="c1">Charge to 100% once</li>
+      <li data-i18n="c2">MagSafe LED colors</li>
+      <li data-i18n="c3">Stay awake until the limit</li>
+      <li data-i18n="c4">Freeze the level during sleep</li>
+      <li data-i18n="c5">Hardware battery percentage</li>
+      <li data-i18n="c6">Works for every user account</li>
+    </ul>
+  </div>
+</section>
+
+<section id="privacy" class="alt">
+  <div class="wrap">
+    <h2 data-i18n="privacy">Privacy</h2>
+    <p class="lead" data-i18n="pv">Jauge only goes online to check for updates on GitHub. No account, no telemetry, nothing leaves your Mac.</p>
+    <p><a href="https://github.com/Vlor999/jauge" data-i18n="pvl">Read the code (MIT license)</a></p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2 data-i18n="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <details>
+        <summary data-i18n="q1">Why does Jauge need a background service?</summary>
+        <p data-i18n="a1">Changing how the battery charges requires administrator rights. A small service runs as root and does only that; the menu bar app talks to it through a local socket that only administrators can use. You approve it once in System Settings.</p>
+      </details>
+      <details>
+        <summary data-i18n="q2">Which Macs are supported?</summary>
+        <p data-i18n="a2">MacBooks with Apple silicon, on macOS 14 or later. Intel Macs are not supported.</p>
+      </details>
+      <details>
+        <summary data-i18n="q3">How does a limit below 80% work on macOS 26 and later?</summary>
+        <p data-i18n="a3">macOS's built-in limit stops at 80%. Below that, Jauge switches between battery and adapter around your limit, so the level moves by about 1%.</p>
+      </details>
+      <details>
+        <summary data-i18n="q4">How do updates work?</summary>
+        <p data-i18n="a4">Jauge checks the latest GitHub release on startup, then every 6 hours. Each update is signed: the app checks the signature, installs it and restarts its service.</p>
+      </details>
+      <details>
+        <summary data-i18n="q5">How do I uninstall it?</summary>
+        <p data-i18n-html="a5">Quit Jauge and move it to the Trash. With Homebrew: <code>brew uninstall --zap jauge</code>.</p>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span data-i18n="indep">Jauge · independent project, not affiliated with Apple</span>
+    <span class="foot-links"><a href="https://github.com/Vlor999/jauge">GitHub</a><a href="https://github.com/Vlor999/jauge/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/jauge/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/jauge/blob/main/LICENSE" data-i18n="mit">MIT License</a></span>
+  </div>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
