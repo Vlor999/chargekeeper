@@ -2,10 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
+  # main only accepts PRs from dev (required check in the main ruleset)
+  source-branch:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD: ${{ github.head_ref }}
+          REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: '[[ $HEAD == dev && $REPO == "$GITHUB_REPOSITORY" ]] || { echo "PRs to main must come from dev"; exit 1; }'
+
   check:
     runs-on: macos-latest
     steps:

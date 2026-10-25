@@ -31,11 +31,17 @@ struct PowerFlow: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Power flow")).font(.caption).foregroundStyle(.secondary)
             // 30 fps, and only while on screen: a hidden menu must not keep redrawing.
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || !shown)) { tl in
-                Canvas { ctx, size in draw(&ctx, size, phase: reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate) }
+            // The timeline is created on appear rather than un-paused: SwiftUI doesn't restart a paused one.
+            Group {
+                if shown && !reduceMotion {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in
+                        Canvas { ctx, size in draw(&ctx, size, phase: tl.date.timeIntervalSinceReferenceDate) }
+                    }
+                } else {
+                    Canvas { ctx, size in draw(&ctx, size, phase: 0) }
+                }
             }
-            .onAppear { shown = true }
-            .onDisappear { shown = false }
+            .background(WindowVisibility { shown = $0 })
             if underpowered {
                 Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
                       systemImage: "exclamationmark.triangle.fill")
@@ -78,6 +84,9 @@ struct PowerFlow: View {
                 ctx.fill(band, with: .linearGradient(Gradient(colors: [src[i].color.opacity(0.45), dst[j].color.opacity(0.45)]),
                                                      startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x1, y: 0)))
                 // Thin moving dashes, one every ~10 pt across the band, show the direction of flow.
+                // Keep the phase within one dash period: the renderer works in Float, and the raw
+                // clock (~1e9 s × 24) loses every fraction, which freezes the dashes.
+                let shift = (phase * 24).truncatingRemainder(dividingBy: 18)
                 let lines = max(1, Int(ha / 10))
                 for k in 0..<lines {
                     let f = (CGFloat(k) + 0.5) / CGFloat(lines)
@@ -85,7 +94,7 @@ struct PowerFlow: View {
                     p.move(to: CGPoint(x: x0 + bar, y: a + ha * f))
                     p.addCurve(to: CGPoint(x: x1 - bar, y: b + hb * f), control1: CGPoint(x: (x0 + x1) / 2, y: a + ha * f), control2: CGPoint(x: (x0 + x1) / 2, y: b + hb * f))
                     ctx.stroke(p, with: .color(.white.opacity(0.5)),
-                               style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [8, 10], dashPhase: -CGFloat(phase * 24 + Double(k) * 6)))
+                               style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [8, 10], dashPhase: -CGFloat(shift + Double(k) * 6)))
                 }
             }
             offS[i] += ha; offD[j] += hb
@@ -132,5 +141,43 @@ struct DashboardView: View {
         .frame(width: 560)
         .onAppear { m.visible += 1 }
         .onDisappear { m.visible -= 1 }
+    }
+}
+
+/// Reports whether the hosting window is actually on screen. onAppear/onDisappear aren't enough:
+/// a closed menu bar window is only ordered out, and its views keep running.
+struct WindowVisibility: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSView { Probe(onChange) }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    final class Probe: NSView {
+        let onChange: (Bool) -> Void
+        private var token: NSObjectProtocol?
+        private weak var observed: NSWindow?
+        private var last: Bool?
+        init(_ onChange: @escaping (Bool) -> Void) { self.onChange = onChange; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { nil }
+
+        // SwiftUI re-attaches this view often; only react when the window itself changes.
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            // Detached for a moment while SwiftUI swaps views: keep the current window and state.
+            guard let window, window !== observed else { return }
+            if let token { NotificationCenter.default.removeObserver(token) }
+            observed = window
+            token = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+                self?.report()
+            }
+            report()
+        }
+
+        private func report() {
+            let visible = observed?.occlusionState.contains(.visible) ?? false
+            guard visible != last else { return }
+            last = visible
+            DispatchQueue.main.async { self.onChange(visible) }
+        }
     }
 }
