@@ -138,8 +138,16 @@
       setLang(b.lang);
     });
   });
+  // Cache the release for an hour: the unauthenticated API allows 60 requests/hour per IP.
+  var cached;
+  try { cached = JSON.parse(localStorage.getItem('release')); } catch (e) {}
+  if (cached && Date.now() - cached.at < 3600e3) { rel = cached.rel; render(); return; }
   fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (r) { rel = r; render(); })
+    .then(function (r) {
+      rel = r;
+      try { localStorage.setItem('release', JSON.stringify({ at: Date.now(), rel: r })); } catch (e) {}
+      render();
+    })
     .catch(function () { rel = null; render(); });
 })();
