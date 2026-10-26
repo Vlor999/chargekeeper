@@ -71,16 +71,6 @@
   var heroDl = document.getElementById('hero-dl'), heroVer = document.getElementById('hero-ver');
   var rel; // undefined while loading, null on error; kept so a language switch re-renders without refetching
 
-  function fail() {
-    meta.textContent = t('Pas encore de version publiée.', 'No release published yet.');
-    box.innerHTML = '';
-    var a = document.createElement('a');
-    a.className = 'btn';
-    a.href = 'https://github.com/' + REPO + '/releases';
-    a.textContent = t('Voir les versions sur GitHub', 'See releases on GitHub');
-    box.appendChild(a);
-  }
-
   function brew() {
     var d = document.createElement('div');
     d.className = 'code';
@@ -106,20 +96,24 @@
     heroDl.textContent = t('Télécharger', 'Download');
     heroVer.textContent = '';
     if (rel === undefined) { meta.textContent = t('Recherche de la dernière version…', 'Looking up the latest release…'); return; }
-    if (!rel) return fail();
-    var dmg = (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
-    if (!dmg) return fail();
-    var ver = rel.tag_name || rel.name;
-    var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(t('fr-FR', 'en-US'), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-    meta.textContent = 'Version ' + ver + (date ? ' · ' + date : '');
-    heroVer.textContent = ver + ' · ';
+    // API down or rate-limited (60 requests/hour per IP): still offer the download through the latest release page.
+    var dmg = rel && (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
+    var url = dmg ? dmg.browser_download_url : 'https://github.com/' + REPO + '/releases/latest';
+    if (dmg) {
+      var ver = rel.tag_name || rel.name;
+      var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(t('fr-FR', 'en-US'), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      meta.textContent = 'Version ' + ver + (date ? ' · ' + date : '');
+      heroVer.textContent = ver + ' · ';
+    } else {
+      meta.textContent = t('Dernière version sur GitHub.', 'Latest release on GitHub.');
+    }
     box.innerHTML = '';
     var d = document.createElement('div');
     d.className = 'dl on';
     d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + LAPTOP + '</svg>macOS</h3>';
     var a = document.createElement('a');
     a.className = 'btn primary';
-    a.href = dmg.browser_download_url;
+    a.href = url;
     a.textContent = t('Télécharger pour Apple silicon', 'Download for Apple silicon');
     var n = document.createElement('small');
     n.textContent = t('✓ Signée et notarisée par Apple · mises à jour automatiques', '✓ Signed and notarized by Apple · automatic updates');
@@ -127,7 +121,7 @@
     d.appendChild(n);
     d.appendChild(brew());
     box.appendChild(d);
-    heroDl.href = dmg.browser_download_url;
+    heroDl.href = url;
     heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + DOWNLOAD + '</svg>';
     heroDl.appendChild(document.createTextNode(t('Télécharger pour macOS', 'Download for macOS')));
   }
