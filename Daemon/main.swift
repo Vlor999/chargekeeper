@@ -122,7 +122,7 @@ final class Daemon {
         if case .status = cmd {} else { mutate(cmd); tick() }
         return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
-                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, nativeLimit: hw.native,
+                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)))
     }
 

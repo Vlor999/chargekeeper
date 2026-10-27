@@ -11,6 +11,7 @@ struct Reading {
     var adapterRatedWatts: Int?
     var systemWatts = 0.0
     var batteryWatts = 0.0
+    var ports: [PortPower] = []
 }
 
 func readBattery() -> Reading? {
@@ -39,8 +40,31 @@ func readBattery() -> Reading? {
     r.adapterWatts = r.adapter ? Double(tele["SystemPowerIn"] as? Int ?? 0) / 1000 : 0
     r.adapterRatedWatts = (p["AdapterDetails"] as? [String: Any])?["Watts"] as? Int
     r.systemWatts = Double(tele["SystemLoad"] as? Int ?? 0) / 1000
+    // Measured per USB-C port (phone, earbuds charging from the Mac), in mW.
+    let out = (p["PowerOutDetails"] as? [[String: Any]] ?? []).map { (port: $0["PortIndex"] as? Int ?? 0, watts: Double($0["Watts"] as? Int ?? 0) / 1000) }
+    let names = out.contains { $0.watts > 0.1 } ? usbPortNames() : [:]
+    r.ports = out.map { PortPower(name: names[$0.port], watts: $0.watts) }
     r.temperature = smcTemperature()
     return r
+}
+
+/// Name of the USB device plugged straight into each USB-C port, keyed by the port number of PowerOutDetails.
+private func usbPortNames() -> [Int: String] {
+    var it: io_iterator_t = 0
+    guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return [:] }
+    defer { IOObjectRelease(it) }
+    var names: [Int: String] = [:]
+    while case let d = IOIteratorNext(it), d != 0 {
+        defer { IOObjectRelease(d) }
+        var port: io_registry_entry_t = 0
+        guard IORegistryEntryGetParentEntry(d, kIOServicePlane, &port) == KERN_SUCCESS else { continue }
+        defer { IOObjectRelease(port) }
+        // Only on the XHCI ports of the Mac itself (not hub ports): a little-endian UInt32.
+        guard let n = IORegistryEntryCreateCFProperty(port, "usb-c-port-number" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Data, n.count >= 4,
+              let name = IORegistryEntryCreateCFProperty(d, "USB Product Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String else { continue }
+        names[Int(n.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })] = name
+    }
+    return names
 }
 
 private func smcRead(_ key: String) -> [UInt8]? {
