@@ -20,6 +20,8 @@ private let french: [String: String] = [
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",
     "Check for Updates…": "Rechercher des mises à jour…",
+    "ChargeKeeper %@ is ready": "ChargeKeeper %@ est prête",
+    "Install and Restart": "Installer et redémarrer",
     "Quit ChargeKeeper": "Quitter ChargeKeeper",
     "Charging service is off": "Service de charge inactif",
     "Allow “ChargeKeeper” in System Settings > General > Login Items > Allow in the Background.":
