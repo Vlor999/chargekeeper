@@ -150,3 +150,26 @@ func lastOccurrence(_ t: ScheduledTask, after: Date, upTo: Date, calendar cal: C
     }
     return found
 }
+
+/// MacBook share of the system load once the USB-C ports are served.
+// ponytail: SystemLoad includes port output on the one Mac checked; ports above the load mean it doesn't, so the load is kept whole.
+func macWatts(system: Double, ports: [Double]) -> Double {
+    let out = ports.reduce(0, +)
+    return out <= system ? system - out : system
+}
+
+/// Label centres pushed apart by at least gap, kept inside 0...height while they fit.
+func spreadLabels(_ y: [Double], gap: Double, height: Double) -> [Double] {
+    var y = y
+    for i in y.indices.dropFirst() { y[i] = max(y[i], y[i - 1] + gap) }
+    if let last = y.indices.last { y[last] = min(y[last], height - gap / 2) }
+    for i in y.indices.dropLast().reversed() { y[i] = min(y[i], y[i + 1] - gap) }
+    return y
+}
+
+/// SF Symbol for a USB device name.
+// ponytail: substring match on Apple product names; anything else gets the generic connector.
+func deviceIcon(_ name: String?) -> String {
+    let d = name?.lowercased() ?? ""
+    return d.contains("iphone") ? "iphone" : d.contains("ipad") ? "ipad" : d.contains("airpods") ? "airpods" : "cable.connector"
+}
