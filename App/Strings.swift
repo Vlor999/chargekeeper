@@ -56,6 +56,17 @@ private let french: [String: String] = [
     "5/5 Back to the limit": "5/5 Retour à la limite",
     // Power flow
     "Power flow": "Flux de puissance",
+    "How to read the power flow": "Comment lire le flux de puissance",
+    "Left: where the power comes from. The adapter (or a display that charges the Mac), and the battery when it helps.":
+        "À gauche : d'où vient la puissance. L'adaptateur (ou un écran qui recharge le Mac), et la batterie quand elle complète.",
+    "Right: where it goes. The MacBook itself, the battery when it charges, and devices charging from the Mac's USB-C ports.":
+        "À droite : où elle va. Le MacBook lui-même, la batterie quand elle se recharge, et les appareils rechargés par les ports USB-C du Mac.",
+    "Example: 78 W come in. 15 W run the Mac, 55 W charge the battery and 8 W charge an iPhone.":
+        "Exemple : 78 W arrivent. 15 W font tourner le Mac, 55 W rechargent la batterie et 8 W rechargent un iPhone.",
+    "Each band is a share of its side. Each side has its own sensor, so the totals can differ by a few watts.":
+        "Chaque bande est une part de son côté. Chaque côté a son propre capteur : les totaux peuvent différer de quelques watts.",
+    "13.3 / 15 W: what a device draws, out of the most its port can supply.":
+        "13.3 / 15 W : ce que consomme un appareil, sur le maximum que son port peut fournir.",
     "Adapter": "Adaptateur",
     "Battery": "Batterie",
     "Adapter too weak: the battery supplies %@": "Adaptateur trop faible : la batterie complète %@",
