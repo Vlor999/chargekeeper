@@ -41,14 +41,25 @@ func readBattery() -> Reading? {
     r.adapterRatedWatts = (p["AdapterDetails"] as? [String: Any])?["Watts"] as? Int
     r.systemWatts = Double(tele["SystemLoad"] as? Int ?? 0) / 1000
     // Measured per USB-C port (phone, earbuds charging from the Mac), in mW.
-    let out = (p["PowerOutDetails"] as? [[String: Any]] ?? []).map { (port: $0["PortIndex"] as? Int ?? 0, watts: Double($0["Watts"] as? Int ?? 0) / 1000) }
-    let names = out.contains { $0.watts > 0.1 } ? usbPortNames() : [:]
-    r.ports = out.map { PortPower(name: names[$0.port], watts: $0.watts) }
+    let out = (p["PowerOutDetails"] as? [[String: Any]] ?? []).compactMap { d in
+        (d["PortIndex"] as? Int).map { (port: $0, watts: Double(d["Watts"] as? Int ?? 0) / 1000) }
+    }
+    // A device draws power before it enumerates: look again while a charging port has no name yet.
+    let active = out.filter { $0.watts > 0.1 }.map(\.port)
+    if active != portNames.ports || active.contains(where: { portNames.names[$0] == nil }) {
+        portNames = (active, active.isEmpty ? [:] : usbPortNames())
+    }
+    r.ports = out.map { PortPower(name: portNames.names[$0.port], watts: $0.watts) }
     r.temperature = smcTemperature()
     return r
 }
 
+// ponytail: refreshed when the set of charging ports changes; a device swapped within one tick keeps the old name.
+private var portNames: (ports: [Int], names: [Int: String]) = ([], [:])
+
 /// Name of the USB device plugged straight into each USB-C port, keyed by the port number of PowerOutDetails.
+// ponytail: direct device only, hubs skipped: a device behind a hub or dock has no name.
+// PortIndex matches usb-c-port-number (both from 1) on the Mac checked.
 private func usbPortNames() -> [Int: String] {
     var it: io_iterator_t = 0
     guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return [:] }
@@ -61,8 +72,12 @@ private func usbPortNames() -> [Int: String] {
         defer { IOObjectRelease(port) }
         // Only on the XHCI ports of the Mac itself (not hub ports): a little-endian UInt32.
         guard let n = IORegistryEntryCreateCFProperty(port, "usb-c-port-number" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Data, n.count >= 4,
-              let name = IORegistryEntryCreateCFProperty(d, "USB Product Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String else { continue }
-        names[Int(n.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })] = name
+              (IORegistryEntryCreateCFProperty(d, "bDeviceClass" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int) != 9,  // hub
+              let raw = IORegistryEntryCreateCFProperty(d, "USB Product Name" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String else { continue }
+        // Device-supplied text: no control characters, bounded length.
+        let name = String(raw.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(64).map(Character.init))
+        let index = Int(n.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
+        names[index] = min(names[index] ?? name, name)  // two devices on one port: same pick whatever the iteration order
     }
     return names
 }

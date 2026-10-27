@@ -82,4 +82,15 @@ assert(lastOccurrence(t, after: d("2026-10-23T10:00:00Z"), upTo: d("2026-10-26T0
 t.repeatRule = .never
 assert(lastOccurrence(t, after: d("2026-10-01T00:00:00Z"), upTo: d("2026-10-24T00:00:00Z"), calendar: cal) == d("2026-10-23T09:00:00Z"))
 
+// Power flow: the MacBook gets the load minus the ports, unless the ports exceed the load.
+assert(macWatts(system: 27, ports: [1, 13]) == 13)
+assert(macWatts(system: 10, ports: [13]) == 10)
+
+// Power flow labels: close centres are spread by gap and stay inside the height.
+assert(spreadLabels([50, 51, 52], gap: 14, height: 200) == [50, 64, 78])
+assert(spreadLabels([100, 108], gap: 14, height: 110) == [89, 103])
+
+// Device icon: Apple devices by name, the rest generic.
+assert(deviceIcon("iPhone") == "iphone" && deviceIcon("AirPods Charging Case") == "airpods" && deviceIcon(nil) == "cable.connector")
+
 print("logic ok")

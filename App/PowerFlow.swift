@@ -10,29 +10,25 @@ struct PowerFlow: View {
 
     var sources: [Node] {
         var n: [Node] = []
-        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: "Adapter", icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
-        if s.batteryWatts < -0.1 { n.append(Node(name: "Battery", icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
+        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: tr("Adapter"), icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
+        if s.batteryWatts < -0.1 { n.append(Node(name: tr("Battery"), icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
         // Right after wake the gauge can report 0 W for a while: show the obvious source with the Mac's load.
         if n.isEmpty {
-            n.append(s.adapter ? Node(name: "Adapter", icon: "bolt.fill", watts: max(s.systemWatts, 0.1), color: .yellow)
-                               : Node(name: "Battery", icon: "battery.50percent", watts: max(s.systemWatts, 0.1), color: .orange))
+            n.append(s.adapter ? Node(name: tr("Adapter"), icon: "bolt.fill", watts: max(s.systemWatts, 0.1), color: .yellow)
+                               : Node(name: tr("Battery"), icon: "battery.50percent", watts: max(s.systemWatts, 0.1), color: .orange))
         }
         return n
     }
 
     var sinks: [Node] {
-        // systemWatts includes what the USB-C ports deliver: the MacBook gets the rest.
         let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
-        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(s.systemWatts - ports.map(\.watts).reduce(0, +), 0.1), color: .blue)]
-        n += ports.map { Node(name: "USB-C", icon: Self.icon($0.name), watts: $0.watts, color: .purple, detail: $0.name) }
-        if s.batteryWatts > 0.1 { n.append(Node(name: "Battery", icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
+        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWatts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
+        n += ports.map { Node(name: $0.name ?? "USB-C", icon: deviceIcon($0.name), watts: $0.watts, color: .purple, detail: $0.name) }
+        if s.batteryWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
         return n
     }
 
-    static func icon(_ device: String?) -> String {
-        let d = device?.lowercased() ?? ""
-        return d.contains("iphone") ? "iphone" : d.contains("ipad") ? "ipad" : d.contains("airpods") ? "airpods" : "cable.connector"
-    }
+    static func spoken(_ n: Node) -> String { "\(n.name) \(String(format: "%.1f W", n.watts))" }
 
     /// Adapter connected but the battery still supplies power we didn't ask for.
     var underpowered: Bool {
@@ -55,6 +51,8 @@ struct PowerFlow: View {
                 }
             }
             .background(WindowVisibility { shown = $0 })
+            .accessibilityElement()
+            .accessibilityLabel(sources.map(Self.spoken).joined(separator: ", ") + " → " + sinks.map(Self.spoken).joined(separator: ", "))
             if underpowered {
                 Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
                       systemImage: "exclamationmark.triangle.fill")
@@ -66,7 +64,7 @@ struct PowerFlow: View {
     func draw(_ ctx: inout GraphicsContext, _ size: CGSize, phase: Double) {
         let src = sources, dst = sinks
         guard !src.isEmpty else { return }
-        // Device names only fit in the wide dashboard, not in the menu.
+        // ponytail: device names only fit in the wide dashboard; the menu tells ports apart by icon only.
         let named = size.width > 400 && dst.contains { $0.detail != nil }
         let label: CGFloat = 92, bar: CGFloat = 5, gap: CGFloat = 6
         let x0 = label, x1 = size.width - (named ? 170 : label)
@@ -117,12 +115,15 @@ struct PowerFlow: View {
         }
 
         func nodes(_ list: [Node], _ f: [Double], _ tops: [CGFloat], _ side: CGFloat, x: CGFloat, left: Bool) {
-            for ((n, share), top) in zip(zip(list, f), tops) {
-                let h = max(CGFloat(share) * side, 2)
+            let hs = zip(f, tops).map { max(CGFloat($0.0) * side, 2) }
+            // Thin bands sit closer than a caption line: spread the labels so they don't overlap.
+            let ys = spreadLabels(zip(tops, hs).map { Double($0 + $1 / 2) }, gap: 14, height: Double(size.height))
+            for (((n, top), h), y) in zip(zip(zip(list, tops), hs), ys) {
                 ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
-                var text = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
-                if named, let d = n.detail { text = text + Text("  \(d)").font(.caption).foregroundColor(.secondary) }
-                ctx.draw(text, at: CGPoint(x: left ? x - 6 : x + 6, y: top + h / 2), anchor: left ? .trailing : .leading)
+                let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
+                // ponytail: character cap sized for the 170 pt reserve, not measured.
+                let detail = (named ? n.detail : nil).map { Text("  \($0.count > 21 ? $0.prefix(20) + "…" : $0)").font(.caption).foregroundStyle(.secondary) }
+                ctx.draw(detail.map { Text("\(watts)\($0)") } ?? watts, at: CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y)), anchor: left ? .trailing : .leading)
             }
         }
         nodes(src, fs, ys, hs, x: x0, left: true)
