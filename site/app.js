@@ -9,7 +9,7 @@
     tagline: 'La batterie de votre MacBook, <span class="accent">au bon niveau.</span>',
     lead: 'Limite de charge, décharge, calibration et planification, depuis la barre des menus. Gratuit, open source, sans compte.',
     how: 'Comment ça marche', heroMeta: 'Apple silicon · macOS 14 ou plus · Licence MIT',
-    heroSr: 'Aperçu du menu ChargeKeeper : batterie à 80 %, charge suspendue à la limite, curseur de limite, boutons de décharge et de charge à 100 %, et flux de puissance de l\'adaptateur vers le MacBook.',
+    heroSr: 'Aperçu du menu ChargeKeeper : batterie à 80 %, charge suspendue à la limite, curseur de limite, boutons de décharge et de charge à 100 %, et flux de puissance de l\'adaptateur vers le MacBook et un iPhone qu\'il recharge.',
     clock: 'dim. 25 oct. 09:41', paused: 'Charge suspendue', hw: 'Matériel 79 % · 29,1 °C', limit: 'Limite de charge',
     discharge: 'Décharge', full: 'Charger à 100 %', calib: 'Démarrer la calibration', pause: 'Suspendre', flow: 'Flux de puissance',
     mockcap: 'Aperçu, données fictives.',
@@ -20,7 +20,7 @@
     f3t: 'Plage de repos', f3: 'La recharge ne reprend qu\'une fois le niveau sous une plage, au lieu de compléter à chaque pour cent.',
     f4t: 'Calibration', f4: 'Un cycle complet : 100 %, descente à 10 %, retour à 100 %, une heure de repos, puis votre limite.',
     f5t: 'Protection thermique', f5: 'La charge s\'arrête au-dessus de la température choisie, vérifiée par fenêtres de cinq minutes.',
-    f6t: 'Flux de puissance', f6: 'Les watts de l\'adaptateur et de la batterie vers le Mac, en direct. Alerte si l\'adaptateur est trop faible.',
+    f6t: 'Flux de puissance', f6: 'Les watts de l\'adaptateur et de la batterie vers le Mac, en direct, et vers chaque appareil rechargé par ses ports USB-C, avec son nom. Alerte si l\'adaptateur est trop faible.',
     f7t: 'Planification', f7: 'Changer la limite, calibrer, charger à 100 % ou basculer l\'Économie d\'énergie à heure fixe. Les tâches manquées peuvent s\'exécuter au réveil.',
     f8t: 'Raccourcis et Terminal', f8: 'Toutes les actions dans l\'app Raccourcis, et <code>chargekeeperctl</code> en ligne de commande.',
     more: 'Et aussi', c1: 'Charge à 100 % ponctuelle', c2: 'Couleurs de la LED MagSafe', c3: 'Rester éveillé jusqu\'à la limite',
@@ -71,16 +71,6 @@
   var heroDl = document.getElementById('hero-dl'), heroVer = document.getElementById('hero-ver');
   var rel; // undefined while loading, null on error; kept so a language switch re-renders without refetching
 
-  function fail() {
-    meta.textContent = t('Pas encore de version publiée.', 'No release published yet.');
-    box.innerHTML = '';
-    var a = document.createElement('a');
-    a.className = 'btn';
-    a.href = 'https://github.com/' + REPO + '/releases';
-    a.textContent = t('Voir les versions sur GitHub', 'See releases on GitHub');
-    box.appendChild(a);
-  }
-
   function brew() {
     var d = document.createElement('div');
     d.className = 'code';
@@ -106,20 +96,24 @@
     heroDl.textContent = t('Télécharger', 'Download');
     heroVer.textContent = '';
     if (rel === undefined) { meta.textContent = t('Recherche de la dernière version…', 'Looking up the latest release…'); return; }
-    if (!rel) return fail();
-    var dmg = (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
-    if (!dmg) return fail();
-    var ver = rel.tag_name || rel.name;
-    var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(t('fr-FR', 'en-US'), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-    meta.textContent = 'Version ' + ver + (date ? ' · ' + date : '');
-    heroVer.textContent = ver + ' · ';
+    // API down or rate-limited (60 requests/hour per IP): still offer the download through the latest release page.
+    var dmg = rel && (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
+    var url = dmg ? dmg.browser_download_url : 'https://github.com/' + REPO + '/releases/latest';
+    if (dmg) {
+      var ver = rel.tag_name || rel.name;
+      var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(t('fr-FR', 'en-US'), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      meta.textContent = 'Version ' + ver + (date ? ' · ' + date : '');
+      heroVer.textContent = ver + ' · ';
+    } else {
+      meta.textContent = t('Dernière version sur GitHub.', 'Latest release on GitHub.');
+    }
     box.innerHTML = '';
     var d = document.createElement('div');
     d.className = 'dl on';
     d.innerHTML = '<h3><svg viewBox="0 0 24 24" aria-hidden="true">' + LAPTOP + '</svg>macOS</h3>';
     var a = document.createElement('a');
     a.className = 'btn primary';
-    a.href = dmg.browser_download_url;
+    a.href = url;
     a.textContent = t('Télécharger pour Apple silicon', 'Download for Apple silicon');
     var n = document.createElement('small');
     n.textContent = t('✓ Signée et notarisée par Apple · mises à jour automatiques', '✓ Signed and notarized by Apple · automatic updates');
@@ -127,7 +121,7 @@
     d.appendChild(n);
     d.appendChild(brew());
     box.appendChild(d);
-    heroDl.href = dmg.browser_download_url;
+    heroDl.href = url;
     heroDl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + DOWNLOAD + '</svg>';
     heroDl.appendChild(document.createTextNode(t('Télécharger pour macOS', 'Download for macOS')));
   }
@@ -144,8 +138,16 @@
       setLang(b.lang);
     });
   });
+  // Cache the release for an hour: the unauthenticated API allows 60 requests/hour per IP.
+  var cached;
+  try { cached = JSON.parse(localStorage.getItem('release')); } catch (e) {}
+  if (cached && Date.now() - cached.at < 3600e3) { rel = cached.rel; render(); return; }
   fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (r) { rel = r; render(); })
+    .then(function (r) {
+      rel = r;
+      try { localStorage.setItem('release', JSON.stringify({ at: Date.now(), rel: r })); } catch (e) {}
+      render();
+    })
     .catch(function () { rel = null; render(); });
 })();

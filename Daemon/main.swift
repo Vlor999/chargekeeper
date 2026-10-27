@@ -122,7 +122,7 @@ final class Daemon {
         if case .status = cmd {} else { mutate(cmd); tick() }
         return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
-                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, nativeLimit: hw.native,
+                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)))
     }
 
@@ -239,6 +239,10 @@ func printStatus(_ s: Status) {
     print("battery \(s.percent)% (hardware \(s.hardwarePercent.map { "\($0)%" } ?? "--")), \(s.adapter ? "adapter" : "battery"), \(s.temperature.map { String(format: "%.1f°C", $0) } ?? "--")")
     print("state \(r.state.rawValue), limit \(s.config.limit)%\(r.discharge ? ", discharge" : "")\(r.topUp ? ", top-up" : "")\(r.calibration.map { ", calibration \($0.rawValue)" } ?? "")")
     print(String(format: "power: adapter %.1fW, system %.1fW, battery %+.1fW", s.adapterWatts, s.systemWatts, s.batteryWatts))
+    let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
+    if !ports.isEmpty {
+        print("usb-c: " + ports.map { "\($0.name ?? "device") \(String(format: "%.1fW", $0.watts))\($0.maxWatts.map { String(format: "/%gW", $0) } ?? "")" }.joined(separator: ", "))
+    }
 }
 
 func cli(_ a: [String]) -> Int32 {

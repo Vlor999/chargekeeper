@@ -68,6 +68,12 @@ struct Runtime: Codable, Equatable {
     var state: ChargeState = .charging
 }
 
+struct PortPower: Codable {
+    var name: String?  // USB device plugged straight into the port
+    var watts: Double
+    var maxWatts: Double?  // what the port agreed to supply (USB-PD contract, or 5 V current limit)
+}
+
 struct Status: Codable {
     var config: Config
     var runtime: Runtime
@@ -79,6 +85,7 @@ struct Status: Codable {
     var adapterRatedWatts: Int?
     var systemWatts: Double
     var batteryWatts: Double  // >0 charging, <0 discharging
+    var ports: [PortPower]?  // USB-C power out, included in systemWatts; nil from an older service
     var nativeLimit: Bool
     var sleepDisabled: Bool
     var history: [HistoryEntry]

@@ -48,7 +48,7 @@
       <p class="meta"><span id="hero-ver"></span><span data-i18n="heroMeta">Apple silicon · macOS 14 or later · MIT License</span></p>
     </div>
     <figure class="shot">
-      <p class="sr" data-i18n="heroSr">Preview of the ChargeKeeper menu: battery at 80%, charging paused at the limit, the limit slider, discharge and full charge buttons, and the power flow from the adapter to the MacBook.</p>
+      <p class="sr" data-i18n="heroSr">Preview of the ChargeKeeper menu: battery at 80%, charging paused at the limit, the limit slider, discharge and full charge buttons, and the power flow from the adapter to the MacBook and to an iPhone charging from it.</p>
       <div class="desk" aria-hidden="true">
         <div class="menubar"><span class="mb-ic"><svg viewBox="0 0 24 24"><path d="M6.34 17.66A8 8 0 1 1 17.66 17.66" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".35"/><path d="M6.34 17.66A8 8 0 1 1 19.9 10.75" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M13 7.2 9.4 12.6h2.7l-1 4.2 3.6-5.4H12z" fill="currentColor"/></svg></span><span data-i18n="clock">Sun Oct 25 9:41 AM</span></div>
         <div class="pop">
@@ -59,19 +59,21 @@
           <div class="p-btns"><span class="pb" data-i18n="calib">Start calibration</span><span class="pb" data-i18n="pause">Pause</span></div>
           <small class="muted" data-i18n="flow">Power flow</small>
           <svg class="flow" viewBox="0 0 280 90">
-            <defs><linearGradient id="fl" x1="0" x2="1"><stop offset="0" stop-color="#f5c400" stop-opacity=".45"/><stop offset="1" stop-color="#3d7fd6" stop-opacity=".45"/></linearGradient></defs>
-            <rect x="80" y="10" width="120" height="60" fill="url(#fl)"/>
-            <path class="dash" d="M80 16 H200"/>
-            <path class="dash" d="M80 24 H200"/>
-            <path class="dash" d="M80 32 H200"/>
-            <path class="dash" d="M80 40 H200"/>
-            <path class="dash" d="M80 48 H200"/>
-            <path class="dash" d="M80 56 H200"/>
-            <path class="dash" d="M80 64 H200"/>
-            <rect x="74" y="10" width="5" height="60" rx="2" fill="#e0b000"/>
-            <rect x="201" y="10" width="5" height="60" rx="2" fill="#3d7fd6"/>
-            <text x="68" y="44" text-anchor="end">AC 11.8 W</text>
-            <text x="212" y="44">Mac 11.2 W</text>
+            <defs><linearGradient id="fl" x1="0" x2="1"><stop offset="0" stop-color="#f5c400" stop-opacity=".45"/><stop offset="1" stop-color="#3d7fd6" stop-opacity=".45"/></linearGradient>
+              <linearGradient id="fl2" x1="0" x2="1"><stop offset="0" stop-color="#f5c400" stop-opacity=".45"/><stop offset="1" stop-color="#af52de" stop-opacity=".45"/></linearGradient></defs>
+            <rect x="68" y="10" width="112" height="30" fill="url(#fl)"/>
+            <path d="M68 40 C124 40 124 46 180 46 V70 H68 Z" fill="url(#fl2)"/>
+            <path class="dash" d="M68 18 H180"/>
+            <path class="dash" d="M68 26 H180"/>
+            <path class="dash" d="M68 34 H180"/>
+            <path class="dash" d="M68 54 H180"/>
+            <path class="dash" d="M68 62 H180"/>
+            <rect x="62" y="10" width="5" height="60" rx="2" fill="#e0b000"/>
+            <rect x="181" y="10" width="5" height="30" rx="2" fill="#3d7fd6"/>
+            <rect x="181" y="46" width="5" height="24" rx="2" fill="#af52de"/>
+            <text x="56" y="44" text-anchor="end">AC 25 W</text>
+            <text x="192" y="29">Mac 11.7 W</text>
+            <text x="192" y="62">iPhone 13.3 W</text>
           </svg>
         </div>
       </div>
@@ -101,7 +103,7 @@
       <article><h3 data-i18n="f3t">Idle range</h3><p data-i18n="f3">Recharge only once the level drops below a range, instead of topping up after every percent.</p></article>
       <article><h3 data-i18n="f4t">Calibration</h3><p data-i18n="f4">A full cycle: 100%, down to 10%, back to 100%, one hour of rest, then your limit.</p></article>
       <article><h3 data-i18n="f5t">Heat protection</h3><p data-i18n="f5">Charging pauses above the temperature you set, checked in five-minute windows.</p></article>
-      <article><h3 data-i18n="f6t">Power flow</h3><p data-i18n="f6">Watts from the adapter and the battery to the Mac, live. Warns you when the adapter is too weak.</p></article>
+      <article><h3 data-i18n="f6t">Power flow</h3><p data-i18n="f6">Watts from the adapter and the battery to the Mac, live, and to each device charging from its USB-C ports, by name. Warns you when the adapter is too weak.</p></article>
       <article><h3 data-i18n="f7t">Schedule</h3><p data-i18n="f7">Set a limit, calibrate, charge to 100% or toggle Low Power Mode at set times. Missed tasks can run on wake.</p></article>
       <article><h3 data-i18n="f8t">Shortcuts and Terminal</h3><p data-i18n-html="f8">Every action in the Shortcuts app, and <code>chargekeeperctl</code> on the command line.</p></article>
     </div>

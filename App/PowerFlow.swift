@@ -6,24 +6,34 @@ struct PowerFlow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
-    struct Node { let name: String; let icon: String; let watts: Double; let color: Color }
+    struct Node { let name: String; let icon: String; let watts: Double; let color: Color; var detail: String? = nil; var max: Double? = nil }
 
     var sources: [Node] {
         var n: [Node] = []
-        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: "Adapter", icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
-        if s.batteryWatts < -0.1 { n.append(Node(name: "Battery", icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
+        if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: tr("Adapter"), icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
+        if s.batteryWatts < -0.1 { n.append(Node(name: tr("Battery"), icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
         // Right after wake the gauge can report 0 W for a while: show the obvious source with the Mac's load.
         if n.isEmpty {
-            n.append(s.adapter ? Node(name: "Adapter", icon: "bolt.fill", watts: max(s.systemWatts, 0.1), color: .yellow)
-                               : Node(name: "Battery", icon: "battery.50percent", watts: max(s.systemWatts, 0.1), color: .orange))
+            n.append(s.adapter ? Node(name: tr("Adapter"), icon: "bolt.fill", watts: max(s.systemWatts, 0.1), color: .yellow)
+                               : Node(name: tr("Battery"), icon: "battery.50percent", watts: max(s.systemWatts, 0.1), color: .orange))
         }
         return n
     }
 
     var sinks: [Node] {
-        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(s.systemWatts, 0.1), color: .blue)]
-        if s.batteryWatts > 0.1 { n.append(Node(name: "Battery", icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
+        let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
+        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWatts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
+        n += ports.map { Node(name: $0.name ?? "USB-C", icon: deviceIcon($0.name), watts: $0.watts, color: .purple, detail: $0.name, max: $0.maxWatts) }
+        if s.batteryWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
         return n
+    }
+
+    static func spoken(_ n: Node) -> String { "\(n.name) \(String(format: "%.1f W", n.watts))" }
+
+    /// Devices charging from the Mac, for the underpowered warning: they may be why the adapter falls short.
+    var charging: String {
+        let ports = (s.ports ?? []).filter { $0.watts > 0.5 }
+        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.name ?? "USB-C") \(String(format: "%.1f W", $0.watts))" }.joined(separator: ", "))
     }
 
     /// Adapter connected but the battery still supplies power we didn't ask for.
@@ -47,8 +57,10 @@ struct PowerFlow: View {
                 }
             }
             .background(WindowVisibility { shown = $0 })
+            .accessibilityElement()
+            .accessibilityLabel(sources.map(Self.spoken).joined(separator: ", ") + " → " + sinks.map(Self.spoken).joined(separator: ", "))
             if underpowered {
-                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
+                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + charging,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
@@ -58,8 +70,10 @@ struct PowerFlow: View {
     func draw(_ ctx: inout GraphicsContext, _ size: CGSize, phase: Double) {
         let src = sources, dst = sinks
         guard !src.isEmpty else { return }
+        // ponytail: device names only fit in the wide dashboard; the menu tells ports apart by icon only.
+        let named = size.width > 400 && dst.contains { $0.detail != nil }
         let label: CGFloat = 92, bar: CGFloat = 5, gap: CGFloat = 6
-        let x0 = label, x1 = size.width - label
+        let x0 = label, x1 = size.width - (named ? 180 : label)
         // Each side fills the full height: sources and consumers are measured by different sensors
         // and rarely sum to the same watts, so bands are shares of their side, labels keep real watts.
         func shares(_ nodes: [Node]) -> [Double] { let t = nodes.map(\.watts).reduce(0, +); return nodes.map { $0.watts / t } }
@@ -107,12 +121,39 @@ struct PowerFlow: View {
         }
 
         func nodes(_ list: [Node], _ f: [Double], _ tops: [CGFloat], _ side: CGFloat, x: CGFloat, left: Bool) {
-            for ((n, share), top) in zip(zip(list, f), tops) {
-                let h = max(CGFloat(share) * side, 2)
+            let hs = zip(f, tops).map { max(CGFloat($0.0) * side, 2) }
+            // Thin bands sit closer than a caption line: spread the labels so they don't overlap.
+            let ys = spreadLabels(zip(tops, hs).map { Double($0 + $1 / 2) }, gap: 14, height: Double(size.height))
+            for (((n, top), h), y) in zip(zip(zip(list, tops), hs), ys) {
                 ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
-                let text = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
-                ctx.draw(text, at: CGPoint(x: left ? x - 6 : x + 6, y: top + h / 2), anchor: left ? .trailing : .leading)
+                // The port's ceiling tells whether the device charges as fast as the port allows; dashboard only, for width.
+                let ceiling = named ? n.max.map { String(format: " / %g", $0) } ?? "" : ""
+                let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f", n.watts))\(ceiling) W").font(.caption.monospacedDigit())
+                let at = CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y))
+                let resolved = ctx.resolve(watts)
+                ctx.draw(resolved, at: at, anchor: left ? .trailing : .leading)
+                if named, let d = n.detail { marquee(d, x: at.x + resolved.measure(in: size).width + 8, y: at.y) }
             }
+        }
+
+        // A name wider than its room scrolls on the timeline already running while the window is visible:
+        // 1.5 s pause, then one pass. Static drawing (hidden, reduced motion) cuts it with an ellipsis instead.
+        func marquee(_ s: String, x: CGFloat, y: CGFloat) {
+            func text(_ s: String) -> GraphicsContext.ResolvedText { ctx.resolve(Text(s).font(.caption).foregroundStyle(.secondary)) }
+            let name = text(s), room = size.width - x, w = name.measure(in: CGSize(width: .infinity, height: size.height)).width
+            guard w > room else { return ctx.draw(name, at: CGPoint(x: x, y: y), anchor: .leading) }
+            var g = ctx
+            g.clip(to: Path(CGRect(x: x, y: 0, width: room, height: size.height)))
+            guard phase > 0 else {
+                var n = s.count - 1, cut = text(s.prefix(n) + "…")
+                while n > 1 && cut.measure(in: size).width > room { n -= 1; cut = text(s.prefix(n) + "…") }
+                return g.draw(cut, at: CGPoint(x: x, y: y), anchor: .leading)
+            }
+            let spacing: CGFloat = 24, speed = 25.0, pause = 1.5
+            let cycle = pause + Double(w + spacing) / speed
+            let o = CGFloat(max(phase.truncatingRemainder(dividingBy: cycle) - pause, 0) * speed)
+            g.draw(name, at: CGPoint(x: x - o, y: y), anchor: .leading)
+            g.draw(name, at: CGPoint(x: x - o + w + spacing, y: y), anchor: .leading)
         }
         nodes(src, fs, ys, hs, x: x0, left: true)
         nodes(dst, fd, yd, hd, x: x1, left: false)
