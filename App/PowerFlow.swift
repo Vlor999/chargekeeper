@@ -129,10 +129,31 @@ struct PowerFlow: View {
                 // The port's ceiling tells whether the device charges as fast as the port allows; dashboard only, for width.
                 let ceiling = named ? n.max.map { String(format: " / %g", $0) } ?? "" : ""
                 let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f", n.watts))\(ceiling) W").font(.caption.monospacedDigit())
-                // ponytail: character cap sized for the 180 pt reserve, not measured.
-                let detail = (named ? n.detail : nil).map { Text("  \($0.count > 18 ? $0.prefix(17) + "…" : $0)").font(.caption).foregroundStyle(.secondary) }
-                ctx.draw(detail.map { Text("\(watts)\($0)") } ?? watts, at: CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y)), anchor: left ? .trailing : .leading)
+                let at = CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y))
+                let resolved = ctx.resolve(watts)
+                ctx.draw(resolved, at: at, anchor: left ? .trailing : .leading)
+                if named, let d = n.detail { marquee(d, x: at.x + resolved.measure(in: size).width + 8, y: at.y) }
             }
+        }
+
+        // A name wider than its room scrolls on the timeline already running while the window is visible:
+        // 1.5 s pause, then one pass. Static drawing (hidden, reduced motion) cuts it with an ellipsis instead.
+        func marquee(_ s: String, x: CGFloat, y: CGFloat) {
+            func text(_ s: String) -> GraphicsContext.ResolvedText { ctx.resolve(Text(s).font(.caption).foregroundStyle(.secondary)) }
+            let name = text(s), room = size.width - x, w = name.measure(in: CGSize(width: .infinity, height: size.height)).width
+            guard w > room else { return ctx.draw(name, at: CGPoint(x: x, y: y), anchor: .leading) }
+            var g = ctx
+            g.clip(to: Path(CGRect(x: x, y: 0, width: room, height: size.height)))
+            guard phase > 0 else {
+                var n = s.count - 1, cut = text(s.prefix(n) + "…")
+                while n > 1 && cut.measure(in: size).width > room { n -= 1; cut = text(s.prefix(n) + "…") }
+                return g.draw(cut, at: CGPoint(x: x, y: y), anchor: .leading)
+            }
+            let spacing: CGFloat = 24, speed = 25.0, pause = 1.5
+            let cycle = pause + Double(w + spacing) / speed
+            let o = CGFloat(max(phase.truncatingRemainder(dividingBy: cycle) - pause, 0) * speed)
+            g.draw(name, at: CGPoint(x: x - o, y: y), anchor: .leading)
+            g.draw(name, at: CGPoint(x: x - o + w + spacing, y: y), anchor: .leading)
         }
         nodes(src, fs, ys, hs, x: x0, left: true)
         nodes(dst, fd, yd, hd, x: x1, left: false)
