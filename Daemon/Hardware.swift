@@ -42,14 +42,19 @@ func readBattery() -> Reading? {
     r.systemWatts = Double(tele["SystemLoad"] as? Int ?? 0) / 1000
     // Measured per USB-C port (phone, earbuds charging from the Mac), in mW.
     let out = (p["PowerOutDetails"] as? [[String: Any]] ?? []).compactMap { d in
-        (d["PortIndex"] as? Int).map { (port: $0, watts: Double(d["Watts"] as? Int ?? 0) / 1000) }
+        (d["PortIndex"] as? Int).map { port in
+            // Non-PD devices (AirPods case) report PDPowermW 0: fall back to the configured voltage × current.
+            let pd = d["PDPowermW"] as? Int ?? 0
+            let mw = pd > 0 ? pd : (d["ConfiguredVoltage"] as? Int ?? 0) * (d["ConfiguredCurrent"] as? Int ?? 0) / 1000
+            return (port: port, watts: Double(d["Watts"] as? Int ?? 0) / 1000, max: mw > 0 ? Double(mw) / 1000 : nil)
+        }
     }
     // A device draws power before it enumerates: look again while a charging port has no name yet.
     let active = out.filter { $0.watts > 0.1 }.map(\.port)
     if active != portNames.ports || active.contains(where: { portNames.names[$0] == nil }) {
         portNames = (active, active.isEmpty ? [:] : usbPortNames())
     }
-    r.ports = out.map { PortPower(name: portNames.names[$0.port], watts: $0.watts) }
+    r.ports = out.map { PortPower(name: portNames.names[$0.port], watts: $0.watts, maxWatts: $0.max) }
     r.temperature = smcTemperature()
     return r
 }

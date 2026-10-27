@@ -71,6 +71,7 @@ struct Runtime: Codable, Equatable {
 struct PortPower: Codable {
     var name: String?  // USB device plugged straight into the port
     var watts: Double
+    var maxWatts: Double?  // what the port agreed to supply (USB-PD contract, or 5 V current limit)
 }
 
 struct Status: Codable {

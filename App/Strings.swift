@@ -58,6 +58,7 @@ private let french: [String: String] = [
     "Battery": "Batterie",
     "Adapter too weak: the battery supplies %@": "Adaptateur trop faible : la batterie complète %@",
     " (adapter %d W)": " (adaptateur %d W)",
+    " · charging from the Mac: %@": " · rechargé par le Mac : %@",
     "Show in menu": "Afficher dans le menu",
     // Settings
     "Charge control": "Contrôle de la charge",

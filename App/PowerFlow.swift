@@ -6,7 +6,7 @@ struct PowerFlow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
-    struct Node { let name: String; let icon: String; let watts: Double; let color: Color; var detail: String? = nil }
+    struct Node { let name: String; let icon: String; let watts: Double; let color: Color; var detail: String? = nil; var max: Double? = nil }
 
     var sources: [Node] {
         var n: [Node] = []
@@ -23,12 +23,18 @@ struct PowerFlow: View {
     var sinks: [Node] {
         let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
         var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWatts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
-        n += ports.map { Node(name: $0.name ?? "USB-C", icon: deviceIcon($0.name), watts: $0.watts, color: .purple, detail: $0.name) }
+        n += ports.map { Node(name: $0.name ?? "USB-C", icon: deviceIcon($0.name), watts: $0.watts, color: .purple, detail: $0.name, max: $0.maxWatts) }
         if s.batteryWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
         return n
     }
 
     static func spoken(_ n: Node) -> String { "\(n.name) \(String(format: "%.1f W", n.watts))" }
+
+    /// Devices charging from the Mac, for the underpowered warning: they may be why the adapter falls short.
+    var charging: String {
+        let ports = (s.ports ?? []).filter { $0.watts > 0.5 }
+        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.name ?? "USB-C") \(String(format: "%.1f W", $0.watts))" }.joined(separator: ", "))
+    }
 
     /// Adapter connected but the battery still supplies power we didn't ask for.
     var underpowered: Bool {
@@ -54,7 +60,7 @@ struct PowerFlow: View {
             .accessibilityElement()
             .accessibilityLabel(sources.map(Self.spoken).joined(separator: ", ") + " → " + sinks.map(Self.spoken).joined(separator: ", "))
             if underpowered {
-                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? ""),
+                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + charging,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
@@ -67,7 +73,7 @@ struct PowerFlow: View {
         // ponytail: device names only fit in the wide dashboard; the menu tells ports apart by icon only.
         let named = size.width > 400 && dst.contains { $0.detail != nil }
         let label: CGFloat = 92, bar: CGFloat = 5, gap: CGFloat = 6
-        let x0 = label, x1 = size.width - (named ? 170 : label)
+        let x0 = label, x1 = size.width - (named ? 180 : label)
         // Each side fills the full height: sources and consumers are measured by different sensors
         // and rarely sum to the same watts, so bands are shares of their side, labels keep real watts.
         func shares(_ nodes: [Node]) -> [Double] { let t = nodes.map(\.watts).reduce(0, +); return nodes.map { $0.watts / t } }
@@ -120,9 +126,11 @@ struct PowerFlow: View {
             let ys = spreadLabels(zip(tops, hs).map { Double($0 + $1 / 2) }, gap: 14, height: Double(size.height))
             for (((n, top), h), y) in zip(zip(zip(list, tops), hs), ys) {
                 ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
-                let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
-                // ponytail: character cap sized for the 170 pt reserve, not measured.
-                let detail = (named ? n.detail : nil).map { Text("  \($0.count > 21 ? $0.prefix(20) + "…" : $0)").font(.caption).foregroundStyle(.secondary) }
+                // The port's ceiling tells whether the device charges as fast as the port allows; dashboard only, for width.
+                let ceiling = named ? n.max.map { String(format: " / %g", $0) } ?? "" : ""
+                let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f", n.watts))\(ceiling) W").font(.caption.monospacedDigit())
+                // ponytail: character cap sized for the 180 pt reserve, not measured.
+                let detail = (named ? n.detail : nil).map { Text("  \($0.count > 18 ? $0.prefix(17) + "…" : $0)").font(.caption).foregroundStyle(.secondary) }
                 ctx.draw(detail.map { Text("\(watts)\($0)") } ?? watts, at: CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y)), anchor: left ? .trailing : .leading)
             }
         }
