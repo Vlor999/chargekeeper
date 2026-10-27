@@ -31,12 +31,19 @@ final class AppModel: ObservableObject {
     @Published var error: String?
     @Published var serviceStatus: SMAppService.Status = .notRegistered
     let service = SMAppService.daemon(plistName: "com.vlor999.jauge.daemon.plist")
-    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    /// Downloaded update waiting for the app to quit; the menu offers to install it now.
+    @Published var readyUpdate: (version: String, install: () -> Void)?
+    let updater: SPUStandardUpdaterController
+    private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private var timer: Timer?
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
     init() {
+        let w = UpdateWatcher()
+        watcher = w
+        updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: w, userDriverDelegate: nil)
+        w.onReady = { [weak self] in self?.readyUpdate = ($0, $1) }
         // First launch: register the root service; macOS then asks for approval in Login Items.
         if service.status == .notRegistered { enableService() }
         refresh()
@@ -65,6 +72,17 @@ final class AppModel: ObservableObject {
     func config<T>(_ kp: WritableKeyPath<Config, T>) -> Binding<T> {
         Binding(get: { self.status?.config[keyPath: kp] ?? Config()[keyPath: kp] },
                 set: { v in guard var c = self.status?.config else { return }; c[keyPath: kp] = v; self.run(.setConfig(c)) })
+    }
+}
+
+/// Sparkle downloads updates silently and installs them when the app quits. A menu bar app rarely quits,
+/// so the update would wait for days: keep Sparkle's install-now block for the menu instead.
+final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
+    var onReady: ((String, @escaping () -> Void) -> Void)?
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
+        onReady?(item.displayVersionString, immediateInstallationBlock)
+        return true
     }
 }
 
@@ -103,6 +121,7 @@ struct MenuView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let u = m.readyUpdate { UpdateBanner(version: u.version, install: u.install); Divider() }
             if let s = m.status, m.error == nil { content(s) } else { serviceSetup }
             Divider()
             HStack {
@@ -179,6 +198,20 @@ struct MenuView: View {
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
+    }
+}
+
+struct UpdateBanner: View {
+    let version: String
+    let install: () -> Void
+
+    var body: some View {
+        HStack {
+            Label(tr("ChargeKeeper %@ is ready", version), systemImage: "arrow.down.circle.fill")
+                .font(.callout).foregroundStyle(.tint)
+            Spacer()
+            Button(tr("Install and Restart"), action: install).controlSize(.small)
+        }
     }
 }
 

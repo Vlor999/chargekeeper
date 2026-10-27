@@ -3,8 +3,10 @@ import SwiftUI
 /// Sankey-style power flow: sources (adapter, battery) on the left, consumers (MacBook, battery) on the right.
 struct PowerFlow: View {
     let s: Status
+    var demo = false  // sample flow inside the help: no title, no help button
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
+    @State private var help = false
 
     struct Node { let name: String; let icon: String; let watts: Double; let color: Color; var detail: String? = nil; var max: Double? = nil }
 
@@ -44,7 +46,16 @@ struct PowerFlow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(tr("Power flow")).font(.caption).foregroundStyle(.secondary)
+            if !demo {
+                HStack(spacing: 4) {
+                    Text(tr("Power flow"))
+                    Button { help.toggle() } label: { Image(systemName: "questionmark.circle") }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(tr("How to read the power flow"))
+                        .popover(isPresented: $help, arrowEdge: .bottom) { FlowHelp() }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            }
             // 30 fps, and only while on screen: a hidden menu must not keep redrawing.
             // The timeline is created on appear rather than un-paused: SwiftUI doesn't restart a paused one.
             Group {
@@ -157,6 +168,37 @@ struct PowerFlow: View {
         }
         nodes(src, fs, ys, hs, x: x0, left: true)
         nodes(dst, fd, yd, hd, x: x1, left: false)
+    }
+}
+
+struct FlowHelp: View {
+    /// Sample values for the demo flow, as on the landing page.
+    static let sample = Status(config: Config(), runtime: Runtime(), percent: 50, hardwarePercent: nil, adapter: true, temperature: nil,
+                               adapterWatts: 78, adapterRatedWatts: nil, systemWatts: 23, batteryWatts: 55,
+                               ports: [PortPower(name: "iPhone", watts: 8, maxWatts: 15)], nativeLimit: true, sleepDisabled: false, history: [])
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(tr("How to read the power flow")).font(.headline)
+            PowerFlow(s: Self.sample, demo: true).frame(height: 90)
+            Text(tr("Example: 78 W come in. 15 W run the Mac, 55 W charge the battery and 8 W charge an iPhone."))
+                .font(.caption).foregroundStyle(.secondary)
+            row("bolt.fill", tr("Left: where the power comes from. The adapter (or a display that charges the Mac), and the battery when it helps."))
+            row("laptopcomputer", tr("Right: where it goes. The MacBook itself, the battery when it charges, and devices charging from the Mac's USB-C ports."))
+            row("chart.bar.fill", tr("Each band is a share of its side. Each side has its own sensor, so the totals can differ by a few watts."))
+            row("cable.connector", tr("13.3 / 15 W: what a device draws, out of the most its port can supply."))
+        }
+        .font(.callout)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding()
+        .frame(width: 300)
+    }
+
+    func row(_ icon: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon).frame(width: 18)
+            Text(text)
+        }
     }
 }
 
