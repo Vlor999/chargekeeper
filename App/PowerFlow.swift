@@ -6,7 +6,7 @@ struct PowerFlow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
-    struct Node { let name: String; let icon: String; let watts: Double; let color: Color }
+    struct Node { let name: String; let icon: String; let watts: Double; let color: Color; var detail: String? = nil }
 
     var sources: [Node] {
         var n: [Node] = []
@@ -21,9 +21,17 @@ struct PowerFlow: View {
     }
 
     var sinks: [Node] {
-        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(s.systemWatts, 0.1), color: .blue)]
+        // systemWatts includes what the USB-C ports deliver: the MacBook gets the rest.
+        let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
+        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(s.systemWatts - ports.map(\.watts).reduce(0, +), 0.1), color: .blue)]
+        n += ports.map { Node(name: "USB-C", icon: Self.icon($0.name), watts: $0.watts, color: .purple, detail: $0.name) }
         if s.batteryWatts > 0.1 { n.append(Node(name: "Battery", icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
         return n
+    }
+
+    static func icon(_ device: String?) -> String {
+        let d = device?.lowercased() ?? ""
+        return d.contains("iphone") ? "iphone" : d.contains("ipad") ? "ipad" : d.contains("airpods") ? "airpods" : "cable.connector"
     }
 
     /// Adapter connected but the battery still supplies power we didn't ask for.
@@ -58,8 +66,10 @@ struct PowerFlow: View {
     func draw(_ ctx: inout GraphicsContext, _ size: CGSize, phase: Double) {
         let src = sources, dst = sinks
         guard !src.isEmpty else { return }
+        // Device names only fit in the wide dashboard, not in the menu.
+        let named = size.width > 400 && dst.contains { $0.detail != nil }
         let label: CGFloat = 92, bar: CGFloat = 5, gap: CGFloat = 6
-        let x0 = label, x1 = size.width - label
+        let x0 = label, x1 = size.width - (named ? 170 : label)
         // Each side fills the full height: sources and consumers are measured by different sensors
         // and rarely sum to the same watts, so bands are shares of their side, labels keep real watts.
         func shares(_ nodes: [Node]) -> [Double] { let t = nodes.map(\.watts).reduce(0, +); return nodes.map { $0.watts / t } }
@@ -110,7 +120,8 @@ struct PowerFlow: View {
             for ((n, share), top) in zip(zip(list, f), tops) {
                 let h = max(CGFloat(share) * side, 2)
                 ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
-                let text = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
+                var text = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f W", n.watts))").font(.caption.monospacedDigit())
+                if named, let d = n.detail { text = text + Text("  \(d)").font(.caption).foregroundColor(.secondary) }
                 ctx.draw(text, at: CGPoint(x: left ? x - 6 : x + 6, y: top + h / 2), anchor: left ? .trailing : .leading)
             }
         }
