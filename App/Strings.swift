@@ -75,6 +75,7 @@ private let french: [String: String] = [
     "Show in menu": "Afficher dans le menu",
     // Settings
     "Sleep": "Suspension",
+    "Charge": "Charge",
     "MagSafe LED": "LED MagSafe",
     "Schedule": "Planification",
     "General": "Général",
