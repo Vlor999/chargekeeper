@@ -221,10 +221,12 @@ private let french: [String: String] = [
     "Calibration: adapter unplugged, plug it in to continue": "Calibration : adaptateur débranché, rebranchez-le pour continuer",
     "Heat protection: charging paused": "Protection thermique : charge suspendue",
     "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
-    "macOS charged past the limit": "macOS a chargé au-delà de la limite",
-    "macOS charged past the %@ %% limit": "macOS a chargé au-delà de la limite de %@ %%",
-    "macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.":
-        "macOS a chargé au-delà de la limite (recalibrage de la batterie ou décision du système). La limite s'appliquera de nouveau quand le niveau y sera redescendu.",
+    "macOS charged the battery above the limit": "macOS a chargé la batterie au-delà de la limite",
+    "macOS charged the battery above %@ %%": "macOS a chargé la batterie au-delà de %@ %%",
+    "Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit.":
+        "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper maintient ce niveau sans décharger. Activez la décharge automatique pour revenir à la limite.",
+    "Battery is above the limit while plugged in (macOS charged it). ChargeKeeper discharges it back to the limit.":
+        "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper la décharge jusqu'à la limite.",
     "macOS battery settings": "Réglages de batterie de macOS",
     "Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.":
         "La limite de recharge d'Apple est réglée à %@ %% dans Réglages Système. Réglez-la sur 100 %% pour laisser ChargeKeeper gérer la recharge.",

@@ -320,8 +320,8 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
         return t("Charge limit set to %@ %%", [int(v)])
     case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
     case .chargedPastLimit:
-        guard let v = e.value else { return t("macOS charged past the limit", []) }
-        return t("macOS charged past the %@ %% limit", [int(v)])
+        guard let v = e.value else { return t("macOS charged the battery above the limit", []) }
+        return t("macOS charged the battery above %@ %%", [int(v)])
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])

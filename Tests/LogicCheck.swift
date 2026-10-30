@@ -113,7 +113,7 @@ assert(historyText(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)
 assert(historyText(HistoryEntry(event: .taskRun, action: .setLimit, late: true, value: 60)) == "Missed task run on wake: Set charge limit (60 %)")
 assert(historyText(HistoryEntry(event: .taskRun, action: .topUp, late: false)) == "Scheduled task: Charge to 100%")
 assert(historyText(HistoryEntry(event: .heatProtect, temperature: 36.24)) == "Heat protection: charging paused at 36.2 °C")
-assert(historyText(HistoryEntry(event: .chargedPastLimit, value: 80)) == "macOS charged past the 80 % limit")
+assert(historyText(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS charged the battery above 85 %")
 assert(historyText(HistoryEntry(event: .limitChanged, value: 75)) == "Charge limit set to 75 %")
 
 // History: free text from an older service maps to its event, unknown text stays as is.
@@ -157,8 +157,11 @@ assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter
 assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
 assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
 assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
-assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, value: 80)) == "macOS a chargé au-delà de la limite de 80\u{00A0}%")
-assert(tr("macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.") != "macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.")
+assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS a chargé la batterie au-delà de 85\u{00A0}%")
+assert(localizedHistory(HistoryEntry(event: .chargedPastLimit)) == "macOS a chargé la batterie au-delà de la limite")
+assert(tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit.")
+       == "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper maintient ce niveau sans décharger. Activez la décharge automatique pour revenir à la limite.")
+assert(tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper discharges it back to the limit.") == "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper la décharge jusqu'à la limite.")
 assert(tr("Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.", "80")
        == "La limite de recharge d'Apple est réglée à 80 % dans Réglages Système. Réglez-la sur 100 % pour laisser ChargeKeeper gérer la recharge.")
 for k in ["macOS battery settings", "Open Battery Settings",
