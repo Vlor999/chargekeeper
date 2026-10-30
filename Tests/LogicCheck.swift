@@ -372,6 +372,22 @@ assert(addHealthSample([tickDaily], tickCal, now: tickDaily.date, calendar: cal)
 assert(addHealthSample([tickCal], tickDaily, now: tickDaily.date, calendar: cal) == [tickCal])
 assert(addHealthSample([tickDaily], tickDaily, now: tickDaily.date, calendar: cal) == [tickDaily])
 
+// Health series on the wire: the request round-trips, the series rides only in its reply, older payloads decode.
+let enc = JSONEncoder(), dec = JSONDecoder()
+if case .healthHistory = try! dec.decode(Command.self, from: enc.encode(Command.healthHistory)) {} else { assert(false) }
+var wire = Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0,
+                  adapterRatedWatts: nil, systemWatts: 0, batteryWatts: 0, batteryAmperage: nil, ports: nil, nativeLimit: true, sleepDisabled: false,
+                  history: [], battery: nil, lastCalibration: nil, appleChargeLimit: nil)
+assert(!String(decoding: try! enc.encode(wire), as: UTF8.self).contains("healthHistory"))
+wire.healthHistory = [tickDaily, tickCal]
+assert(try! dec.decode(Status.self, from: enc.encode(wire)).healthHistory == [tickDaily, tickCal])
+var oldJSON = try! JSONSerialization.jsonObject(with: enc.encode(wire)) as! [String: Any]
+oldJSON["healthHistory"] = nil
+assert(try! dec.decode(Status.self, from: JSONSerialization.data(withJSONObject: oldJSON)).healthHistory == nil)
+let noFlag = #"{"date":0,"maxCapacity":4200,"designCapacity":4800}"#.data(using: .utf8)!
+assert(try! dec.decode(HealthSample.self, from: noFlag) == HealthSample(date: Date(timeIntervalSinceReferenceDate: 0), maxCapacity: 4200,
+                                                                        nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil))
+
 // Health range: starts 3 months or 1 year back.
 assert(healthRangeStart(.threeMonths, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2026-07-30T12:00:00Z"))
 assert(healthRangeStart(.year, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2025-10-30T12:00:00Z"))
