@@ -136,6 +136,7 @@ private let french: [String: String] = [
     "History": "Historique",
     "Battery health": "Santé de la batterie",
     "Battery data unavailable.": "Données de la batterie indisponibles.",
+    "Waiting for the ChargeKeeper service…": "En attente du service ChargeKeeper…",
     "Health": "Santé",
     "Health (nominal)": "Santé (nominale)",
     "Full charge capacity": "Capacité de charge complète",

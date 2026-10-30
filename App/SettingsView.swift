@@ -279,7 +279,7 @@ struct BatteryView: View {
                 }
             }
             if m.status?.battery == nil && m.status?.lastCalibration == nil {
-                Text(tr("Battery data unavailable."))
+                Text(m.status == nil ? tr("Waiting for the ChargeKeeper service…") : tr("Battery data unavailable."))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
