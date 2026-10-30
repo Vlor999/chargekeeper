@@ -115,20 +115,21 @@ final class Daemon {
             if late && !s.config.catchUpMissedTasks { record(HistoryEntry(event: .taskSkipped, action: t.action, value: value)); continue }
             record(HistoryEntry(event: .taskRun, action: t.action, late: late, value: value))
             switch t.action {
-            case .setLimit: mutate(.setLimit(t.value))
-            case .calibrate: mutate(.calibrate(true))
-            case .topUp: mutate(.topUp(true))
-            case .pause: mutate(.pause)
-            case .dischargeTo: mutate(.dischargeTo(t.value))
-            case .lowPowerOn: mutate(.lowPower(true))
-            case .lowPowerOff: mutate(.lowPower(false))
+            case .setLimit: mutate(.setLimit(t.value), scheduled: true)
+            case .calibrate: mutate(.calibrate(true), scheduled: true)
+            case .topUp: mutate(.topUp(true), scheduled: true)
+            case .pause: mutate(.pause, scheduled: true)
+            case .dischargeTo: mutate(.dischargeTo(t.value), scheduled: true)
+            case .lowPowerOn: mutate(.lowPower(true), scheduled: true)
+            case .lowPowerOff: mutate(.lowPower(false), scheduled: true)
             }
         }
     }
 
-    func mutate(_ cmd: Command) {
+    /// `scheduled`: run by a task, whose history row already carries the value, so no separate limit change row.
+    func mutate(_ cmd: Command, scheduled: Bool = false) {
         let limit = s.config.limit
-        defer { if s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
+        defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
         case .status: break
         case .setConfig(var c):
