@@ -72,27 +72,56 @@ final class AppModel: ObservableObject {
     }
 
     func run(_ cmd: Command) {
-        if case .calibrate(true) = cmd { requestNotifications() }
+        switch cmd {
+        case .calibrate(true): requestNotifications()
+        case .setConfig(let c) where c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotifications()
+        default: break
+        }
         do { status = try send(cmd); error = nil } catch { self.error = error.localizedDescription }
-        if let c = status?.lastCalibration { notifyCalibration(c) }
+        if let s = status { notifyCalibration(s.lastCalibration) }
     }
 
-    /// Asked when a calibration is started or scheduled, not at launch.
+    /// Asked when a calibration is started or scheduled, not at launch. No prompt once the user has answered.
     func requestNotifications() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
+    private let notifiedKey = "lastNotifiedCalibration"
+    private var notifying = false
+
     /// Once per calibration: on the service's signal, or at the next status if the app was not running then.
-    private func notifyCalibration(_ c: CalibrationResult) {
-        let key = "lastNotifiedCalibration"
-        guard c.end > (UserDefaults.standard.object(forKey: key) as? Date ?? .distantPast) else { return }
-        UserDefaults.standard.set(c.end, forKey: key)
+    private func notifyCalibration(_ c: CalibrationResult?) {
+        let handled = UserDefaults.standard.object(forKey: notifiedKey) as? Date
+        switch calibrationNotice(end: c?.end, handled: handled) {
+        case .seed(let d): UserDefaults.standard.set(d, forKey: notifiedKey)
+        case .none: break
+        case .notify:
+            guard let c, !notifying else { return }
+            notifying = true
+            let center = UNUserNotificationCenter.current()
+            // Calibrations started from Shortcuts, the CLI or an older schedule never asked: ask at the first result.
+            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                guard granted else { return DispatchQueue.main.async { self.handled(c.end) } }
+                center.add(UNNotificationRequest(identifier: "calibration", content: self.content(c), trigger: nil)) { error in
+                    DispatchQueue.main.async { if error == nil { self.handled(c.end) } else { self.notifying = false } }
+                }
+            }
+        }
+    }
+
+    /// Denied counts as handled too: no retry on every status.
+    private func handled(_ end: Date) {
+        UserDefaults.standard.set(end, forKey: notifiedKey)
+        notifying = false
+    }
+
+    private func content(_ c: CalibrationResult) -> UNNotificationContent {
         let n = UNMutableNotificationContent()
         n.title = tr("Calibration complete")
-        n.body = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %d → %d mAh", b, $0) } },
-                  c.before.health.flatMap { b in c.after.health.map { tr("Health: %.1f → %.1f %%", b, $0) } }]
-            .compactMap { $0 }.joined(separator: "\n")
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "calibration", content: n, trigger: nil))
+        let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %d → %d mAh", b, $0) } },
+                     c.before.health.flatMap { b in c.after.health.map { tr("Health: %.1f → %.1f %%", b, $0) } }].compactMap { $0 }
+        n.body = lines.isEmpty ? tr("Finished %@", c.end.formatted(date: .abbreviated, time: .shortened)) : lines.joined(separator: "\n")
+        return n
     }
 
     /// Binding into the daemon's config; every edit is pushed immediately.

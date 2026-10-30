@@ -156,8 +156,8 @@ struct ScheduleView: View {
                 }
                 HStack {
                     Button(tr("+ Task")) { tasks.wrappedValue.append(ScheduledTask(action: .setLimit, repeatRule: .daily, start: nextNine())) }
-                    Button(tr("Monthly calibration")) { m.requestNotifications(); tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
-                    Button(tr("Calibration every 2 weeks")) { m.requestNotifications(); tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
+                    Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
+                    Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
                 Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
             }

@@ -75,6 +75,14 @@ for (pct, t) in [(100, 0.0), (100, 3599), (100, 3600), (95, 4000), (80, 5000)] a
 assert(finished == [false, false, true, false, false])
 assert(!calibrationFinished(from: .hold, to: nil) && !calibrationFinished(from: .returnToLimit, to: nil))
 
+// Calibration notice: first run seeds without a banner, then one banner per new result.
+let t0 = Date(timeIntervalSince1970: 1000), t1 = Date(timeIntervalSince1970: 2000)
+assert(calibrationNotice(end: t0, handled: nil) == .seed(t0))
+assert(calibrationNotice(end: nil, handled: nil) == .seed(.distantPast))
+assert(calibrationNotice(end: t0, handled: .distantPast) == .notify)
+assert(calibrationNotice(end: t0, handled: t0) == .none && calibrationNotice(end: nil, handled: t0) == .none)
+assert(calibrationNotice(end: t1, handled: t0) == .notify)
+
 // Calibration report: health is capacity over design, summary shows before→after.
 let before = BatterySnapshot(date: Date(), maxCapacity: 7100, nominalCapacity: 7344, designCapacity: 8579, cycleCount: 277, percent: 60)
 var after = before; after.maxCapacity = 7180; after.cycleCount = 278

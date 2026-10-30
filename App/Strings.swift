@@ -151,6 +151,7 @@ private let french: [String: String] = [
     "Calibration complete": "Calibration terminée",
     "Capacity: %d → %d mAh": "Capacité : %d → %d mAh",
     "Health: %.1f → %.1f %%": "Santé : %.1f → %.1f %%",
+    "Finished %@": "Terminée le %@",
     "Action": "Action",
     "Repeat": "Répétition",
     "Value: %d %%": "Valeur : %d %%",
