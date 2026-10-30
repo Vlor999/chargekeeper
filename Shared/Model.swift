@@ -12,7 +12,7 @@ let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAda
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
 /// Battery health series: one point per day for this many days, one per week before.
 let healthDailyDays = 180
-/// Battery health series cap (~100 bytes each in state.json): about 7 years at one point per week.
+/// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
 let healthMaxSamples = 520
 
 enum ChargeState: String, Codable {

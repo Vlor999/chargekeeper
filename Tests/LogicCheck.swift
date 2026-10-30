@@ -332,19 +332,45 @@ assert(!healthSampleDue([hp("2026-09-01T12:00:00Z"), hp("2026-10-01T12:00:00Z")]
 var series: [HealthSample] = []
 var day = d("2025-01-01T12:00:00Z")
 while day <= d("2026-10-01T12:00:00Z") {
-    series = addHealthSample(series, HealthSample(date: day, maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil), calendar: cal)
+    series = addHealthSample(series, HealthSample(date: day, maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil), now: day, calendar: cal)
     day = day.addingTimeInterval(86400)
 }
-series = addHealthSample(series, hp("2025-03-05T18:00:00Z", cal: true), calendar: cal)
+series = addHealthSample(series, hp("2025-03-05T18:00:00Z", cal: true), now: d("2026-10-01T12:00:00Z"), calendar: cal)
 assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
 let cutoff = d("2026-10-01T12:00:00Z").addingTimeInterval(-180 * 86400)
 assert(series.filter { $0.date >= cutoff }.count == 181)
 let old = series.filter { $0.date < cutoff && $0.calibration != true }
 assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
 assert(series.contains { $0.calibration == true })
-series = (0..<600).reduce([]) { s, i in addHealthSample(s, HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), maxCapacity: 4200,
-                                                                        nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: true), calendar: cal) }
-assert(series.count == healthMaxSamples && series.last?.date == d("2026-01-01T00:00:00Z").addingTimeInterval(599 * 60))
+
+// Health series: over the cap, daily and weekly points go before calibration points, oldest first.
+func minute(_ i: Int, cal c: Bool?) -> HealthSample {
+    HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800,
+                 cycleCount: nil, calibration: c)
+}
+let capNow = d("2026-01-02T00:00:00Z")
+series = (0..<600).reduce([]) { s, i in addHealthSample(s, minute(i, cal: i % 2 == 0 ? true : nil), now: capNow, calendar: cal) }
+assert(series.count == healthMaxSamples && series.filter { $0.calibration == true }.count == 300)
+assert(series.last?.date == minute(599, cal: nil).date && series.first?.date == minute(0, cal: true).date)
+series = (0..<600).reduce([]) { s, i in addHealthSample(s, minute(i, cal: true), now: capNow, calendar: cal) }
+assert(series.count == healthMaxSamples && series.first?.date == minute(80, cal: true).date)
+
+// Health series: a point dated more than a day ahead is refused, and such points drop out once the clock is back.
+let base = [hp("2026-10-01T12:00:00Z")]
+assert(addHealthSample(base, hp("2026-10-03T12:00:00Z"), now: d("2026-10-01T12:00:00Z"), calendar: cal) == base)
+assert(addHealthSample([hp("2026-10-01T12:00:00Z"), hp("2027-10-01T12:00:00Z")], hp("2026-10-02T12:00:00Z"), now: d("2026-10-02T12:00:00Z"), calendar: cal)
+       == [hp("2026-10-01T12:00:00Z"), hp("2026-10-02T12:00:00Z")])
+// The thinning cutoff follows the current time, not the inserted point.
+let daily = (0..<200).map { i in HealthSample(date: d("2026-10-01T12:00:00Z").addingTimeInterval(-Double(i) * 86400), maxCapacity: 4200,
+                                              nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil) }.reversed()
+let thinned = addHealthSample(Array(daily), hp("2026-03-01T12:00:00Z", cal: true), now: d("2026-10-01T12:00:00Z"), calendar: cal)
+assert(thinned.filter { $0.calibration != true && $0.date < cutoff }.count <= 3)
+
+// Health series: one point per date; the calibration point replaces the daily point of the same tick, never the reverse.
+let tickDaily = hp("2026-10-01T12:00:00Z"), tickCal = hp("2026-10-01T12:00:00Z", 4300, cal: true)
+assert(addHealthSample([tickDaily], tickCal, now: tickDaily.date, calendar: cal) == [tickCal])
+assert(addHealthSample([tickCal], tickDaily, now: tickDaily.date, calendar: cal) == [tickCal])
+assert(addHealthSample([tickDaily], tickDaily, now: tickDaily.date, calendar: cal) == [tickDaily])
 
 // Health range: starts 3 months or 1 year back.
 assert(healthRangeStart(.threeMonths, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2026-07-30T12:00:00Z"))

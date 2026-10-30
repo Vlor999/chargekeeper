@@ -252,15 +252,32 @@ func healthSampleDue(_ series: [HealthSample], now: Date, calendar: Calendar = .
     series.last { calendar.isDate($0.date, inSameDayAs: now) } == nil
 }
 
-/// Inserts the point in date order, then thins the series: daily for the last `healthDailyDays` days, the first point
-/// of each week before (calibration points always kept), at most `healthMaxSamples` points.
-func addHealthSample(_ series: [HealthSample], _ p: HealthSample, calendar cal: Calendar = .current) -> [HealthSample] {
-    var all = series
+/// Inserts the point in date order, then thins the series: daily for the `healthDailyDays` days before `now`, the first
+/// point of each week before that, calibration points kept. Over `healthMaxSamples` points, the oldest daily or weekly
+/// points go first, then the oldest calibration points.
+/// Points dated more than a day after `now` (a clock that was set ahead) are refused, and dropped from the series.
+/// One point per date: the calibration point wins over the daily point of the same tick.
+func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, calendar cal: Calendar = .current) -> [HealthSample] {
+    let latest = now.addingTimeInterval(86400)
+    var all = series.filter { $0.date <= latest }
+    guard p.date <= latest else { return all }
+    if let i = all.firstIndex(where: { $0.date == p.date }) {
+        guard p.calibration == true, all[i].calibration != true else { return all }
+        all.remove(at: i)
+    }
     all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
-    let cutoff = p.date.addingTimeInterval(-Double(healthDailyDays) * 86400)
+    let cutoff = now.addingTimeInterval(-Double(healthDailyDays) * 86400)
     var weeks = Set<DateComponents>()
-    let kept = all.filter { s in
+    var kept = all.filter { s in
         s.date >= cutoff || s.calibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
+    }
+    var excess = kept.count - healthMaxSamples
+    if excess > 0 {
+        kept = kept.filter { s in
+            guard excess > 0, s.calibration != true else { return true }
+            excess -= 1
+            return false
+        }
     }
     return Array(kept.suffix(healthMaxSamples))
 }
