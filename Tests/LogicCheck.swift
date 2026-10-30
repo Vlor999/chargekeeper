@@ -152,6 +152,10 @@ assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !
 assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
 assert(tr("%@ to %@ %%", approxDuration(1500), "80") == "~25 min jusqu'à 80 %")
 assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter to continue calibration")
+// Menu and notification strings have their French text.
+assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
+assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
+assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
 let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]

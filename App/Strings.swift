@@ -95,6 +95,8 @@ private let french: [String: String] = [
     "Rest 1 h at %@ %%": "Pause 1 h à %@ %%",
     "Back to %@ %%": "Retour à %@ %%",
     "%@ min left": "encore %@ min",
+    "~%@ min": "~%@ min",
+    "~%@ h %@ min": "~%@ h %@ min",
     "Before: %@": "Avant : %@",
     "Plug in the adapter to continue calibration": "Branchez l'adaptateur pour poursuivre la calibration",
     // Power flow
