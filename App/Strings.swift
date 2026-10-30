@@ -28,7 +28,8 @@ func localizedHistory(_ e: HistoryEntry) -> String {
         .replacingOccurrences(of: #" (%|mAh|°C)"#, with: "\u{00A0}$1", options: .regularExpression)
 }
 
-private let french: [String: String] = [
+/// Internal so make check can assert that every template has a French entry.
+let french: [String: String] = [
     // Menu
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",

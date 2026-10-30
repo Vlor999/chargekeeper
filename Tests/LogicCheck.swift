@@ -154,7 +154,14 @@ let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: 
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
     + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
-for e in samples { assert(localizedHistory(e) != historyText(e), historyText(e)) }
+var templates: Set<String> = []
+for e in samples { _ = historyText(e, { templates.insert($0); return englishTemplate($0, $1) }) }
+// Banners and notification settings (App.swift).
+templates.formUnion(["Heat protection", "Charge limit reached", "Calibration complete", "Heat protection paused charging", "Notifications",
+                     "Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications.",
+                     "Charging paused: battery at %@ °C (max %@ °C).", "Battery at %@ %%. Charging paused at the limit.",
+                     "Capacity: %@ → %@ mAh", "Health: %@ → %@ %%", "Finished %@"])
+for k in templates { assert(french[k] != nil, "no French for \(k)") }
 
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
