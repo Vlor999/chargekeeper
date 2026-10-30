@@ -4,6 +4,10 @@ import Foundation
 let socketPath = "/var/run/jauge.sock"
 /// Darwin notification posted by the service when a calibration finishes.
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
+/// Posted when heat protection pauses charging, once per heat episode.
+let heatProtectNotification = "com.vlor999.jauge.heatProtect"
+/// Posted when the battery level reaches the charge limit, once per charging session.
+let limitReachedNotification = "com.vlor999.jauge.limitReached"
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -35,9 +39,56 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     var lastRun: Date?
 }
 
+enum HistoryEvent: String, Codable {
+    case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
+    case taskRun, taskSkipped, limitChanged, heatProtect
+}
+
+/// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
+/// rendering, kept for older apps and for entries written by an older service (free text only).
 struct HistoryEntry: Codable, Hashable {
     var date: Date
     var text: String
+    var event: HistoryEvent?
+    var phase: CalibrationPhase?
+    var action: TaskAction?
+    var late: Bool?  // task run after its time (caught up on wake)
+    var value: Int?  // task value or new charge limit, in %
+    var temperature: Double?
+    var capacityBefore: Int?, capacityAfter: Int?  // mAh
+    var healthBefore: Double?, healthAfter: Double?  // %
+    var cycles: Int?
+
+    init(date: Date = Date(), text: String = "", event: HistoryEvent? = nil, phase: CalibrationPhase? = nil, action: TaskAction? = nil,
+         late: Bool? = nil, value: Int? = nil, temperature: Double? = nil, capacityBefore: Int? = nil, capacityAfter: Int? = nil,
+         healthBefore: Double? = nil, healthAfter: Double? = nil, cycles: Int? = nil) {
+        (self.date, self.text, self.event, self.phase, self.action, self.late, self.value, self.temperature) =
+            (date, text, event, phase, action, late, value, temperature)
+        (self.capacityBefore, self.capacityAfter, self.healthBefore, self.healthAfter, self.cycles) =
+            (capacityBefore, capacityAfter, healthBefore, healthAfter, cycles)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, text, event, phase, action, late, value, temperature, capacityBefore, capacityAfter, healthBefore, healthAfter, cycles
+    }
+
+    /// Lenient: an event or value unknown to this build (newer service) falls back to the text instead of failing the whole Status.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(Date.self, forKey: .date)
+        text = try c.decode(String.self, forKey: .text)
+        event = try? c.decodeIfPresent(HistoryEvent.self, forKey: .event)
+        phase = try? c.decodeIfPresent(CalibrationPhase.self, forKey: .phase)
+        action = try? c.decodeIfPresent(TaskAction.self, forKey: .action)
+        late = try? c.decodeIfPresent(Bool.self, forKey: .late)
+        value = try? c.decodeIfPresent(Int.self, forKey: .value)
+        temperature = try? c.decodeIfPresent(Double.self, forKey: .temperature)
+        capacityBefore = try? c.decodeIfPresent(Int.self, forKey: .capacityBefore)
+        capacityAfter = try? c.decodeIfPresent(Int.self, forKey: .capacityAfter)
+        healthBefore = try? c.decodeIfPresent(Double.self, forKey: .healthBefore)
+        healthAfter = try? c.decodeIfPresent(Double.self, forKey: .healthAfter)
+        cycles = try? c.decodeIfPresent(Int.self, forKey: .cycles)
+    }
 }
 
 struct Config: Codable, Equatable {

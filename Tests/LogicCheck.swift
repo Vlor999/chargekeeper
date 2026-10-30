@@ -92,6 +92,77 @@ assert(calibrationSummary(before: nil, after: after) == "7180 mAh, health 83.7 %
 after.designCapacity = nil
 assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
 
+// Service notices: heat once per episode (a second pause after cooling is a new one), limit once per charging session, reset on unplug.
+var latch = NoticeLatch(seenLimit: 80)
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .heatProtect, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
+assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .calibration, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .pause, to: .discharging, adapter: false, limit: 80, latch: &latch) == [] && !latch.limit)
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
+
+// Limit notice: only when the battery level reaches an unchanged limit; a limit change re-arms it.
+latch = NoticeLatch(seenLimit: 80)
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 70, latch: &latch) == [])  // lowered limit, Pause, scheduled task
+assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: 90, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 90, latch: &latch) == [.limitReached])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+latch = NoticeLatch()
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])  // first tick after a restart
+
+// History: events render in English with their parameters.
+let done = HistoryEntry(event: .calibrationDone, capacityBefore: 7100, capacityAfter: 7180, healthBefore: 82.76, healthAfter: 83.69, cycles: 278)
+assert(historyText(done) == "Calibration complete: 7100 → 7180 mAh, health 82.8 → 83.7 %, 278 cycles")
+assert(historyText(HistoryEntry(event: .calibrationDone)) == "Calibration complete")
+assert(historyText(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration: discharging to 10 %")
+assert(historyText(HistoryEntry(event: .taskRun, action: .setLimit, late: true, value: 60)) == "Missed task run on wake: Set charge limit (60 %)")
+assert(historyText(HistoryEntry(event: .taskRun, action: .topUp, late: false)) == "Scheduled task: Charge to 100%")
+assert(historyText(HistoryEntry(event: .heatProtect, temperature: 36.24)) == "Heat protection: charging paused at 36.2 °C")
+assert(historyText(HistoryEntry(event: .limitChanged, value: 75)) == "Charge limit set to 75 %")
+
+// History: free text from an older service maps to its event, unknown text stays as is.
+assert(historyText(HistoryEntry(text: "calibration done: 7100→7180 mAh, health 82.8→83.7 %, 278 cycles")) == historyText(done))
+assert(historyText(HistoryEntry(text: "calibration done: 7180 mAh, 278 cycles")) == "Calibration complete: 7180 mAh, 278 cycles")
+assert(parsedHistory(HistoryEntry(text: "calibration: dischargeTo10")).phase == .dischargeTo10)
+assert(parsedHistory(HistoryEntry(text: "calibration: back to limit")).event == .calibrationEnded)
+assert(parsedHistory(HistoryEntry(text: "calibration started")).event == .calibrationStarted)
+let caught = parsedHistory(HistoryEntry(text: "task calibrate (caught up)"))
+assert(caught.event == .taskRun && caught.action == .calibrate && caught.late == true)
+assert(parsedHistory(HistoryEntry(text: "task skipped (missed): topUp")).event == .taskSkipped)
+assert(historyText(HistoryEntry(text: "Limit 80 %")) == "Limit 80 %")
+
+// History decoding: an event unknown to this build falls back to the text; older apps read the text only.
+struct OldEntry: Codable { var date: Date; var text: String }
+let decoded = try! JSONDecoder().decode([HistoryEntry].self, from: Data(#"[{"date":0,"text":"x","event":"future"},{"date":0,"text":"calibration stopped"}]"#.utf8))
+assert(decoded[0].event == nil && historyText(decoded[0]) == "x" && historyText(decoded[1]) == "Calibration stopped")
+var stored = done; stored.text = historyText(done)
+assert(try! JSONDecoder().decode(OldEntry.self, from: JSONEncoder().encode(stored)).text == historyText(done))
+assert(try! JSONDecoder().decode(HistoryEntry.self, from: JSONEncoder().encode(stored)) == stored)
+
+// History in French: locale numbers, and every event template has a translation.
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
+assert(localizedHistory(done) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
+assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
+let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
+               HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
+               HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
+    + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
+    + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
+var templates: Set<String> = []
+for e in samples { _ = historyText(e, { templates.insert($0); return englishTemplate($0, $1) }) }
+// Banners and notification settings (App.swift).
+templates.formUnion(["Heat protection", "Charge limit reached", "Calibration complete", "Heat protection paused charging", "Notifications",
+                     "Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications.",
+                     "Charging paused: battery at %@ °C (max %@ °C).", "Battery at %@ %%. Charging paused at the limit.",
+                     "Capacity: %@ → %@ mAh", "Health: %@ → %@ %%", "Finished %@"])
+for k in templates { assert(french[k] != nil, "no French for \(k)") }
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)

@@ -10,12 +10,26 @@ var appLanguage: String {
 }
 
 /// English is the source text; French comes from the table below. Placeholders follow String(format:).
-func tr(_ en: String, _ args: CVarArg...) -> String {
+func tr(_ en: String, _ args: CVarArg...) -> String { tr(en, args) }
+
+func tr(_ en: String, _ args: [CVarArg]) -> String {
     let s = appLanguage == "fr" ? (french[en] ?? en) : en
     return args.isEmpty ? s : String(format: s, arguments: args)
 }
 
-private let french: [String: String] = [
+/// Number in the UI language ("82.8" in English, "82,8" in French), without grouping like the mAh values elsewhere.
+func number(_ v: Double, decimals: Int = 0) -> String {
+    v.formatted(.number.precision(.fractionLength(decimals)).grouping(.never).locale(Locale(identifier: appLanguage)))
+}
+
+/// History entry in the UI language. Units stay on the line of their number.
+func localizedHistory(_ e: HistoryEntry) -> String {
+    historyText(e, { tr($0, $1) }, { number($0, decimals: $1) })
+        .replacingOccurrences(of: #" (%|mAh|°C)"#, with: "\u{00A0}$1", options: .regularExpression)
+}
+
+/// Internal so make check can assert that every template has a French entry.
+let french: [String: String] = [
     // Menu
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",
@@ -75,6 +89,7 @@ private let french: [String: String] = [
     "Show in menu": "Afficher dans le menu",
     // Settings
     "Sleep": "Suspension",
+    "Charge": "Charge",
     "MagSafe LED": "LED MagSafe",
     "Schedule": "Planification",
     "General": "Général",
@@ -150,10 +165,39 @@ private let french: [String: String] = [
     "Temperature": "Température",
     "%d h %02d min": "%d h %02d min",
     "Calibration complete": "Calibration terminée",
-    "Capacity: %d → %d mAh": "Capacité : %d → %d mAh",
-    "Health: %.1f → %.1f %%": "Santé : %.1f → %.1f %%",
     "Finished %@": "Terminée le %@",
     "Action": "Action",
     "Repeat": "Répétition",
     "Value: %d %%": "Valeur : %d %%",
+    // History
+    "Calibration started": "Calibration démarrée",
+    "Calibration stopped": "Calibration arrêtée",
+    "Calibration over: back at the limit": "Fin de la calibration : retour à la limite",
+    "Calibration: charging to 100 %": "Calibration : charge jusqu'à 100 %",
+    "Calibration: discharging to 10 %": "Calibration : décharge jusqu'à 10 %",
+    "Calibration: recharging to 100 %": "Calibration : recharge jusqu'à 100 %",
+    "Calibration: resting 1 h at 100 %": "Calibration : pause d'1 h à 100 %",
+    "Calibration: discharging back to the limit": "Calibration : décharge jusqu'à la limite",
+    "Calibration complete: %@": "Calibration terminée : %@",
+    "%@ → %@": "%@ → %@",
+    "%@ mAh": "%@ mAh",
+    "health %@ %%": "santé %@ %%",
+    "%@ cycles": "%@ cycles",
+    "%@ (%@ %%)": "%@ (%@ %%)",
+    "Scheduled task: %@": "Tâche planifiée : %@",
+    "Missed task run on wake: %@": "Tâche manquée exécutée au réveil : %@",
+    "Missed task skipped: %@": "Tâche manquée ignorée : %@",
+    "Charge limit set to %@ %%": "Limite de recharge réglée à %@ %%",
+    "Heat protection: charging paused": "Protection thermique : charge suspendue",
+    "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
+    // Notifications
+    "Notifications": "Notifications",
+    "Heat protection paused charging": "Charge suspendue par la protection thermique",
+    "Charge limit reached": "Limite de recharge atteinte",
+    "Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications.":
+        "Affichées seulement quand ChargeKeeper est ouvert. Autorisez ChargeKeeper dans Réglages Système > Notifications.",
+    "Charging paused: battery at %@ °C (max %@ °C).": "Charge suspendue : batterie à %@ °C (max %@ °C).",
+    "Battery at %@ %%. Charging paused at the limit.": "Batterie à %@ %%. Charge suspendue à la limite.",
+    "Capacity: %@ → %@ mAh": "Capacité : %@ → %@ mAh",
+    "Health: %@ → %@ %%": "Santé : %@ → %@ %%",
 ]

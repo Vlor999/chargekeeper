@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
-    private var calibrationToken: Int32 = 0
+    private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
@@ -53,6 +53,8 @@ final class AppModel: ObservableObject {
         UNUserNotificationCenter.current().delegate = banner
         // Posted by the service when a calibration finishes: event driven, nothing runs in between.
         notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
+        notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
+        notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -73,8 +75,8 @@ final class AppModel: ObservableObject {
 
     func run(_ cmd: Command) {
         switch cmd {
-        case .calibrate(true): requestNotifications()
-        case .setConfig(let c) where c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotifications()
+        case .calibrate(true) where NoticeKind.calibration.enabled: requestNotifications()
+        case .setConfig(let c) where NoticeKind.calibration.enabled && c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotifications()
         default: break
         }
         do { status = try send(cmd); error = nil } catch { self.error = error.localizedDescription }
@@ -97,14 +99,38 @@ final class AppModel: ObservableObject {
         case .none: break
         case .notify:
             guard let c, !notifying else { return }
+            guard NoticeKind.calibration.enabled else { return self.handled(c.end) }
             notifying = true
-            let center = UNUserNotificationCenter.current()
-            // Calibrations started from Shortcuts, the CLI or an older schedule never asked: ask at the first result.
-            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                guard granted else { return DispatchQueue.main.async { self.handled(c.end) } }
-                center.add(UNNotificationRequest(identifier: "calibration", content: self.content(c), trigger: nil)) { error in
-                    DispatchQueue.main.async { if error == nil { self.handled(c.end) } else { self.notifying = false } }
-                }
+            deliver("calibration", content(c)) { if $0 { self.handled(c.end) } else { self.notifying = false } }
+        }
+    }
+
+    /// Heat and limit banners follow the service's signal live: a signal sent while the app was not running is not replayed.
+    private func notice(_ kind: NoticeKind) {
+        guard kind.enabled else { return }
+        run(.status)
+        guard let s = status, error == nil else { return }
+        let n = UNMutableNotificationContent()
+        switch kind {
+        case .heat:
+            n.title = tr("Heat protection")
+            n.body = tr("Charging paused: battery at %@ °C (max %@ °C).", s.temperature.map { number($0, decimals: 1) } ?? "--", number(s.config.maxTemp))
+        case .limit:
+            n.title = tr("Charge limit reached")
+            n.body = tr("Battery at %@ %%. Charging paused at the limit.", number(Double(s.percent)))
+        case .calibration: return
+        }
+        deliver(kind.rawValue, n) { _ in }
+    }
+
+    /// Asks for permission first: events from Shortcuts, the CLI or the schedule never asked. `done(true)` once
+    /// delivered or denied (denied counts as handled), `done(false)` on a delivery error.
+    private func deliver(_ id: String, _ content: UNNotificationContent, done: @escaping (Bool) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return DispatchQueue.main.async { done(true) } }
+            center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
+                DispatchQueue.main.async { done(error == nil) }
             }
         }
     }
@@ -118,8 +144,9 @@ final class AppModel: ObservableObject {
     private func content(_ c: CalibrationResult) -> UNNotificationContent {
         let n = UNMutableNotificationContent()
         n.title = tr("Calibration complete")
-        let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %d → %d mAh", b, $0) } },
-                     c.before.health.flatMap { b in c.after.health.map { tr("Health: %.1f → %.1f %%", b, $0) } }].compactMap { $0 }
+        let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %@ → %@ mAh", number(Double(b)), number(Double($0))) } },
+                     c.before.health.flatMap { b in c.after.health.map { tr("Health: %@ → %@ %%", number(b, decimals: 1), number($0, decimals: 1)) } }]
+            .compactMap { $0 }
         n.body = lines.isEmpty ? tr("Finished %@", c.end.formatted(date: .abbreviated, time: .shortened)) : lines.joined(separator: "\n")
         return n
     }
@@ -128,6 +155,24 @@ final class AppModel: ObservableObject {
     func config<T>(_ kp: WritableKeyPath<Config, T>) -> Binding<T> {
         Binding(get: { self.status?.config[keyPath: kp] ?? Config()[keyPath: kp] },
                 set: { v in guard var c = self.status?.config else { return }; c[keyPath: kp] = v; self.run(.setConfig(c)) })
+    }
+}
+
+/// Banners the user can turn off in Settings > General.
+enum NoticeKind: String, CaseIterable, Identifiable {
+    case calibration, heat, limit
+
+    var id: Self { self }
+    var key: String { "notify." + rawValue }
+    var defaultOn: Bool { self != .limit }
+    var enabled: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? defaultOn }
+
+    var label: String {
+        switch self {
+        case .calibration: tr("Calibration complete")
+        case .heat: tr("Heat protection paused charging")
+        case .limit: tr("Charge limit reached")
+        }
     }
 }
 
