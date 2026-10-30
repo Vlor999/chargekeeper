@@ -160,7 +160,7 @@ final class Daemon {
         let limit = s.config.limit
         defer { if s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
-        case .status: break
+        case .status, .healthHistory: break
         case .setConfig(var c):
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)
@@ -188,12 +188,17 @@ final class Daemon {
     }
 
     func handle(_ cmd: Command) -> Status {
-        if case .status = cmd {} else { mutate(cmd); tick() }
-        return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
+        switch cmd {
+        case .status, .healthHistory: break
+        default: mutate(cmd); tick()
+        }
+        var out = Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
                       systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
+        if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
+        return out
     }
 
     /// "Stop charging during sleep": freeze at current level before sleeping.
@@ -253,6 +258,8 @@ func serve() {
         defer { close(c) }
         var tv = timeval(tv_sec: 2, tv_usec: 0)
         setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        // The health series reply spans several socket buffers: a client that stops reading must not stall the service.
+        setsockopt(c, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         guard let data = try? readLine(c), let cmd = try? JSONDecoder().decode(Command.self, from: data),
               let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
         try? writeLine(c, out)

@@ -197,6 +197,7 @@ struct Status: Codable {
     var battery: BatterySnapshot?  // nil from an older service
     var lastCalibration: CalibrationResult?
     var appleChargeLimit: Int?  // Charge Limit set in System Settings below 100 %, on Macs where the service never sets it
+    var healthHistory: [HealthSample]?  // only in the reply to .healthHistory, to keep the periodic status small
 }
 
 enum Command: Codable {
@@ -211,4 +212,5 @@ enum Command: Codable {
     case led(LEDColor?)
     case lowPower(Bool)
     case highPower(Bool)
+    case healthHistory  // a service older than this command closes the connection without a reply
 }
