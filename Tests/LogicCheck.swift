@@ -93,19 +93,28 @@ after.designCapacity = nil
 assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
 
 // Service notices: heat once per episode (a second pause after cooling is a new one), limit once per charging session, reset on unplug.
-var latch = NoticeLatch()
-assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [.heatProtect])
-assert(serviceNotices(from: .heatProtect, to: .heatProtect, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [.heatProtect])
-assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [.limitReached])
-assert(serviceNotices(from: .pause, to: .charging, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [.heatProtect])
-assert(serviceNotices(from: .calibration, to: .pause, adapter: true, latch: &latch) == [])
-assert(serviceNotices(from: .pause, to: .discharging, adapter: false, latch: &latch) == [] && latch == NoticeLatch())
-assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [.limitReached])
+var latch = NoticeLatch(seenLimit: 80)
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .heatProtect, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
+assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .calibration, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+assert(serviceNotices(from: .pause, to: .discharging, adapter: false, limit: 80, latch: &latch) == [] && !latch.limit)
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
+
+// Limit notice: only when the battery level reaches an unchanged limit; a limit change re-arms it.
+latch = NoticeLatch(seenLimit: 80)
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 70, latch: &latch) == [])  // lowered limit, Pause, scheduled task
+assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: 90, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 90, latch: &latch) == [.limitReached])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
+latch = NoticeLatch()
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])  // first tick after a restart
 
 // History: events render in English with their parameters.
 let done = HistoryEntry(event: .calibrationDone, capacityBefore: 7100, capacityAfter: 7180, healthBefore: 82.76, healthAfter: 83.69, cycles: 278)
