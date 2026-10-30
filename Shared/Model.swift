@@ -167,6 +167,7 @@ struct Status: Codable {
     var adapterRatedWatts: Int?
     var systemWatts: Double
     var batteryWatts: Double  // >0 charging, <0 discharging
+    var batteryAmperage: Int?  // mA, >0 charging; nil from an older service
     var ports: [PortPower]?  // USB-C power out, included in systemWatts; nil from an older service
     var nativeLimit: Bool
     var sleepDisabled: Bool
