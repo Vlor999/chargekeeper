@@ -131,18 +131,25 @@ final class Backend {
     private var lastInhibit: Bool?
     private var lastDischarge: Bool?
     private var lastLED: LEDColor?
+    /// The last hold or discharge applied is in effect: every write it needed succeeded and its keys exist.
+    private(set) var inControl = false
 
     func apply(_ a: Action, percent: Int) {
         switch a {
         case .discharge:
-            setDischarge(true)
+            inControl = setDischarge(true)
         case .charge(let t):
             setDischarge(false)
             if inhibitKey != nil { setInhibit(false) } else { setMCL(min(max(t, 80), 100)) }
+            inControl = false
         case .hold(let level):
-            if inhibitKey != nil { setDischarge(false); setInhibit(true) }
-            else if level >= 80 { setDischarge(false); setMCL(level) }
-            else { setMCL(80); setDischarge(percent > level) }  // ponytail: ±1% sawtooth, the only option without an inhibit key
+            if inhibitKey != nil { setDischarge(false); inControl = setInhibit(true) }
+            else if level >= 80 { setDischarge(false); inControl = setMCL(level) }
+            else {  // ponytail: ±1% sawtooth, the only option without an inhibit key
+                let mcl = setMCL(80)
+                let discharge = setDischarge(percent > level)
+                inControl = mcl && discharge && dischargeKey != nil
+            }
         }
     }
 
@@ -157,21 +164,33 @@ final class Backend {
         setLED(.system)
     }
 
-    func setInhibit(_ on: Bool) {
-        guard let k = inhibitKey, lastInhibit != on else { return }
+    /// The setters return whether the requested state is in effect. Without the key, "off" is in effect and "on" is not.
+    @discardableResult
+    func setInhibit(_ on: Bool) -> Bool {
+        guard let k = inhibitKey else { return !on }
+        guard lastInhibit != on else { return true }
         let ok = k == "CHTE" ? smcWrite(k, [on ? 1 : 0, 0, 0, 0])
                              : smcWrite("CH0B", [on ? 2 : 0]) && smcWrite("CH0C", [on ? 2 : 0])
         if ok { lastInhibit = on }
+        return ok
     }
 
-    func setDischarge(_ on: Bool) {
-        guard let k = dischargeKey, lastDischarge != on else { return }
-        if smcWrite(k, [on ? (k == "CHIE" ? 8 : 1) : 0]) { lastDischarge = on }
+    @discardableResult
+    func setDischarge(_ on: Bool) -> Bool {
+        guard let k = dischargeKey else { return !on }
+        guard lastDischarge != on else { return true }
+        let ok = smcWrite(k, [on ? (k == "CHIE" ? 8 : 1) : 0])
+        if ok { lastDischarge = on }
+        return ok
     }
 
-    func setMCL(_ limit: Int) {
-        guard native, lastMCL != limit else { return }
-        if mcl_set(Int32(limit)) == 0 { lastMCL = limit } else { log("MCL \(limit) failed") }
+    @discardableResult
+    func setMCL(_ limit: Int) -> Bool {
+        guard native else { return false }
+        guard lastMCL != limit else { return true }
+        let ok = mcl_set(Int32(limit)) == 0
+        if ok { lastMCL = limit } else { log("MCL \(limit) failed") }
+        return ok
     }
 
     // ponytail: ACLC blink value (6) unverified on MagSafe 2, adjust here if colors are off.
