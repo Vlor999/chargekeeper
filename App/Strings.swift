@@ -220,6 +220,9 @@ private let french: [String: String] = [
     "Notifications": "Notifications",
     "Heat protection paused charging": "Charge suspendue par la protection thermique",
     "Charge limit reached": "Limite de recharge atteinte",
+    "Calibration needs the adapter": "Calibration en attente de l'adaptateur",
+    "Calibration paused": "Calibration en pause",
+    "Plug in the adapter to continue calibration.": "Branchez l'adaptateur pour continuer la calibration.",
     "Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications.":
         "Affichées seulement quand ChargeKeeper est ouvert. Autorisez ChargeKeeper dans Réglages Système > Notifications.",
     "Charging paused: battery at %@ °C (max %@ °C).": "Charge suspendue : batterie à %@ °C (max %@ °C).",

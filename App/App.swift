@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
-    private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0
+    private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
@@ -55,6 +55,7 @@ final class AppModel: ObservableObject {
         notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
         notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
+        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -105,7 +106,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Heat and limit banners follow the service's signal live: a signal sent while the app was not running is not replayed.
+    /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
     private func notice(_ kind: NoticeKind) {
         guard kind.enabled else { return }
         run(.status)
@@ -118,6 +119,11 @@ final class AppModel: ObservableObject {
         case .limit:
             n.title = tr("Charge limit reached")
             n.body = tr("Battery at %@ %%. Charging paused at the limit.", number(Double(s.percent)))
+        case .adapter:
+            // Plugged back in before the signal was handled: nothing to ask.
+            guard calibrationNeedsAdapter(s.runtime.calibration) && !s.adapter else { return }
+            n.title = tr("Calibration paused")
+            n.body = tr("Plug in the adapter to continue calibration.")
         case .calibration: return
         }
         deliver(kind.rawValue, n) { _ in }
@@ -160,7 +166,7 @@ final class AppModel: ObservableObject {
 
 /// Banners the user can turn off in Settings > General.
 enum NoticeKind: String, CaseIterable, Identifiable {
-    case calibration, heat, limit
+    case calibration, adapter, heat, limit
 
     var id: Self { self }
     var key: String { "notify." + rawValue }
@@ -170,6 +176,7 @@ enum NoticeKind: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .calibration: tr("Calibration complete")
+        case .adapter: tr("Calibration needs the adapter")
         case .heat: tr("Heat protection paused charging")
         case .limit: tr("Charge limit reached")
         }
