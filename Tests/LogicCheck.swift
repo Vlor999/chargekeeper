@@ -138,6 +138,11 @@ assert(try! JSONDecoder().decode(HistoryEntry.self, from: JSONEncoder().encode(s
 UserDefaults.standard.register(defaults: [languageKey: "fr"])
 assert(localizedHistory(done) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
 assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
+// App language drives decimals and dates, not the Mac's locale.
+assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--" && watts(13.4) == "13,4 W")
+var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifier: "Europe/Paris")!
+let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
+assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !dateTime(oct30).contains("PM"), dateTime(oct30))
 let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]

@@ -17,10 +17,24 @@ func tr(_ en: String, _ args: [CVarArg]) -> String {
     return args.isEmpty ? s : String(format: s, arguments: args)
 }
 
+/// Locale for dates and numbers: the language chosen in Settings, or the Mac's own locale for "system".
+var appLocale: Locale {
+    (UserDefaults.standard.string(forKey: languageKey) ?? "system") == "system" ? .current : Locale(identifier: appLanguage)
+}
+
 /// Number in the UI language ("82.8" in English, "82,8" in French), without grouping like the mAh values elsewhere.
 func number(_ v: Double, decimals: Int = 0) -> String {
-    v.formatted(.number.precision(.fractionLength(decimals)).grouping(.never).locale(Locale(identifier: appLanguage)))
+    v.formatted(.number.precision(.fractionLength(decimals)).grouping(.never).locale(appLocale))
 }
+
+/// "31.2 °C" / "31,2 °C"; "--" when unknown.
+func celsius(_ v: Double?) -> String { v.map { number($0, decimals: 1) + " °C" } ?? "--" }
+
+/// "13.3 W" / "13,3 W".
+func watts(_ v: Double) -> String { number(v, decimals: 1) + " W" }
+
+/// Date and time in the UI language: "Oct 30, 2026 at 9:41 AM" / "30 oct. 2026 à 09:41".
+func dateTime(_ d: Date) -> String { d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(appLocale)) }
 
 /// History entry in the UI language. Units stay on the line of their number.
 func localizedHistory(_ e: HistoryEntry) -> String {

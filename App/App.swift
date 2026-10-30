@@ -147,7 +147,7 @@ final class AppModel: ObservableObject {
         let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %@ → %@ mAh", number(Double(b)), number(Double($0))) } },
                      c.before.health.flatMap { b in c.after.health.map { tr("Health: %@ → %@ %%", number(b, decimals: 1), number($0, decimals: 1)) } }]
             .compactMap { $0 }
-        n.body = lines.isEmpty ? tr("Finished %@", c.end.formatted(date: .abbreviated, time: .shortened)) : lines.joined(separator: "\n")
+        n.body = lines.isEmpty ? tr("Finished %@", dateTime(c.end)) : lines.joined(separator: "\n")
         return n
     }
 
@@ -269,7 +269,7 @@ struct MenuView: View {
             Text("\(s.percent) %").font(.system(size: 34, weight: .semibold))
             VStack(alignment: .leading) {
                 Text(r.state.label).font(.headline)
-                Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", s.temperature.map { String(format: "%.1f °C", $0) } ?? "--"))
+                Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", celsius(s.temperature)))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -327,6 +327,6 @@ struct UpdateBanner: View {
 extension View {
     /// Rebuilds the view tree when the language changes and formats dates in that language.
     func localized(_ language: String) -> some View {
-        id(language).environment(\.locale, Locale(identifier: appLanguage))
+        id(language).environment(\.locale, appLocale)
     }
 }

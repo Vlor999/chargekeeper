@@ -30,12 +30,12 @@ struct PowerFlow: View {
         return n
     }
 
-    static func spoken(_ n: Node) -> String { "\(n.name) \(String(format: "%.1f W", n.watts))" }
+    static func spoken(_ n: Node) -> String { "\(n.name) \(watts(n.watts))" }
 
     /// Devices charging from the Mac, for the underpowered warning: they may be why the adapter falls short.
     var charging: String {
         let ports = (s.ports ?? []).filter { $0.watts > 0.5 }
-        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.name ?? "USB-C") \(String(format: "%.1f W", $0.watts))" }.joined(separator: ", "))
+        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.name ?? "USB-C") \(watts($0.watts))" }.joined(separator: ", "))
     }
 
     /// Adapter connected but the battery still supplies power we didn't ask for.
@@ -71,7 +71,7 @@ struct PowerFlow: View {
             .accessibilityElement()
             .accessibilityLabel(sources.map(Self.spoken).joined(separator: ", ") + " → " + sinks.map(Self.spoken).joined(separator: ", "))
             if underpowered {
-                Label(tr("Adapter too weak: the battery supplies %@", String(format: "%.1f W", -s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + charging,
+                Label(tr("Adapter too weak: the battery supplies %@", watts(-s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + charging,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
@@ -138,8 +138,8 @@ struct PowerFlow: View {
             for (((n, top), h), y) in zip(zip(zip(list, tops), hs), ys) {
                 ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
                 // The port's ceiling tells whether the device charges as fast as the port allows; dashboard only, for width.
-                let ceiling = named ? n.max.map { String(format: " / %g", $0) } ?? "" : ""
-                let watts = Text("\(Image(systemName: n.icon)) \(String(format: "%.1f", n.watts))\(ceiling) W").font(.caption.monospacedDigit())
+                let ceiling = named ? n.max.map { " / " + number($0, decimals: $0 == $0.rounded() ? 0 : 1) } ?? "" : ""
+                let watts = Text("\(Image(systemName: n.icon)) \(number(n.watts, decimals: 1))\(ceiling) W").font(.caption.monospacedDigit())
                 let at = CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y))
                 let resolved = ctx.resolve(watts)
                 ctx.draw(resolved, at: at, anchor: left ? .trailing : .leading)
@@ -213,7 +213,7 @@ struct DashboardView: View {
                     Text("\(s.percent) %").font(.system(size: 40, weight: .semibold))
                     VStack(alignment: .leading) {
                         Text(s.runtime.state.label).font(.headline)
-                        Text(tr("Hardware %@ · %@ · Limit %d %%", s.hardwarePercent.map { "\($0) %" } ?? "--", s.temperature.map { String(format: "%.1f °C", $0) } ?? "--", s.config.limit))
+                        Text(tr("Hardware %@ · %@ · Limit %d %%", s.hardwarePercent.map { "\($0) %" } ?? "--", celsius(s.temperature), s.config.limit))
                             .foregroundStyle(.secondary)
                     }
                 }
