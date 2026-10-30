@@ -276,6 +276,11 @@ pc.limit = 70; pr.discharge = true
 assert(tick(pc, &pr, 78) == .discharge)
 assert(nil == pastLimitEpisode(.discharge, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
 
+// Apple Charge Limit from System Settings: only an enabled limit in 50...99 counts; a failed read (-1) or 100 is no cap.
+assert(userChargeLimit(enabled: 1, limit: 80) == 80 && userChargeLimit(enabled: 0, limit: 80) == nil)
+assert(userChargeLimit(enabled: 1, limit: 100) == nil && userChargeLimit(enabled: -1, limit: 80) == nil)
+assert(userChargeLimit(enabled: 1, limit: -1) == nil && userChargeLimit(enabled: 1, limit: 0) == nil && userChargeLimit(enabled: 1, limit: 49) == nil)
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)

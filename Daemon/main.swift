@@ -4,6 +4,8 @@ import notify
 
 let stateDir = "/Library/Application Support/Jauge"
 let statePath = stateDir + "/state.json"
+/// The Apple Charge Limit read is a synchronous call to powerd on the main queue: kept rare.
+let appleLimitReadInterval: TimeInterval = 10 * 60
 
 struct Saved: Codable {
     var config = Config()
@@ -20,6 +22,7 @@ final class Daemon {
     var reading = Reading()
     var sleepDisabled = false
     var lastScheduleCheck = Date()
+    var lastAppleLimitRead = Date.distantPast
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
     var adapterNotices = AdapterNoticeState()
@@ -68,7 +71,8 @@ final class Daemon {
         guard let rd = readBattery() else { return }
         reading = rd
         let now = Date()
-        if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now); readAppleChargeLimit() }
+        if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
+        if now.timeIntervalSince(lastAppleLimitRead) >= appleLimitReadInterval { readAppleChargeLimit() }
 
         let prev = s.runtime.state, prevPhase = s.runtime.calibration
         let a = decide(s.config, &s.runtime, Inputs(percent: rd.percent, adapter: rd.adapter, temperature: rd.temperature, now: now))
@@ -103,11 +107,12 @@ final class Daemon {
         save()
     }
 
-    /// Read once a minute: two calls to powerd. Only where the service charges through the SMC: elsewhere the native
-    /// limit is the service's own and a user value cannot be told apart from it.
+    /// Read at start, then every 10 min: two calls to powerd. Only where the service charges through the SMC: elsewhere the
+    /// native limit is the service's own and a user value cannot be told apart from it.
     func readAppleChargeLimit() {
+        lastAppleLimitRead = Date()
         guard hw.native, hw.inhibitKey != nil else { return }
-        appleChargeLimit = userChargeLimit(enabled: mcl_enabled() != 0, limit: Int(mcl_limit()))
+        appleChargeLimit = userChargeLimit(enabled: Int(mcl_enabled()), limit: Int(mcl_limit()))
     }
 
     func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {

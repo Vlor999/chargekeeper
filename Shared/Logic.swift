@@ -211,7 +211,10 @@ func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, inControl:
 
 /// Charge Limit of System Settings when it caps charging. Read only on Macs where the service never sets it (it charges
 /// through the SMC): there, an active limit below 100 % can only come from the user.
-func userChargeLimit(enabled: Bool, limit: Int) -> Int? { enabled && limit < 100 ? limit : nil }
+/// `enabled` is 1 or 0 and -1 when the read failed; a limit outside 50...99 is a failed read or no cap.
+func userChargeLimit(enabled: Int, limit: Int) -> Int? {
+    enabled == 1 && (50...99).contains(limit) ? limit : nil
+}
 
 /// What the app does with the service's last calibration, given the last result it handled.
 enum CalibrationNotice: Equatable {
