@@ -170,14 +170,25 @@ assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 1500)) == 2100)
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5000)) == 0)
 
-// Adapter needed: charging and rest phases only; noticed once on unplug or when such a phase starts unplugged.
+// Adapter needed: charging and rest phases only.
 assert(calibrationNeedsAdapter(.hold) && !calibrationNeedsAdapter(.dischargeTo10) && !calibrationNeedsAdapter(nil))
-assert(adapterMissingNotice(phase: .chargeFull, prevPhase: .chargeFull, adapter: false, wasAdapter: true))
-assert(!adapterMissingNotice(phase: .chargeFull, prevPhase: .chargeFull, adapter: false, wasAdapter: false))
-assert(adapterMissingNotice(phase: .rechargeFull, prevPhase: .dischargeTo10, adapter: false, wasAdapter: false))
-assert(!adapterMissingNotice(phase: .rechargeFull, prevPhase: .hold, adapter: false, wasAdapter: false))
-assert(!adapterMissingNotice(phase: .dischargeTo10, prevPhase: .chargeFull, adapter: false, wasAdapter: true))
-assert(!adapterMissingNotice(phase: .hold, prevPhase: .rechargeFull, adapter: true, wasAdapter: true))
+
+// Adapter notice: once per wait, also on the first tick after a service restart; same wait across rest -> recharge;
+// at most one per 10 min across short unplugs; one reminder after 1 h of waiting.
+func at(_ t: TimeInterval) -> Date { Date(timeIntervalSince1970: t) }
+var an = AdapterNoticeState()
+assert(adapterNotice(phase: .hold, adapter: false, now: at(0), &an) == .first)  // fresh state = restart while unplugged
+assert(adapterNotice(phase: .hold, adapter: false, now: at(5), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(10), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: true, now: at(60), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(120), &an) == .none)  // within 10 min
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(3000), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(3720), &an) == .reminder)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(9000), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: true, now: at(9100), &an) == .none)
+assert(adapterNotice(phase: .chargeFull, adapter: false, now: at(9200), &an) == .first)
+assert(adapterNotice(phase: .dischargeTo10, adapter: false, now: at(20000), &an) == .none)
+assert(adapterNotice(phase: nil, adapter: false, now: at(30000), &an) == .none)
 
 // Calibration rest: only counts on the adapter. Unplugged at 100 % it restarts on replug; below 100 % it recharges first.
 r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)

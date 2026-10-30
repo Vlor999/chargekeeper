@@ -6,7 +6,7 @@ let socketPath = "/var/run/jauge.sock"
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
 /// Posted when heat protection pauses charging, once per heat episode.
 let heatProtectNotification = "com.vlor999.jauge.heatProtect"
-/// Posted when the adapter is missing during a calibration phase that needs it, once per unplug episode.
+/// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
 let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
 /// Posted when charging stops at the limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"

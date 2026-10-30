@@ -115,10 +115,34 @@ func calibrationNeedsAdapter(_ p: CalibrationPhase?) -> Bool {
     p == .chargeFull || p == .rechargeFull || p == .hold
 }
 
-/// Once per unplug episode: the adapter is unplugged during a phase that needs it, or such a phase starts unplugged.
-/// Moving between two such phases while unplugged (rest back to recharge) is the same episode.
-func adapterMissingNotice(phase: CalibrationPhase?, prevPhase: CalibrationPhase?, adapter: Bool, wasAdapter: Bool) -> Bool {
-    calibrationNeedsAdapter(phase) && !adapter && (wasAdapter || !calibrationNeedsAdapter(prevPhase))
+let adapterNoticeGap: TimeInterval = 10 * 60
+let adapterReminderAfter: TimeInterval = 60 * 60
+
+/// Service memory of the "calibration needs the adapter" notices. In memory only: after a restart the first tick that finds
+/// the adapter missing starts a new episode, since the adapter state before the restart is unknown.
+struct AdapterNoticeState: Equatable {
+    var waitingSince: Date?  // start of the current wait for the adapter
+    var lastNotice: Date?
+    var reminded = false
+}
+
+enum AdapterNotice: Equatable { case none, first, reminder }
+
+/// One notice when a wait for the adapter starts (unplugged in a phase that needs it, or such a phase reached unplugged),
+/// at most one per 10 min across short unplugs, and one reminder when the wait reaches 1 h.
+/// Moving between two such phases while unplugged (rest back to recharge) is the same wait.
+func adapterNotice(phase: CalibrationPhase?, adapter: Bool, now: Date, _ s: inout AdapterNoticeState) -> AdapterNotice {
+    guard calibrationNeedsAdapter(phase) && !adapter else { s.waitingSince = nil; s.reminded = false; return .none }
+    guard let since = s.waitingSince else {
+        s.waitingSince = now
+        if let last = s.lastNotice, now.timeIntervalSince(last) < adapterNoticeGap { return .none }
+        s.lastNotice = now
+        return .first
+    }
+    guard !s.reminded, now.timeIntervalSince(since) >= adapterReminderAfter else { return .none }
+    s.reminded = true
+    s.lastNotice = now
+    return .reminder
 }
 
 /// Step of the phase in the calibration, from 1, and the step count.

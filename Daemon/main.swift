@@ -22,6 +22,7 @@ final class Daemon {
     var lastScheduleCheck = Date()
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
+    var adapterNotices = AdapterNoticeState()
 
     init() {
         s = Daemon.load()
@@ -62,7 +63,6 @@ final class Daemon {
 
     func tick() {
         guard let rd = readBattery() else { return }
-        let wasAdapter = reading.adapter
         reading = rd
         let now = Date()
         if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
@@ -77,8 +77,10 @@ final class Daemon {
         }
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
         if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
-        if adapterMissingNotice(phase: s.runtime.calibration, prevPhase: prevPhase, adapter: rd.adapter, wasAdapter: wasAdapter) {
-            adapterMissing(s.runtime.calibration)
+        switch adapterNotice(phase: s.runtime.calibration, adapter: rd.adapter, now: now, &adapterNotices) {
+        case .first: record(HistoryEntry(event: .calibrationNeedsAdapter, phase: s.runtime.calibration)); notify_post(calibrationNeedsAdapterNotification)
+        case .reminder: notify_post(calibrationNeedsAdapterNotification)
+        case .none: break
         }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, latch: &notices) {
             switch n {
@@ -90,11 +92,6 @@ final class Daemon {
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }
         save()
-    }
-
-    func adapterMissing(_ phase: CalibrationPhase?) {
-        record(HistoryEntry(event: .calibrationNeedsAdapter, phase: phase))
-        notify_post(calibrationNeedsAdapterNotification)
     }
 
     func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {
@@ -159,7 +156,6 @@ final class Daemon {
             s.runtime.phaseStart = Date()
             s.runtime.calibrationBefore = on ? running ?? snapshot(reading) : nil
             record(HistoryEntry(event: on ? .calibrationStarted : .calibrationStopped))
-            if on && !reading.adapter { adapterMissing(.chargeFull) }
         case .pause: s.config.limit = clamp(reading.percent, 20, 100); s.runtime.discharge = false
         case .led(let c): s.runtime.ledOverride = c
         case .lowPower(let on): pmset(["-a", "lowpowermode", on ? "1" : "0"])
