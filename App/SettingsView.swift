@@ -61,6 +61,7 @@ struct SettingsView: View {
                             .frame(width: 13, height: 13)
                             .frame(width: 20, height: 20)
                             .background(p.color.gradient, in: RoundedRectangle(cornerRadius: 5))
+                            .accessibilityHidden(true)
                     }
                     .tag(p)
                 }
