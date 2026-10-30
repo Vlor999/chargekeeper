@@ -41,8 +41,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
 }
 
-/// Sidebar navigation like System Settings. Does not observe the model: the status refresh while the
-/// window is open re-renders the selected pane only, never the navigation.
+/// Sidebar navigation like System Settings. Its inputs (the model reference, the stored pane) do not change on a
+/// status refresh, so SwiftUI re-renders only the selected pane, which observes the model, not the navigation.
 struct SettingsView: View {
     let model: AppModel
     @AppStorage("settingsPane") private var pane = SettingsPane.general
