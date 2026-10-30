@@ -103,6 +103,44 @@ func calibrationFinished(from: CalibrationPhase?, to: CalibrationPhase?) -> Bool
     from == .hold && to == .returnToLimit
 }
 
+/// Step of the phase in the calibration, from 1, and the step count.
+func calibrationStep(_ p: CalibrationPhase) -> (step: Int, of: Int) {
+    let all = CalibrationPhase.allCases
+    return (all.firstIndex(of: p)! + 1, all.count)
+}
+
+/// Charge level the phase is heading to; nil for the timed rest.
+func calibrationTarget(_ p: CalibrationPhase, limit: Int) -> Int? {
+    switch p {
+    case .chargeFull, .rechargeFull: 100
+    case .dischargeTo10: 10
+    case .hold: nil
+    case .returnToLimit: limit
+    }
+}
+
+/// Time left in the 1 h rest at 100 %.
+func holdRemaining(phaseStart: Date?, now: Date) -> TimeInterval {
+    max(0, calibrationHold - now.timeIntervalSince(phaseStart ?? now))
+}
+
+/// Pack voltage assumed when the service does not report the battery current (3-cell Li-ion, nominal).
+let nominalPackVolts = 11.4
+
+/// Time to go from `percent` to `target` at the present battery current, or nil when the estimate is not worth showing:
+/// target reached, no capacity, current near zero or going the wrong way, or more than 24 h.
+/// `amperage` in mA (>0 charging); without it the current comes from `watts` at the nominal pack voltage.
+// ponytail: linear at the present current. Charging tapers above ~80 %, so the time to 100 % comes out short;
+// the menu refreshes every 2 s while open, so the figure corrects itself as the current falls.
+func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
+    guard let capacity, capacity > 0, target != percent else { return nil }
+    let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
+    let toGo = Double(target - percent) / 100 * Double(capacity)  // mAh, signed like the current
+    guard abs(mA) >= 50, (toGo > 0) == (mA > 0) else { return nil }
+    let t = toGo / mA * 3600
+    return t <= 24 * 3600 ? max(t, 60) : nil
+}
+
 /// What the app does with the service's last calibration, given the last result it handled.
 enum CalibrationNotice: Equatable {
     case seed(Date)  // first run: remember the current result without a banner

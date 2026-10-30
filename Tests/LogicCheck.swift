@@ -143,12 +143,30 @@ assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--" && watts(13.4) == "1
 var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifier: "Europe/Paris")!
 let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
 assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !dateTime(oct30).contains("PM"), dateTime(oct30))
+assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
 let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
     + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
 for e in samples { assert(localizedHistory(e) != historyText(e), historyText(e)) }
+
+// Time to target: from the current and the capacity; nil when reached, idle, going the wrong way or over 24 h.
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 2000, watts: 0) == 1800)
+assert(timeToTarget(percent: 90, target: 80, capacity: 5000, amperage: -1000, watts: 0) == 1800)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: nil, watts: 22.8) == 1800)  // 2000 mA at 11.4 V
+assert(timeToTarget(percent: 80, target: 80, capacity: 5000, amperage: 2000, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 20, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: -2000, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: nil, amperage: 2000, watts: 0) == nil)
+assert(timeToTarget(percent: 10, target: 100, capacity: 5000, amperage: 60, watts: 0) == nil)
+assert(timeToTarget(percent: 79, target: 80, capacity: 1000, amperage: 5000, watts: 0) == 60)
+
+// Calibration progress: 5 steps in order, a target per phase except the timed rest, rest time left.
+assert(calibrationStep(.chargeFull) == (1, 5) && calibrationStep(.dischargeTo10) == (2, 5) && calibrationStep(.returnToLimit) == (5, 5))
+assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.returnToLimit, limit: 80) == 80 && calibrationTarget(.hold, limit: 80) == nil)
+assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 1500)) == 2100)
+assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5000)) == 0)
 
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause

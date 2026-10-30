@@ -36,6 +36,12 @@ func watts(_ v: Double) -> String { number(v, decimals: 1) + " W" }
 /// Date and time in the UI language: "Oct 30, 2026 at 9:41 AM" / "30 oct. 2026 à 09:41".
 func dateTime(_ d: Date) -> String { d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(appLocale)) }
 
+/// Rounded duration: "~25 min", "~1 h 05 min".
+func approxDuration(_ t: TimeInterval) -> String {
+    let m = max(Int((t / 60).rounded()), 1)
+    return m < 60 ? tr("~%@ min", number(Double(m))) : tr("~%@ h %@ min", number(Double(m / 60)), String(format: "%02d", m % 60))
+}
+
 /// History entry in the UI language. Units stay on the line of their number.
 func localizedHistory(_ e: HistoryEntry) -> String {
     historyText(e, { tr($0, $1) }, { number($0, decimals: $1) })

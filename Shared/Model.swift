@@ -14,7 +14,7 @@ enum ChargeState: String, Codable {
     case topup = "FullCharge", heatProtect = "HeatProtect", calibration = "Calibration", exit = "Exit"
 }
 
-enum CalibrationPhase: String, Codable {
+enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
 }
 
