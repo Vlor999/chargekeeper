@@ -13,4 +13,4 @@ paths:
 - `Daemon/`: root service and CLI (`chargekeeperctl`). C/ObjC for SMC and private PowerUI lives in `Native.m` behind `Native.h`.
 - `App/`: SwiftUI. UI strings are English and go through `tr(...)`; add the French text to `App/Strings.swift` in the same change. Shortcuts strings go in `App/fr.lproj/Localizable.strings`.
 - Comments only where the code can't say it (a hardware quirk, a SwiftUI workaround), in English.
-- Deliberate shortcuts are marked `ponytail:` with their limit and upgrade path.
+- Deliberate shortcuts are marked with a comment stating their limit and upgrade path.
