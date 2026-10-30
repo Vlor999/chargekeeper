@@ -314,12 +314,14 @@ struct ScheduleView: View {
 
 struct BatteryView: View {
     @EnvironmentObject var m: AppModel
-    @State private var series: [HealthSample] = []
+    @State private var series: [HealthSample]?
+    @State private var fetched = false
+    @State private var fetchedCalibration: Date?
 
     var body: some View {
         Form {
             if let b = m.status?.battery {
-                HealthChartSection(series: series)
+                if fetched { HealthChartSection(series: series) }
                 Section(tr("Battery health")) {
                     row(tr("Health"), percent(b.health))
                     row(tr("Health (nominal)"), percent(b.nominalHealth))
@@ -347,8 +349,17 @@ struct BatteryView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { series = m.healthHistory() }
-        .onChange(of: m.status?.lastCalibration?.end) { series = m.healthHistory() }
+        .onAppear(perform: fetch)
+        .onChange(of: m.status?.battery != nil) { _, has in if has && !fetched { fetch() } }
+        .onChange(of: m.status?.lastCalibration?.end) { _, end in if fetched, end != nil, end != fetchedCalibration { fetch() } }
+    }
+
+    /// Once when the pane opens with battery data, then after each new calibration result.
+    func fetch() {
+        guard m.status?.battery != nil else { return }
+        series = m.healthHistory()
+        fetched = true
+        fetchedCalibration = m.status?.lastCalibration?.end
     }
 
     func row(_ label: String, _ value: String) -> some View {

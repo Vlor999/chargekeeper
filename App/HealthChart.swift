@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Battery health over time. The series comes from one request when the Battery pane opens, not from the periodic status.
 struct HealthChartSection: View {
-    let series: [HealthSample]
+    let series: [HealthSample]?  // nil: the service did not answer
     @AppStorage("healthRange") private var range = HealthRange.year
     @State private var hovered: Date?
 
@@ -12,15 +12,19 @@ struct HealthChartSection: View {
     private static let surface = Color(nsColor: .controlBackgroundColor)
 
     var body: some View {
-        let shown = series.filter { $0.date >= healthRangeStart(range, now: Date()) }
+        let all = series ?? []
+        let shown = all.filter { $0.date >= healthRangeStart(range, now: Date()) }
         Section(tr("Health over time")) {
-            if series.count >= 2 {
+            if all.count >= 2 {
                 Picker(tr("Period"), selection: $range) {
                     ForEach(HealthRange.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
             }
-            if shown.count < 2 {
+            if series == nil {
+                Text(tr("Health history unavailable: the ChargeKeeper service did not answer (restart it after an update)."))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if shown.count < 2 {
                 Text(tr("Not enough data yet: one point is recorded per day."))
                     .font(.caption).foregroundStyle(.secondary)
             } else {

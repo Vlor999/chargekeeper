@@ -201,6 +201,8 @@ private let french: [String: String] = [
     "%d months": "%d mois",
     "%d years": "%d ans",
     "no new cycle": "aucun nouveau cycle",
+    "Health history unavailable: the ChargeKeeper service did not answer (restart it after an update).":
+        "Historique de santé indisponible : le service ChargeKeeper n'a pas répondu (redémarrez-le après une mise à jour).",
     "+1 cycle": "1 cycle de plus",
     "+%d cycles": "%d cycles de plus",
     "Date": "Date",
