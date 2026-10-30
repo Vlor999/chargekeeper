@@ -4,6 +4,11 @@ import Foundation
 let socketPath = "/var/run/jauge.sock"
 /// Darwin notification posted by the service when a calibration finishes.
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
+/// Posted when heat protection pauses charging, once per heat episode.
+let heatProtectNotification = "com.vlor999.jauge.heatProtect"
+/// Posted when charging stops at the limit, once per charging session.
+let limitReachedNotification = "com.vlor999.jauge.limitReached"
+
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
     case topup = "FullCharge", heatProtect = "HeatProtect", calibration = "Calibration", exit = "Exit"

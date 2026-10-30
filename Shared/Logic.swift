@@ -125,6 +125,27 @@ func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) ->
             a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
 }
 
+/// Notification the service posts on a state change.
+enum ServiceNotice: Equatable { case heatProtect, limitReached }
+
+/// What has already been notified: heat until the episode ends, the limit until the charger is unplugged.
+struct NoticeLatch: Equatable {
+    var heat = false
+    var limit = false
+}
+
+/// Notices for this tick: one heat notice per heat episode, one limit notice per charging session.
+func serviceNotices(from prev: ChargeState, to now: ChargeState, adapter: Bool, latch l: inout NoticeLatch) -> [ServiceNotice] {
+    guard adapter else { l = NoticeLatch(); return [] }
+    var out: [ServiceNotice] = []
+    if now == .heatProtect && prev != .heatProtect && !l.heat { l.heat = true; out.append(.heatProtect) }
+    if now == .pause && prev == .charging {
+        l.heat = false
+        if !l.limit { l.limit = true; out.append(.limitReached) }
+    }
+    return out
+}
+
 // MARK: - History
 
 /// Fills an English template (String(format:) placeholders, arguments already formatted). The app passes tr().

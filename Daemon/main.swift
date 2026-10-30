@@ -21,6 +21,7 @@ final class Daemon {
     var sleepDisabled = false
     var lastScheduleCheck = Date()
     var lastSaved: Data?
+    var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
 
     init() {
         s = Daemon.load()
@@ -75,6 +76,12 @@ final class Daemon {
         }
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
         if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
+        for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, latch: &notices) {
+            switch n {
+            case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(heatProtectNotification)
+            case .limitReached: notify_post(limitReachedNotification)
+            }
+        }
 
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }

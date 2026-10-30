@@ -92,6 +92,19 @@ assert(calibrationSummary(before: nil, after: after) == "7180 mAh, health 83.7 %
 after.designCapacity = nil
 assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
 
+// Service notices: heat once per episode, limit once per charging session, both reset on unplug.
+var latch = NoticeLatch()
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [.limitReached])
+assert(serviceNotices(from: .pause, to: .charging, adapter: true, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [])
+assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, latch: &latch) == [.heatProtect])
+assert(serviceNotices(from: .calibration, to: .pause, adapter: true, latch: &latch) == [])
+assert(serviceNotices(from: .pause, to: .discharging, adapter: false, latch: &latch) == [] && latch == NoticeLatch())
+assert(serviceNotices(from: .charging, to: .pause, adapter: true, latch: &latch) == [.limitReached])
+
 // History: events render in English with their parameters.
 let done = HistoryEntry(event: .calibrationDone, capacityBefore: 7100, capacityAfter: 7180, healthBefore: 82.76, healthAfter: 83.69, cycles: 278)
 assert(historyText(done) == "Calibration complete: 7100 → 7180 mAh, health 82.8 → 83.7 %, 278 cycles")
