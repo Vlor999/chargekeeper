@@ -2,20 +2,94 @@ import ServiceManagement
 import Sparkle
 import SwiftUI
 
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, charge, sleep, led, schedule, battery
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .general: tr("General")
+        case .charge: tr("Charge")
+        case .sleep: tr("Sleep")
+        case .led: tr("MagSafe LED")
+        case .schedule: tr("Schedule")
+        case .battery: tr("Battery")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .charge: "bolt.fill"
+        case .sleep: "moon.fill"
+        case .led: "lightbulb.fill"
+        case .schedule: "calendar"
+        case .battery: "battery.100percent"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .general: .gray
+        case .charge: .orange
+        case .sleep: .indigo
+        case .led: .teal
+        case .schedule: .red
+        case .battery: .green
+        }
+    }
+}
+
+/// Sidebar navigation like System Settings. Its inputs (the model reference, the stored pane) do not change on a
+/// status refresh, so SwiftUI re-renders only the selected pane, which observes the model, not the navigation.
 struct SettingsView: View {
-    @EnvironmentObject var m: AppModel
+    let model: AppModel
+    @AppStorage("settingsPane") private var pane = SettingsPane.general
 
     var body: some View {
-        TabView {
-            general.tabItem { Label(tr("General"), systemImage: "gearshape") }
-            charge.tabItem { Label(tr("Charge control"), systemImage: "bolt") }
-            sleep.tabItem { Label(tr("Sleep"), systemImage: "moon") }
-            led.tabItem { Label(tr("MagSafe LED"), systemImage: "lightbulb") }
-            ScheduleView().tabItem { Label(tr("Schedule"), systemImage: "calendar") }
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            List(selection: Binding(get: { pane }, set: { if let p = $0 { pane = p } })) {
+                ForEach(SettingsPane.allCases) { p in
+                    Label {
+                        Text(p.title)
+                    } icon: {
+                        Image(systemName: p.icon)
+                            .resizable().scaledToFit()
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(width: 13, height: 13)
+                            .frame(width: 20, height: 20)
+                            .background(p.color.gradient, in: RoundedRectangle(cornerRadius: 5))
+                            .accessibilityHidden(true)
+                    }
+                    .tag(p)
+                }
+            }
+            .navigationSplitViewColumnWidth(180)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            SettingsPaneView(pane: pane).navigationTitle(pane.title)
         }
-        .frame(width: 560, height: 440)
-        .onAppear { NSApp.activate(ignoringOtherApps: true); m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .frame(width: 720, height: 480)
+        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
+        .onDisappear { model.visible -= 1 }
+    }
+}
+
+struct SettingsPaneView: View {
+    @EnvironmentObject var m: AppModel
+    let pane: SettingsPane
+
+    var body: some View {
+        switch pane {
+        case .general: general
+        case .charge: charge
+        case .sleep: sleep
+        case .led: led
+        case .schedule: ScheduleView()
+        case .battery: BatteryView()
+        }
     }
 
     @AppStorage(languageKey) private var language = "system"
@@ -161,6 +235,28 @@ struct ScheduleView: View {
                 }
                 Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
             }
+            Section(tr("History")) {
+                ForEach(m.status?.history ?? [], id: \.self) { h in
+                    HStack {
+                        Text(h.date, style: .date); Text(h.date, style: .time)
+                        Text(h.text).foregroundStyle(.secondary)
+                    }.font(.caption)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    func nextNine() -> Date {
+        Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
+    }
+}
+
+struct BatteryView: View {
+    @EnvironmentObject var m: AppModel
+
+    var body: some View {
+        Form {
             if let b = m.status?.battery {
                 Section(tr("Battery health")) {
                     row(tr("Health"), percent(b.health))
@@ -183,13 +279,9 @@ struct ScheduleView: View {
                     row(tr("Temperature"), c.after.temperature.map { String(format: "%.1f °C", $0) } ?? "--")
                 }
             }
-            Section(tr("History")) {
-                ForEach(m.status?.history ?? [], id: \.self) { h in
-                    HStack {
-                        Text(h.date, style: .date); Text(h.date, style: .time)
-                        Text(h.text).foregroundStyle(.secondary)
-                    }.font(.caption)
-                }
+            if m.status?.battery == nil && m.status?.lastCalibration == nil {
+                Text(m.status == nil ? tr("Waiting for the ChargeKeeper service…") : tr("Battery data unavailable."))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -202,10 +294,6 @@ struct ScheduleView: View {
     func mAh(_ v: Int?) -> String { v.map { "\($0) mAh" } ?? "--" }
     func percent(_ v: Double?) -> String { v.map { String(format: "%.1f %%", $0) } ?? "--" }
     func duration(_ s: TimeInterval) -> String { tr("%d h %02d min", Int(s) / 3600, Int(s) % 3600 / 60) }
-
-    func nextNine() -> Date {
-        Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
-    }
 }
 
 struct TaskRow: View {
