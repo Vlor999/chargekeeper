@@ -1,21 +1,96 @@
 import ServiceManagement
 import Sparkle
 import SwiftUI
+import UserNotifications
 
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, charge, sleep, led, schedule, battery
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .general: tr("General")
+        case .charge: tr("Charge")
+        case .sleep: tr("Sleep")
+        case .led: tr("MagSafe LED")
+        case .schedule: tr("Schedule")
+        case .battery: tr("Battery")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .charge: "bolt.fill"
+        case .sleep: "moon.fill"
+        case .led: "lightbulb.fill"
+        case .schedule: "calendar"
+        case .battery: "battery.100percent"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .general: .gray
+        case .charge: .orange
+        case .sleep: .indigo
+        case .led: .teal
+        case .schedule: .red
+        case .battery: .green
+        }
+    }
+}
+
+/// Sidebar navigation like System Settings. Its inputs (the model reference, the stored pane) do not change on a
+/// status refresh, so SwiftUI re-renders only the selected pane, which observes the model, not the navigation.
 struct SettingsView: View {
-    @EnvironmentObject var m: AppModel
+    let model: AppModel
+    @AppStorage("settingsPane") private var pane = SettingsPane.general
 
     var body: some View {
-        TabView {
-            general.tabItem { Label(tr("General"), systemImage: "gearshape") }
-            charge.tabItem { Label(tr("Charge control"), systemImage: "bolt") }
-            sleep.tabItem { Label(tr("Sleep"), systemImage: "moon") }
-            led.tabItem { Label(tr("MagSafe LED"), systemImage: "lightbulb") }
-            ScheduleView().tabItem { Label(tr("Schedule"), systemImage: "calendar") }
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            List(selection: Binding(get: { pane }, set: { if let p = $0 { pane = p } })) {
+                ForEach(SettingsPane.allCases) { p in
+                    Label {
+                        Text(p.title)
+                    } icon: {
+                        Image(systemName: p.icon)
+                            .resizable().scaledToFit()
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(width: 13, height: 13)
+                            .frame(width: 20, height: 20)
+                            .background(p.color.gradient, in: RoundedRectangle(cornerRadius: 5))
+                            .accessibilityHidden(true)
+                    }
+                    .tag(p)
+                }
+            }
+            .navigationSplitViewColumnWidth(180)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            SettingsPaneView(pane: pane).navigationTitle(pane.title)
         }
-        .frame(width: 560, height: 440)
-        .onAppear { NSApp.activate(ignoringOtherApps: true); m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .frame(width: 720, height: 480)
+        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
+        .onDisappear { model.visible -= 1 }
+    }
+}
+
+struct SettingsPaneView: View {
+    @EnvironmentObject var m: AppModel
+    let pane: SettingsPane
+
+    var body: some View {
+        switch pane {
+        case .general: general
+        case .charge: charge
+        case .sleep: sleep
+        case .led: led
+        case .schedule: ScheduleView()
+        case .battery: BatteryView()
+        }
     }
 
     @AppStorage(languageKey) private var language = "system"
@@ -30,6 +105,14 @@ struct SettingsView: View {
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
+            Section {
+                ForEach(NoticeKind.allCases) { NoticeToggle(kind: $0) }
+            } header: {
+                Text(tr("Notifications"))
+            } footer: {
+                Text(tr("Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(tr("Updates")) {
                 let u = m.updater.updater
                 Toggle(tr("Install updates automatically"), isOn: Binding(
@@ -38,7 +121,7 @@ struct SettingsView: View {
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
-                        Text(u.lastUpdateCheckDate.map { tr("Last check: %@", $0.formatted(date: .abbreviated, time: .shortened)) } ?? tr("Never checked"))
+                        Text(u.lastUpdateCheckDate.map { tr("Last check: %@", dateTime($0)) } ?? tr("Never checked"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -59,6 +142,21 @@ struct SettingsView: View {
 
     var charge: some View {
         Form {
+            Section(tr("macOS battery settings")) {
+                if let s = m.status, let l = s.appleChargeLimit, l < s.config.limit {
+                    Label(tr("Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.", number(Double(l))),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                HStack {
+                    Text(tr("Turn off Optimized Battery Charging in System Settings > Battery: it can conflict with ChargeKeeper's limit."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(tr("Open Battery Settings")) {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
+                    }
+                }
+            }
             Section(tr("Discharge")) {
                 Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge))
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
@@ -116,16 +214,50 @@ struct SettingsView: View {
     }
 }
 
+struct NoticeToggle: View {
+    let kind: NoticeKind
+    @AppStorage private var on: Bool
+
+    init(kind: NoticeKind) {
+        self.kind = kind
+        _on = AppStorage(wrappedValue: kind.defaultOn, kind.key)
+    }
+
+    var body: some View {
+        Toggle(kind.label, isOn: $on)
+            .onChange(of: on) { _, v in
+                if v { UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in } }
+            }
+    }
+}
+
 extension TaskAction {
-    var label: String {
-        switch self {
-        case .setLimit: tr("Set charge limit")
-        case .calibrate: tr("Start Calibration")
-        case .topUp: tr("Charge to 100%")
-        case .pause: tr("Pause charging")
-        case .dischargeTo: tr("Discharge to")
-        case .lowPowerOn: tr("Turn on Low Power Mode")
-        case .lowPowerOff: tr("Turn off Low Power Mode")
+    var label: String { tr(title) }
+}
+
+extension HistoryEntry {
+    /// SF Symbol and tint of the entry; free text from an older service gets a neutral clock.
+    var symbol: (name: String, color: Color) {
+        let e = parsedHistory(self)
+        switch e.event {
+        case nil: return ("clock", .secondary)
+        case .calibrationStarted: return ("play.circle.fill", .orange)
+        case .calibrationStopped: return ("stop.circle.fill", .secondary)
+        case .calibrationEnded: return ("checkmark.circle.fill", .orange)
+        case .calibrationDone: return ("checkmark.seal.fill", .green)
+        case .calibrationPhase:
+            switch e.phase {
+            case .chargeFull?, .rechargeFull?: return ("battery.100percent.bolt", .orange)
+            case .dischargeTo10?: return ("battery.25percent", .orange)
+            case .hold?: return ("hourglass", .orange)
+            case .returnToLimit?, nil: return ("arrow.down.to.line", .orange)
+            }
+        case .taskRun: return ("calendar", .red)
+        case .taskSkipped: return ("calendar.badge.exclamationmark", .secondary)
+        case .limitChanged: return ("slider.horizontal.3", .blue)
+        case .heatProtect: return ("thermometer.high", .red)
+        case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
+        case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
         }
     }
 }
@@ -163,10 +295,13 @@ struct ScheduleView: View {
             }
             Section(tr("History")) {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
-                    HStack {
-                        Text(h.date, style: .date); Text(h.date, style: .time)
-                        Text(h.text).foregroundStyle(.secondary)
-                    }.font(.caption)
+                    HStack(alignment: .firstTextBaseline) {
+                        Image(systemName: h.symbol.name).foregroundStyle(h.symbol.color).frame(width: 18)
+                        Text(localizedHistory(h))
+                        Spacer()
+                        Text(h.date, format: .dateTime.day().month(.abbreviated).hour().minute())
+                            .foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
             }
         }
@@ -176,6 +311,65 @@ struct ScheduleView: View {
     func nextNine() -> Date {
         Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
     }
+}
+
+struct BatteryView: View {
+    @EnvironmentObject var m: AppModel
+    @State private var series: [HealthSample]?
+    @State private var fetched = false
+    @State private var fetchedCalibration: Date?
+
+    var body: some View {
+        Form {
+            if let b = m.status?.battery {
+                if fetched { HealthChartSection(series: series) }
+                Section(tr("Battery health")) {
+                    row(tr("Health"), percent(b.health))
+                    row(tr("Health (nominal)"), percent(b.nominalHealth))
+                    row(tr("Full charge capacity"), mAh(b.maxCapacity))
+                    row(tr("Nominal capacity"), mAh(b.nominalCapacity))
+                    row(tr("Design capacity"), mAh(b.designCapacity))
+                    row(tr("Cycle count"), b.cycleCount.map(String.init) ?? "--")
+                }
+            }
+            if let c = m.status?.lastCalibration {
+                Section(tr("Last calibration")) {
+                    row(tr("Date"), dateTime(c.end))
+                    row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
+                    row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
+                    row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
+                    row(tr("Health (nominal)"), "\(percent(c.before.nominalHealth)) → \(percent(c.after.nominalHealth))")
+                    row(tr("Cycle count"), "\(c.before.cycleCount.map(String.init) ?? "--") → \(c.after.cycleCount.map(String.init) ?? "--")")
+                    row(tr("Design capacity"), mAh(c.after.designCapacity))
+                    row(tr("Temperature"), celsius(c.after.temperature))
+                }
+            }
+            if m.status?.battery == nil && m.status?.lastCalibration == nil {
+                Text(m.status == nil ? tr("Waiting for the ChargeKeeper service…") : tr("Battery data unavailable."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear(perform: fetch)
+        .onChange(of: m.status?.battery != nil) { _, has in if has && !fetched { fetch() } }
+        .onChange(of: m.status?.lastCalibration?.end) { _, end in if fetched, end != nil, end != fetchedCalibration { fetch() } }
+    }
+
+    /// Once when the pane opens with battery data, then after each new calibration result.
+    func fetch() {
+        guard m.status?.battery != nil else { return }
+        series = m.healthHistory()
+        fetched = true
+        fetchedCalibration = m.status?.lastCalibration?.end
+    }
+
+    func row(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) { Text(value).monospacedDigit() }
+    }
+
+    func mAh(_ v: Int?) -> String { v.map { "\($0) mAh" } ?? "--" }
+    func percent(_ v: Double?) -> String { v.map { number($0, decimals: 1) + " %" } ?? "--" }
+    func duration(_ s: TimeInterval) -> String { tr("%d h %02d min", Int(s) / 3600, Int(s) % 3600 / 60) }
 }
 
 struct TaskRow: View {

@@ -2,13 +2,25 @@ import Foundation
 
 // Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
 let socketPath = "/var/run/jauge.sock"
+/// Darwin notification posted by the service when a calibration finishes.
+let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
+/// Posted when heat protection pauses charging, once per heat episode.
+let heatProtectNotification = "com.vlor999.jauge.heatProtect"
+/// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
+let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
+/// Posted when the battery level reaches the charge limit, once per charging session.
+let limitReachedNotification = "com.vlor999.jauge.limitReached"
+/// Battery health series: one point per day for this many days, one per week before.
+let healthDailyDays = 180
+/// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
+let healthMaxSamples = 520
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
     case topup = "FullCharge", heatProtect = "HeatProtect", calibration = "Calibration", exit = "Exit"
 }
 
-enum CalibrationPhase: String, Codable {
+enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
 }
 
@@ -33,9 +45,56 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     var lastRun: Date?
 }
 
+enum HistoryEvent: String, Codable {
+    case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
+    case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
+}
+
+/// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
+/// rendering, kept for older apps and for entries written by an older service (free text only).
 struct HistoryEntry: Codable, Hashable {
     var date: Date
     var text: String
+    var event: HistoryEvent?
+    var phase: CalibrationPhase?
+    var action: TaskAction?
+    var late: Bool?  // task run after its time (caught up on wake)
+    var value: Int?  // task value or new charge limit, in %
+    var temperature: Double?
+    var capacityBefore: Int?, capacityAfter: Int?  // mAh
+    var healthBefore: Double?, healthAfter: Double?  // %
+    var cycles: Int?
+
+    init(date: Date = Date(), text: String = "", event: HistoryEvent? = nil, phase: CalibrationPhase? = nil, action: TaskAction? = nil,
+         late: Bool? = nil, value: Int? = nil, temperature: Double? = nil, capacityBefore: Int? = nil, capacityAfter: Int? = nil,
+         healthBefore: Double? = nil, healthAfter: Double? = nil, cycles: Int? = nil) {
+        (self.date, self.text, self.event, self.phase, self.action, self.late, self.value, self.temperature) =
+            (date, text, event, phase, action, late, value, temperature)
+        (self.capacityBefore, self.capacityAfter, self.healthBefore, self.healthAfter, self.cycles) =
+            (capacityBefore, capacityAfter, healthBefore, healthAfter, cycles)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, text, event, phase, action, late, value, temperature, capacityBefore, capacityAfter, healthBefore, healthAfter, cycles
+    }
+
+    /// Lenient: an event or value unknown to this build (newer service) falls back to the text instead of failing the whole Status.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(Date.self, forKey: .date)
+        text = try c.decode(String.self, forKey: .text)
+        event = try? c.decodeIfPresent(HistoryEvent.self, forKey: .event)
+        phase = try? c.decodeIfPresent(CalibrationPhase.self, forKey: .phase)
+        action = try? c.decodeIfPresent(TaskAction.self, forKey: .action)
+        late = try? c.decodeIfPresent(Bool.self, forKey: .late)
+        value = try? c.decodeIfPresent(Int.self, forKey: .value)
+        temperature = try? c.decodeIfPresent(Double.self, forKey: .temperature)
+        capacityBefore = try? c.decodeIfPresent(Int.self, forKey: .capacityBefore)
+        capacityAfter = try? c.decodeIfPresent(Int.self, forKey: .capacityAfter)
+        healthBefore = try? c.decodeIfPresent(Double.self, forKey: .healthBefore)
+        healthAfter = try? c.decodeIfPresent(Double.self, forKey: .healthAfter)
+        cycles = try? c.decodeIfPresent(Int.self, forKey: .cycles)
+    }
 }
 
 struct Config: Codable, Equatable {
@@ -66,6 +125,51 @@ struct Runtime: Codable, Equatable {
     var idleRecharge = false  // dropped below idle range: charge back up to limit
     var heatSince: Date?
     var state: ChargeState = .charging
+    var calibrationBefore: BatterySnapshot?  // taken when the running calibration started
+    var pastLimitSince: Date?  // macOS charging past the limit against the service (gauge recalibration or other override)
+}
+
+/// Battery wear at one point in time. Capacities in mAh.
+struct BatterySnapshot: Codable, Equatable {
+    var date: Date
+    var maxCapacity: Int?  // full charge capacity learned by the gauge (AppleRawMaxCapacity)
+    var nominalCapacity: Int?
+    var designCapacity: Int?
+    var cycleCount: Int?
+    var temperature: Double?
+    var percent: Int
+
+    /// Full charge capacity over design capacity, in %.
+    var health: Double? { ratio(maxCapacity) }
+    /// Nominal capacity over design capacity, in %: close to the macOS "Maximum Capacity".
+    var nominalHealth: Double? { ratio(nominalCapacity) }
+
+    private func ratio(_ v: Int?) -> Double? {
+        guard let v, let d = designCapacity, d > 0 else { return nil }
+        return Double(v) * 100 / Double(d)
+    }
+}
+
+/// One point of the battery health series: one per day, plus one per calibration result. Capacities in mAh.
+struct HealthSample: Codable, Equatable {
+    var date: Date
+    var maxCapacity: Int
+    var nominalCapacity: Int?
+    var designCapacity: Int
+    var cycleCount: Int?
+    var calibration: Bool?  // taken when a calibration finished
+
+    /// Full charge capacity over design capacity, in %.
+    var health: Double { Double(maxCapacity) * 100 / Double(max(designCapacity, 1)) }
+    /// Nominal capacity over design capacity, in %.
+    var nominalHealth: Double? { nominalCapacity.map { Double($0) * 100 / Double(max(designCapacity, 1)) } }
+}
+
+struct CalibrationResult: Codable, Equatable {
+    var start: Date
+    var end: Date
+    var before: BatterySnapshot
+    var after: BatterySnapshot
 }
 
 struct PortPower: Codable {
@@ -85,10 +189,15 @@ struct Status: Codable {
     var adapterRatedWatts: Int?
     var systemWatts: Double
     var batteryWatts: Double  // >0 charging, <0 discharging
+    var batteryAmperage: Int?  // mA, >0 charging; nil from an older service
     var ports: [PortPower]?  // USB-C power out, included in systemWatts; nil from an older service
     var nativeLimit: Bool
     var sleepDisabled: Bool
     var history: [HistoryEntry]
+    var battery: BatterySnapshot?  // nil from an older service
+    var lastCalibration: CalibrationResult?
+    var appleChargeLimit: Int?  // Charge Limit set in System Settings below 100 %, on Macs where the service never sets it
+    var healthHistory: [HealthSample]?  // only in the reply to .healthHistory, to keep the periodic status small
 }
 
 enum Command: Codable {
@@ -103,4 +212,5 @@ enum Command: Codable {
     case led(LEDColor?)
     case lowPower(Bool)
     case highPower(Bool)
+    case healthHistory  // a service older than this command closes the connection without a reply
 }

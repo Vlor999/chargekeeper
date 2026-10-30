@@ -93,8 +93,19 @@ static PowerUISmartChargeClient *client(void) {
 }
 
 int mcl_available(void) { return client() != nil; }
-int mcl_enabled(void) { return client() ? (int)[client() isMCLCurrentlyEnabled:NULL] : 0; }
-int mcl_limit(void) { return client() ? [client() getMCLLimitWithError:NULL] : 100; }
+int mcl_enabled(void) {
+    if (!client()) return -1;
+    NSError *e = nil;
+    NSUInteger on = [client() isMCLCurrentlyEnabled:&e];
+    return e ? -1 : on != 0;
+}
+
+int mcl_limit(void) {
+    if (!client()) return -1;
+    NSError *e = nil;
+    unsigned char limit = [client() getMCLLimitWithError:&e];
+    return e ? -1 : limit;
+}
 
 int mcl_set(int limit) {
     PowerUISmartChargeClient *c = client();
