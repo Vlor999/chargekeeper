@@ -168,6 +168,22 @@ assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 1500)) == 2100)
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5000)) == 0)
 
+// Calibration rest: only counts on the adapter. Unplugged at 100 % it restarts on replug; below 100 % it recharges first.
+r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)
+assert(tick(c, &r, 100, at: 1800) == .hold(at: 100))
+_ = tick(c, &r, 100, ac: false, at: 3000)
+_ = tick(c, &r, 100, ac: false, at: 4000); assert(r.calibration == .hold)
+assert(!calibrationFinished(from: .hold, to: r.calibration))
+_ = tick(c, &r, 100, at: 7000); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 10500); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 10700); assert(r.calibration == .returnToLimit)
+r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)
+assert(tick(c, &r, 99, ac: false, at: 3700) == .charge(to: 100) && r.calibration == .rechargeFull)
+assert(tick(c, &r, 99, at: 3800) == .charge(to: 100))
+_ = tick(c, &r, 100, at: 3900); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 7400); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 7500); assert(r.calibration == .returnToLimit)
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)

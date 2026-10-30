@@ -44,7 +44,14 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
             if pct <= 10 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
             return .discharge
         case .hold:
-            if i.now.timeIntervalSince(r.phaseStart ?? i.now) >= calibrationHold { advance(&r, to: .returnToLimit, i.now) }
+            // The rest only counts on the adapter: unplugged, it starts over on replug, or recharges first if the level fell.
+            if !i.adapter {
+                if pct < 100 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
+                r.phaseStart = nil  // not now: the saved state would change every tick
+            } else {
+                if r.phaseStart == nil { r.phaseStart = i.now }
+                if i.now.timeIntervalSince(r.phaseStart!) >= calibrationHold { advance(&r, to: .returnToLimit, i.now) }
+            }
             return hold(100, &r)
         case .returnToLimit:
             if pct > c.limit { return .discharge }
