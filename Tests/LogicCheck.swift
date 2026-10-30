@@ -64,6 +64,15 @@ _ = tick(c, &r, 100, at: 30 + 3600); assert(r.calibration == .returnToLimit)
 assert(tick(c, &r, 95, at: 4000) == .discharge)
 assert(tick(c, &r, 80, at: 5000) == .hold(at: 80) && r.calibration == nil && r.state == .pause)
 
+// Calibration report: health is capacity over design, summary shows before→after.
+let before = BatterySnapshot(date: Date(), maxCapacity: 7100, nominalCapacity: 7344, designCapacity: 8579, cycleCount: 277, percent: 60)
+var after = before; after.maxCapacity = 7180; after.cycleCount = 278
+assert(String(format: "%.1f", before.health!) == "82.8" && String(format: "%.1f", before.nominalHealth!) == "85.6")
+assert(calibrationSummary(before: before, after: after) == "7100→7180 mAh, health 82.8→83.7 %, 278 cycles")
+assert(calibrationSummary(before: nil, after: after) == "7180 mAh, health 83.7 %, 278 cycles")
+after.designCapacity = nil
+assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)

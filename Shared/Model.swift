@@ -2,6 +2,8 @@ import Foundation
 
 // Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
 let socketPath = "/var/run/jauge.sock"
+/// Darwin notification posted by the service when a calibration finishes.
+let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -66,6 +68,35 @@ struct Runtime: Codable, Equatable {
     var idleRecharge = false  // dropped below idle range: charge back up to limit
     var heatSince: Date?
     var state: ChargeState = .charging
+    var calibrationBefore: BatterySnapshot?  // taken when the running calibration started
+}
+
+/// Battery wear at one point in time. Capacities in mAh.
+struct BatterySnapshot: Codable, Equatable {
+    var date: Date
+    var maxCapacity: Int?  // full charge capacity learned by the gauge (AppleRawMaxCapacity)
+    var nominalCapacity: Int?
+    var designCapacity: Int?
+    var cycleCount: Int?
+    var temperature: Double?
+    var percent: Int
+
+    /// Full charge capacity over design capacity, in %.
+    var health: Double? { ratio(maxCapacity) }
+    /// Nominal capacity over design capacity, in %: close to the macOS "Maximum Capacity".
+    var nominalHealth: Double? { ratio(nominalCapacity) }
+
+    private func ratio(_ v: Int?) -> Double? {
+        guard let v, let d = designCapacity, d > 0 else { return nil }
+        return Double(v) * 100 / Double(d)
+    }
+}
+
+struct CalibrationResult: Codable, Equatable {
+    var start: Date
+    var end: Date
+    var before: BatterySnapshot
+    var after: BatterySnapshot
 }
 
 struct PortPower: Codable {
@@ -89,6 +120,8 @@ struct Status: Codable {
     var nativeLimit: Bool
     var sleepDisabled: Bool
     var history: [HistoryEntry]
+    var battery: BatterySnapshot?  // nil from an older service
+    var lastCalibration: CalibrationResult?
 }
 
 enum Command: Codable {

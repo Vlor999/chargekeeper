@@ -98,6 +98,15 @@ private func advance(_ r: inout Runtime, to p: CalibrationPhase, _ now: Date) {
     r.holdLevel = nil
 }
 
+/// History line for a finished calibration: "7100→7180 mAh, health 82.8→83.7 %, 278 cycles".
+func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) -> String {
+    func span(_ x: String?, _ y: String?) -> String? { y.map { y in x.map { "\($0)→\(y)" } ?? y } }
+    func pct(_ h: Double?) -> String? { h.map { String(format: "%.1f", $0) } }
+    return [span(b?.maxCapacity.map(String.init), a.maxCapacity.map(String.init)).map { "\($0) mAh" },
+            span(pct(b?.health), pct(a.health)).map { "health \($0) %" },
+            a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
+}
+
 func ledColor(_ c: Config, _ r: Runtime, adapter: Bool, percent: Int) -> LEDColor {
     if let o = r.ledOverride { return o }
     switch c.led {
