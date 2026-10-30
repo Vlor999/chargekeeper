@@ -225,6 +225,12 @@ private let french: [String: String] = [
     "macOS charged past the %@ %% limit": "macOS a chargé au-delà de la limite de %@ %%",
     "macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.":
         "macOS a chargé au-delà de la limite (recalibrage de la batterie ou décision du système). La limite s'appliquera de nouveau quand le niveau y sera redescendu.",
+    "macOS battery settings": "Réglages de batterie de macOS",
+    "Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.":
+        "La limite de recharge d'Apple est réglée à %@ %% dans Réglages Système. Réglez-la sur 100 %% pour laisser ChargeKeeper gérer la recharge.",
+    "Turn off Optimized Battery Charging in System Settings > Battery: it can conflict with ChargeKeeper's limit.":
+        "Désactivez « Recharge optimisée de la batterie » dans Réglages Système > Batterie : elle peut entrer en conflit avec la limite de ChargeKeeper.",
+    "Open Battery Settings": "Ouvrir les réglages Batterie",
     // Notifications
     "Notifications": "Notifications",
     "Heat protection paused charging": "Charge suspendue par la protection thermique",
