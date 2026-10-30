@@ -68,7 +68,7 @@ final class Daemon {
         if prev != s.runtime.state { log("\(rd.percent)%: \(prev.rawValue) -> \(s.runtime.state.rawValue) (\(a))") }
         if prevPhase != s.runtime.calibration { record("calibration: \(s.runtime.calibration?.rawValue ?? "back to limit")") }
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
-        if prevPhase == .hold && s.runtime.calibration == .returnToLimit { finishCalibration(snapshot(rd, now)) }
+        if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
 
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }

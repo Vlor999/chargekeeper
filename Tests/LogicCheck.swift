@@ -64,6 +64,17 @@ _ = tick(c, &r, 100, at: 30 + 3600); assert(r.calibration == .returnToLimit)
 assert(tick(c, &r, 95, at: 4000) == .discharge)
 assert(tick(c, &r, 80, at: 5000) == .hold(at: 80) && r.calibration == nil && r.state == .pause)
 
+// Calibration finished: only when the rest at 100 % ends, not on a stop or another phase change.
+r = Runtime(); r.calibration = .rechargeFull
+var finished: [Bool] = []
+for (pct, t) in [(100, 0.0), (100, 3599), (100, 3600), (95, 4000), (80, 5000)] as [(Int, TimeInterval)] {
+    let from = r.calibration
+    _ = tick(c, &r, pct, at: t)
+    finished.append(calibrationFinished(from: from, to: r.calibration))
+}
+assert(finished == [false, false, true, false, false])
+assert(!calibrationFinished(from: .hold, to: nil) && !calibrationFinished(from: .returnToLimit, to: nil))
+
 // Calibration report: health is capacity over design, summary shows before→after.
 let before = BatterySnapshot(date: Date(), maxCapacity: 7100, nominalCapacity: 7344, designCapacity: 8579, cycleCount: 277, percent: 60)
 var after = before; after.maxCapacity = 7180; after.cycleCount = 278
