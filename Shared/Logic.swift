@@ -98,6 +98,33 @@ private func advance(_ r: inout Runtime, to p: CalibrationPhase, _ now: Date) {
     r.holdLevel = nil
 }
 
+/// The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the calibration result is final.
+func calibrationFinished(from: CalibrationPhase?, to: CalibrationPhase?) -> Bool {
+    from == .hold && to == .returnToLimit
+}
+
+/// What the app does with the service's last calibration, given the last result it handled.
+enum CalibrationNotice: Equatable {
+    case seed(Date)  // first run: remember the current result without a banner
+    case notify
+    case none
+}
+
+func calibrationNotice(end: Date?, handled: Date?) -> CalibrationNotice {
+    guard let handled else { return .seed(end ?? .distantPast) }
+    guard let end, end > handled else { return .none }
+    return .notify
+}
+
+/// History line for a finished calibration: "7100→7180 mAh, health 82.8→83.7 %, 278 cycles".
+func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) -> String {
+    func span(_ x: String?, _ y: String?) -> String? { y.map { y in x.map { "\($0)→\(y)" } ?? y } }
+    func pct(_ h: Double?) -> String? { h.map { String(format: "%.1f", $0) } }
+    return [span(b?.maxCapacity.map(String.init), a.maxCapacity.map(String.init)).map { "\($0) mAh" },
+            span(pct(b?.health), pct(a.health)).map { "health \($0) %" },
+            a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
+}
+
 func ledColor(_ c: Config, _ r: Runtime, adapter: Bool, percent: Int) -> LEDColor {
     if let o = r.ledOverride { return o }
     switch c.led {

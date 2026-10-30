@@ -64,6 +64,34 @@ _ = tick(c, &r, 100, at: 30 + 3600); assert(r.calibration == .returnToLimit)
 assert(tick(c, &r, 95, at: 4000) == .discharge)
 assert(tick(c, &r, 80, at: 5000) == .hold(at: 80) && r.calibration == nil && r.state == .pause)
 
+// Calibration finished: only when the rest at 100 % ends, not on a stop or another phase change.
+r = Runtime(); r.calibration = .rechargeFull
+var finished: [Bool] = []
+for (pct, t) in [(100, 0.0), (100, 3599), (100, 3600), (95, 4000), (80, 5000)] as [(Int, TimeInterval)] {
+    let from = r.calibration
+    _ = tick(c, &r, pct, at: t)
+    finished.append(calibrationFinished(from: from, to: r.calibration))
+}
+assert(finished == [false, false, true, false, false])
+assert(!calibrationFinished(from: .hold, to: nil) && !calibrationFinished(from: .returnToLimit, to: nil))
+
+// Calibration notice: first run seeds without a banner, then one banner per new result.
+let t0 = Date(timeIntervalSince1970: 1000), t1 = Date(timeIntervalSince1970: 2000)
+assert(calibrationNotice(end: t0, handled: nil) == .seed(t0))
+assert(calibrationNotice(end: nil, handled: nil) == .seed(.distantPast))
+assert(calibrationNotice(end: t0, handled: .distantPast) == .notify)
+assert(calibrationNotice(end: t0, handled: t0) == .none && calibrationNotice(end: nil, handled: t0) == .none)
+assert(calibrationNotice(end: t1, handled: t0) == .notify)
+
+// Calibration report: health is capacity over design, summary shows before→after.
+let before = BatterySnapshot(date: Date(), maxCapacity: 7100, nominalCapacity: 7344, designCapacity: 8579, cycleCount: 277, percent: 60)
+var after = before; after.maxCapacity = 7180; after.cycleCount = 278
+assert(String(format: "%.1f", before.health!) == "82.8" && String(format: "%.1f", before.nominalHealth!) == "85.6")
+assert(calibrationSummary(before: before, after: after) == "7100→7180 mAh, health 82.8→83.7 %, 278 cycles")
+assert(calibrationSummary(before: nil, after: after) == "7180 mAh, health 83.7 %, 278 cycles")
+after.designCapacity = nil
+assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)
