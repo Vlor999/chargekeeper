@@ -238,6 +238,33 @@ func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) ->
             a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
 }
 
+// MARK: - Health series
+
+/// Series point from a reading; nil while the gauge reports no capacity.
+func healthSample(_ b: BatterySnapshot, calibration: Bool = false) -> HealthSample? {
+    guard let m = b.maxCapacity, m > 0, let d = b.designCapacity, d > 0 else { return nil }
+    return HealthSample(date: b.date, maxCapacity: m, nominalCapacity: b.nominalCapacity, designCapacity: d, cycleCount: b.cycleCount,
+                        calibration: calibration ? true : nil)
+}
+
+/// The daily point is due when no point falls on the same calendar day.
+func healthSampleDue(_ series: [HealthSample], now: Date, calendar: Calendar = .current) -> Bool {
+    series.last { calendar.isDate($0.date, inSameDayAs: now) } == nil
+}
+
+/// Inserts the point in date order, then thins the series: daily for the last `healthDailyDays` days, the first point
+/// of each week before (calibration points always kept), at most `healthMaxSamples` points.
+func addHealthSample(_ series: [HealthSample], _ p: HealthSample, calendar cal: Calendar = .current) -> [HealthSample] {
+    var all = series
+    all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
+    let cutoff = p.date.addingTimeInterval(-Double(healthDailyDays) * 86400)
+    var weeks = Set<DateComponents>()
+    let kept = all.filter { s in
+        s.date >= cutoff || s.calibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
+    }
+    return Array(kept.suffix(healthMaxSamples))
+}
+
 /// Notification the service posts on a state change.
 enum ServiceNotice: Equatable { case heatProtect, limitReached }
 

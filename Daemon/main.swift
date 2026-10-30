@@ -12,6 +12,7 @@ struct Saved: Codable {
     var runtime = Runtime()
     var history: [HistoryEntry] = []
     var lastCalibration: CalibrationResult?
+    var healthHistory: [HealthSample] = []
 }
 
 func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
@@ -73,6 +74,7 @@ final class Daemon {
         let now = Date()
         if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
         if now.timeIntervalSince(lastAppleLimitRead) >= appleLimitReadInterval { readAppleChargeLimit() }
+        if healthSampleDue(s.healthHistory, now: now), let p = healthSample(snapshot(rd, now)) { s.healthHistory = addHealthSample(s.healthHistory, p) }
 
         let prev = s.runtime.state, prevPhase = s.runtime.calibration
         let a = decide(s.config, &s.runtime, Inputs(percent: rd.percent, adapter: rd.adapter, temperature: rd.temperature, now: now))
@@ -125,6 +127,7 @@ final class Daemon {
         s.runtime.calibrationBefore = nil
         record(HistoryEntry(event: .calibrationDone, capacityBefore: before?.maxCapacity, capacityAfter: after.maxCapacity,
                             healthBefore: before?.health, healthAfter: after.health, cycles: after.cycleCount))
+        if let p = healthSample(after, calibration: true) { s.healthHistory = addHealthSample(s.healthHistory, p) }
         // Started by an older service: no starting point to compare with.
         guard let before else { return }
         s.lastCalibration = CalibrationResult(start: before.date, end: after.date, before: before, after: after)

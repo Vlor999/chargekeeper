@@ -10,6 +10,10 @@ let heatProtectNotification = "com.vlor999.jauge.heatProtect"
 let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
 /// Posted when charging stops at the limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
+/// Battery health series: one point per day for this many days, one per week before.
+let healthDailyDays = 180
+/// Battery health series cap (~100 bytes each in state.json): about 7 years at one point per week.
+let healthMaxSamples = 520
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -144,6 +148,21 @@ struct BatterySnapshot: Codable, Equatable {
         guard let v, let d = designCapacity, d > 0 else { return nil }
         return Double(v) * 100 / Double(d)
     }
+}
+
+/// One point of the battery health series: one per day, plus one per calibration result. Capacities in mAh.
+struct HealthSample: Codable, Equatable {
+    var date: Date
+    var maxCapacity: Int
+    var nominalCapacity: Int?
+    var designCapacity: Int
+    var cycleCount: Int?
+    var calibration: Bool?  // taken when a calibration finished
+
+    /// Full charge capacity over design capacity, in %.
+    var health: Double { Double(maxCapacity) * 100 / Double(max(designCapacity, 1)) }
+    /// Nominal capacity over design capacity, in %.
+    var nominalHealth: Double? { nominalCapacity.map { Double($0) * 100 / Double(max(designCapacity, 1)) } }
 }
 
 struct CalibrationResult: Codable, Equatable {

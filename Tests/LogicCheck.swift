@@ -313,4 +313,37 @@ assert(spreadLabels([100, 108], gap: 14, height: 110) == [89, 103])
 // Device icon: Apple devices by name, the rest generic.
 assert(deviceIcon("iPhone") == "iphone" && deviceIcon("AirPods Charging Case") == "airpods" && deviceIcon(nil) == "cable.connector")
 
+// Health series: a point needs both capacities; the calibration flag is only stored when set.
+let snap = BatterySnapshot(date: d("2026-10-01T12:00:00Z"), maxCapacity: 4200, nominalCapacity: 4300, designCapacity: 4800, cycleCount: 100, temperature: nil, percent: 80)
+assert(healthSample(snap)?.health == 87.5 && healthSample(snap)?.calibration == nil && healthSample(snap, calibration: true)?.calibration == true)
+var noDesign = snap; noDesign.designCapacity = 0
+assert(healthSample(noDesign) == nil)
+
+// Health series: one point per calendar day, also after the clock moved back.
+func hp(_ s: String, _ m: Int = 4200, cycles: Int? = 100, cal: Bool? = nil) -> HealthSample {
+    HealthSample(date: d(s), maxCapacity: m, nominalCapacity: m + 100, designCapacity: 4800, cycleCount: cycles, calibration: cal)
+}
+assert(healthSampleDue([], now: d("2026-10-01T12:00:00Z"), calendar: cal))
+assert(!healthSampleDue([hp("2026-10-01T00:30:00Z")], now: d("2026-10-01T23:00:00Z"), calendar: cal))
+assert(healthSampleDue([hp("2026-10-01T23:00:00Z")], now: d("2026-10-02T00:10:00Z"), calendar: cal))
+assert(!healthSampleDue([hp("2026-09-01T12:00:00Z"), hp("2026-10-01T12:00:00Z")], now: d("2026-09-01T18:00:00Z"), calendar: cal))
+
+// Health series: inserted in date order; daily kept for 180 days, then the first point of each week, calibrations always.
+var series: [HealthSample] = []
+var day = d("2025-01-01T12:00:00Z")
+while day <= d("2026-10-01T12:00:00Z") {
+    series = addHealthSample(series, HealthSample(date: day, maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil), calendar: cal)
+    day = day.addingTimeInterval(86400)
+}
+series = addHealthSample(series, hp("2025-03-05T18:00:00Z", cal: true), calendar: cal)
+assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
+let cutoff = d("2026-10-01T12:00:00Z").addingTimeInterval(-180 * 86400)
+assert(series.filter { $0.date >= cutoff }.count == 181)
+let old = series.filter { $0.date < cutoff && $0.calibration != true }
+assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
+assert(series.contains { $0.calibration == true })
+series = (0..<600).reduce([]) { s, i in addHealthSample(s, HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), maxCapacity: 4200,
+                                                                        nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: true), calendar: cal) }
+assert(series.count == healthMaxSamples && series.last?.date == d("2026-01-01T00:00:00Z").addingTimeInterval(599 * 60))
+
 print("logic ok")
