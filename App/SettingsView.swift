@@ -156,10 +156,32 @@ struct ScheduleView: View {
                 }
                 HStack {
                     Button(tr("+ Task")) { tasks.wrappedValue.append(ScheduledTask(action: .setLimit, repeatRule: .daily, start: nextNine())) }
-                    Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
-                    Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
+                    Button(tr("Monthly calibration")) { m.requestNotifications(); tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
+                    Button(tr("Calibration every 2 weeks")) { m.requestNotifications(); tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
                 Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
+            }
+            if let b = m.status?.battery {
+                Section(tr("Battery health")) {
+                    row(tr("Health"), percent(b.health))
+                    row(tr("Health (nominal)"), percent(b.nominalHealth))
+                    row(tr("Full charge capacity"), mAh(b.maxCapacity))
+                    row(tr("Nominal capacity"), mAh(b.nominalCapacity))
+                    row(tr("Design capacity"), mAh(b.designCapacity))
+                    row(tr("Cycle count"), b.cycleCount.map(String.init) ?? "--")
+                }
+            }
+            if let c = m.status?.lastCalibration {
+                Section(tr("Last calibration")) {
+                    row(tr("Date"), c.end.formatted(date: .abbreviated, time: .shortened))
+                    row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
+                    row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
+                    row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
+                    row(tr("Health (nominal)"), "\(percent(c.before.nominalHealth)) → \(percent(c.after.nominalHealth))")
+                    row(tr("Cycle count"), "\(c.before.cycleCount.map(String.init) ?? "--") → \(c.after.cycleCount.map(String.init) ?? "--")")
+                    row(tr("Design capacity"), mAh(c.after.designCapacity))
+                    row(tr("Temperature"), c.after.temperature.map { String(format: "%.1f °C", $0) } ?? "--")
+                }
             }
             Section(tr("History")) {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
@@ -172,6 +194,14 @@ struct ScheduleView: View {
         }
         .formStyle(.grouped)
     }
+
+    func row(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) { Text(value).monospacedDigit() }
+    }
+
+    func mAh(_ v: Int?) -> String { v.map { "\($0) mAh" } ?? "--" }
+    func percent(_ v: Double?) -> String { v.map { String(format: "%.1f %%", $0) } ?? "--" }
+    func duration(_ s: TimeInterval) -> String { tr("%d h %02d min", Int(s) / 3600, Int(s) % 3600 / 60) }
 
     func nextNine() -> Date {
         Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
