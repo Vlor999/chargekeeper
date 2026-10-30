@@ -241,6 +241,7 @@ extension HistoryEntry {
         case .limitChanged: return ("slider.horizontal.3", .blue)
         case .heatProtect: return ("thermometer.high", .red)
         case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
+        case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
         }
     }
 }

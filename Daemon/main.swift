@@ -82,6 +82,10 @@ final class Daemon {
         case .reminder: notify_post(calibrationNeedsAdapterNotification)
         case .none: break
         }
+        if pastLimitEpisode(a, state: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent, amperage: rd.amperage,
+                            watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
+            record(HistoryEntry(event: .chargedPastLimit, value: s.config.limit))
+        }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, latch: &notices) {
             switch n {
             case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(heatProtectNotification)

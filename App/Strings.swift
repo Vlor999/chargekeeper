@@ -221,6 +221,8 @@ private let french: [String: String] = [
     "Calibration: adapter unplugged, plug it in to continue": "Calibration : adaptateur débranché, rebranchez-le pour continuer",
     "Heat protection: charging paused": "Protection thermique : charge suspendue",
     "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
+    "macOS charged past the limit": "macOS a chargé au-delà de la limite",
+    "macOS charged past the %@ %% limit": "macOS a chargé au-delà de la limite de %@ %%",
     // Notifications
     "Notifications": "Notifications",
     "Heat protection paused charging": "Charge suspendue par la protection thermique",

@@ -43,7 +43,7 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 
 enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
-    case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter
+    case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
@@ -122,6 +122,7 @@ struct Runtime: Codable, Equatable {
     var heatSince: Date?
     var state: ChargeState = .charging
     var calibrationBefore: BatterySnapshot?  // taken when the running calibration started
+    var pastLimitSince: Date?  // macOS charging past the limit against the service (gauge recalibration or other override)
 }
 
 /// Battery wear at one point in time. Capacities in mAh.
