@@ -6,6 +6,8 @@ let socketPath = "/var/run/jauge.sock"
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
 /// Posted when heat protection pauses charging, once per heat episode.
 let heatProtectNotification = "com.vlor999.jauge.heatProtect"
+/// Posted when the adapter is missing during a calibration phase that needs it, once per unplug episode.
+let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
 /// Posted when charging stops at the limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
 
@@ -41,7 +43,7 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 
 enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
-    case taskRun, taskSkipped, limitChanged, heatProtect
+    case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English

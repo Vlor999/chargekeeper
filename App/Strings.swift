@@ -206,6 +206,7 @@ private let french: [String: String] = [
     "Missed task run on wake: %@": "Tâche manquée exécutée au réveil : %@",
     "Missed task skipped: %@": "Tâche manquée ignorée : %@",
     "Charge limit set to %@ %%": "Limite de recharge réglée à %@ %%",
+    "Calibration: adapter unplugged, plug it in to continue": "Calibration : adaptateur débranché, rebranchez-le pour continuer",
     "Heat protection: charging paused": "Protection thermique : charge suspendue",
     "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
     // Notifications

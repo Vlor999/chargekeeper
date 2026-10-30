@@ -240,6 +240,7 @@ extension HistoryEntry {
         case .taskSkipped: return ("calendar.badge.exclamationmark", .secondary)
         case .limitChanged: return ("slider.horizontal.3", .blue)
         case .heatProtect: return ("thermometer.high", .red)
+        case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
         }
     }
 }

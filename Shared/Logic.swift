@@ -110,6 +110,17 @@ func calibrationFinished(from: CalibrationPhase?, to: CalibrationPhase?) -> Bool
     from == .hold && to == .returnToLimit
 }
 
+/// Calibration phases that only progress on the adapter: unplugged, charging stalls and the rest is not a rest.
+func calibrationNeedsAdapter(_ p: CalibrationPhase?) -> Bool {
+    p == .chargeFull || p == .rechargeFull || p == .hold
+}
+
+/// Once per unplug episode: the adapter is unplugged during a phase that needs it, or such a phase starts unplugged.
+/// Moving between two such phases while unplugged (rest back to recharge) is the same episode.
+func adapterMissingNotice(phase: CalibrationPhase?, prevPhase: CalibrationPhase?, adapter: Bool, wasAdapter: Bool) -> Bool {
+    calibrationNeedsAdapter(phase) && !adapter && (wasAdapter || !calibrationNeedsAdapter(prevPhase))
+}
+
 /// Step of the phase in the calibration, from 1, and the step count.
 func calibrationStep(_ p: CalibrationPhase) -> (step: Int, of: Int) {
     let all = CalibrationPhase.allCases
@@ -250,6 +261,7 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
     case .limitChanged:
         guard let v = e.value else { return e.text }
         return t("Charge limit set to %@ %%", [int(v)])
+    case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])

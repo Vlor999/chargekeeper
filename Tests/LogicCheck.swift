@@ -144,7 +144,7 @@ var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifi
 let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
 assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !dateTime(oct30).contains("PM"), dateTime(oct30))
 assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
-let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
+let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
@@ -167,6 +167,15 @@ assert(calibrationStep(.chargeFull) == (1, 5) && calibrationStep(.dischargeTo10)
 assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.returnToLimit, limit: 80) == 80 && calibrationTarget(.hold, limit: 80) == nil)
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 1500)) == 2100)
 assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5000)) == 0)
+
+// Adapter needed: charging and rest phases only; noticed once on unplug or when such a phase starts unplugged.
+assert(calibrationNeedsAdapter(.hold) && !calibrationNeedsAdapter(.dischargeTo10) && !calibrationNeedsAdapter(nil))
+assert(adapterMissingNotice(phase: .chargeFull, prevPhase: .chargeFull, adapter: false, wasAdapter: true))
+assert(!adapterMissingNotice(phase: .chargeFull, prevPhase: .chargeFull, adapter: false, wasAdapter: false))
+assert(adapterMissingNotice(phase: .rechargeFull, prevPhase: .dischargeTo10, adapter: false, wasAdapter: false))
+assert(!adapterMissingNotice(phase: .rechargeFull, prevPhase: .hold, adapter: false, wasAdapter: false))
+assert(!adapterMissingNotice(phase: .dischargeTo10, prevPhase: .chargeFull, adapter: false, wasAdapter: true))
+assert(!adapterMissingNotice(phase: .hold, prevPhase: .rechargeFull, adapter: true, wasAdapter: true))
 
 // Calibration rest: only counts on the adapter. Unplugged at 100 % it restarts on replug; below 100 % it recharges first.
 r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)
