@@ -3,7 +3,7 @@ import Sparkle
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, charge, sleep, led, schedule
+    case general, charge, sleep, led, schedule, battery
 
     var id: Self { self }
 
@@ -14,6 +14,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sleep: tr("Sleep")
         case .led: tr("MagSafe LED")
         case .schedule: tr("Schedule")
+        case .battery: tr("Battery")
         }
     }
 
@@ -24,6 +25,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sleep: "moon.fill"
         case .led: "lightbulb.fill"
         case .schedule: "calendar"
+        case .battery: "battery.100percent"
         }
     }
 
@@ -34,6 +36,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .sleep: .indigo
         case .led: .teal
         case .schedule: .red
+        case .battery: .green
         }
     }
 }
@@ -84,6 +87,7 @@ struct SettingsPaneView: View {
         case .sleep: sleep
         case .led: led
         case .schedule: ScheduleView()
+        case .battery: BatteryView()
         }
     }
 
@@ -230,6 +234,28 @@ struct ScheduleView: View {
                 }
                 Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
             }
+            Section(tr("History")) {
+                ForEach(m.status?.history ?? [], id: \.self) { h in
+                    HStack {
+                        Text(h.date, style: .date); Text(h.date, style: .time)
+                        Text(h.text).foregroundStyle(.secondary)
+                    }.font(.caption)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    func nextNine() -> Date {
+        Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
+    }
+}
+
+struct BatteryView: View {
+    @EnvironmentObject var m: AppModel
+
+    var body: some View {
+        Form {
             if let b = m.status?.battery {
                 Section(tr("Battery health")) {
                     row(tr("Health"), percent(b.health))
@@ -252,13 +278,9 @@ struct ScheduleView: View {
                     row(tr("Temperature"), c.after.temperature.map { String(format: "%.1f °C", $0) } ?? "--")
                 }
             }
-            Section(tr("History")) {
-                ForEach(m.status?.history ?? [], id: \.self) { h in
-                    HStack {
-                        Text(h.date, style: .date); Text(h.date, style: .time)
-                        Text(h.text).foregroundStyle(.secondary)
-                    }.font(.caption)
-                }
+            if m.status?.battery == nil && m.status?.lastCalibration == nil {
+                Text(tr("Battery data unavailable."))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -271,10 +293,6 @@ struct ScheduleView: View {
     func mAh(_ v: Int?) -> String { v.map { "\($0) mAh" } ?? "--" }
     func percent(_ v: Double?) -> String { v.map { String(format: "%.1f %%", $0) } ?? "--" }
     func duration(_ s: TimeInterval) -> String { tr("%d h %02d min", Int(s) / 3600, Int(s) % 3600 / 60) }
-
-    func nextNine() -> Date {
-        Calendar.current.nextDate(after: Date(), matching: DateComponents(hour: 9, minute: 0), matchingPolicy: .nextTime) ?? Date()
-    }
 }
 
 struct TaskRow: View {

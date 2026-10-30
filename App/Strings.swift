@@ -135,6 +135,7 @@ private let french: [String: String] = [
     "Run missed tasks on wake": "Exécuter au réveil les tâches manquées",
     "History": "Historique",
     "Battery health": "Santé de la batterie",
+    "Battery data unavailable.": "Données de la batterie indisponibles.",
     "Health": "Santé",
     "Health (nominal)": "Santé (nominale)",
     "Full charge capacity": "Capacité de charge complète",
