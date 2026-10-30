@@ -8,7 +8,7 @@ let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
 let heatProtectNotification = "com.vlor999.jauge.heatProtect"
 /// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
 let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
-/// Posted when charging stops at the limit, once per charging session.
+/// Posted when the battery level reaches the charge limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
 
 enum ChargeState: String, Codable {
