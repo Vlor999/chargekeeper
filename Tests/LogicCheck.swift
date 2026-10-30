@@ -206,6 +206,12 @@ _ = tick(c, &r, 100, at: 3900); assert(r.calibration == .hold)
 _ = tick(c, &r, 100, at: 7400); assert(r.calibration == .hold)
 _ = tick(c, &r, 100, at: 7500); assert(r.calibration == .returnToLimit)
 
+// Calibration rest reloaded without a start (unplugged before a restart): the hour starts on the adapter.
+r = Runtime(); r.calibration = .hold
+_ = tick(c, &r, 100, at: 1000); assert(r.calibration == .hold && r.phaseStart == Date(timeIntervalSince1970: 1000))
+_ = tick(c, &r, 100, at: 4500); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 4700); assert(r.calibration == .returnToLimit)
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)
