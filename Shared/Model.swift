@@ -177,6 +177,7 @@ struct Status: Codable {
     var history: [HistoryEntry]
     var battery: BatterySnapshot?  // nil from an older service
     var lastCalibration: CalibrationResult?
+    var appleChargeLimit: Int?  // Charge Limit set in System Settings below 100 %, on Macs where the service never sets it
 }
 
 enum Command: Codable {

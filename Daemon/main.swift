@@ -23,11 +23,13 @@ final class Daemon {
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
     var adapterNotices = AdapterNoticeState()
+    var appleChargeLimit: Int?
 
     init() {
         s = Daemon.load()
         // A crash may have left sleep disabled: start from the system default.
         _ = setSleepDisabled(false)
+        readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
     }
 
@@ -65,7 +67,7 @@ final class Daemon {
         guard let rd = readBattery() else { return }
         reading = rd
         let now = Date()
-        if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
+        if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now); readAppleChargeLimit() }
 
         let prev = s.runtime.state, prevPhase = s.runtime.calibration
         let a = decide(s.config, &s.runtime, Inputs(percent: rd.percent, adapter: rd.adapter, temperature: rd.temperature, now: now))
@@ -96,6 +98,13 @@ final class Daemon {
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }
         save()
+    }
+
+    /// Read once a minute: two calls to powerd. Only where the service charges through the SMC: elsewhere the native
+    /// limit is the service's own and a user value cannot be told apart from it.
+    func readAppleChargeLimit() {
+        guard hw.native, hw.inhibitKey != nil else { return }
+        appleChargeLimit = userChargeLimit(enabled: mcl_enabled() != 0, limit: Int(mcl_limit()))
     }
 
     func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {
@@ -173,7 +182,7 @@ final class Daemon {
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
                       systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
-                      lastCalibration: s.lastCalibration)
+                      lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
     }
 
     /// "Stop charging during sleep": freeze at current level before sleeping.
