@@ -4,6 +4,8 @@ import notify
 
 let stateDir = "/Library/Application Support/Jauge"
 let statePath = stateDir + "/state.json"
+/// The Apple Charge Limit read is a synchronous call to powerd on the main queue: kept rare.
+let appleLimitReadInterval: TimeInterval = 10 * 60
 
 struct Saved: Codable {
     var config = Config()
@@ -20,14 +22,18 @@ final class Daemon {
     var reading = Reading()
     var sleepDisabled = false
     var lastScheduleCheck = Date()
+    var lastAppleLimitRead = Date.distantPast
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
     var adapterNotices = AdapterNoticeState()
+    var appleChargeLimit: Int?
+    var lastAction: Action?  // in memory: the first tick after a restart counts as a mode change
 
     init() {
         s = Daemon.load()
         // A crash may have left sleep disabled: start from the system default.
         _ = setSleepDisabled(false)
+        readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
     }
 
@@ -66,6 +72,7 @@ final class Daemon {
         reading = rd
         let now = Date()
         if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
+        if now.timeIntervalSince(lastAppleLimitRead) >= appleLimitReadInterval { readAppleChargeLimit() }
 
         let prev = s.runtime.state, prevPhase = s.runtime.calibration
         let a = decide(s.config, &s.runtime, Inputs(percent: rd.percent, adapter: rd.adapter, temperature: rd.temperature, now: now))
@@ -82,6 +89,12 @@ final class Daemon {
         case .reminder: notify_post(calibrationNeedsAdapterNotification)
         case .none: break
         }
+        let settled = prev == s.runtime.state && lastAction == a
+        lastAction = a
+        if let held = pastLimitEpisode(a, state: s.runtime.state, settled: settled, inControl: hw.inControl, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent,
+                            amperage: rd.amperage, watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
+            record(HistoryEntry(event: .chargedPastLimit, value: held))
+        }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, latch: &notices) {
             switch n {
             case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(heatProtectNotification)
@@ -92,6 +105,14 @@ final class Daemon {
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }
         save()
+    }
+
+    /// Read at start, then every 10 min: two calls to powerd. Only where the service charges through the SMC: elsewhere the
+    /// native limit is the service's own and a user value cannot be told apart from it.
+    func readAppleChargeLimit() {
+        lastAppleLimitRead = Date()
+        guard hw.native, hw.inhibitKey != nil else { return }
+        appleChargeLimit = userChargeLimit(enabled: Int(mcl_enabled()), limit: Int(mcl_limit()))
     }
 
     func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {
@@ -170,7 +191,7 @@ final class Daemon {
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
                       systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
-                      lastCalibration: s.lastCalibration)
+                      lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
     }
 
     /// "Stop charging during sleep": freeze at current level before sleeping.

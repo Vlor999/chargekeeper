@@ -183,6 +183,39 @@ func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, wat
     return t <= 24 * 3600 ? max(t, 60) : nil
 }
 
+/// Points above the level the service holds before charging counts as macOS overriding the limit. Covers the native
+/// Charge Limit rounding a held level up to its next step of 5 (81 → 85).
+let pastLimitMargin = 5
+
+/// Tracks macOS charging past the limit while the service holds or drains the battery: the gauge recalibration of
+/// macOS 26.4+ ("Your Mac will occasionally charge to 100 %"), or any other system override. Detected from the effect,
+/// since the cause is not readable without a private entitlement. Returns the held level when a new episode starts.
+/// The episode lasts until the level is back to the held level, the adapter is unplugged or the service changes mode.
+/// `inControl`: the service's own hold or discharge is in effect (keys present, writes succeeded); otherwise the charge
+/// may come from the service's own limitation, not from macOS.
+/// `settled`: same state and action as the previous tick. The reading is taken before the action is applied, so on the
+/// tick that changes mode the current still reflects the previous mode (charging before a new discharge).
+func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
+                      watts: Double, since: inout Date?, now: Date) -> Int? {
+    let held: Int? = switch a {
+    case .hold(let level) where state == .pause: level
+    case .discharge where state == .discharging: limit
+    default: nil
+    }
+    guard adapter, let held, percent > held else { since = nil; return nil }
+    let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
+    guard since == nil, settled, inControl, percent >= held + pastLimitMargin, mA >= 50 else { return nil }
+    since = now
+    return held
+}
+
+/// Charge Limit of System Settings when it caps charging. Read only on Macs where the service never sets it (it charges
+/// through the SMC): there, an active limit below 100 % can only come from the user.
+/// `enabled` is 1 or 0 and -1 when the read failed; a limit outside 50...99 is a failed read or no cap.
+func userChargeLimit(enabled: Int, limit: Int) -> Int? {
+    enabled == 1 && (50...99).contains(limit) ? limit : nil
+}
+
 /// What the app does with the service's last calibration, given the last result it handled.
 enum CalibrationNotice: Equatable {
     case seed(Date)  // first run: remember the current result without a banner
@@ -288,6 +321,9 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
         guard let v = e.value else { return e.text }
         return t("Charge limit set to %@ %%", [int(v)])
     case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
+    case .chargedPastLimit:
+        guard let v = e.value else { return t("macOS charged the battery above the limit", []) }
+        return t("macOS charged the battery above %@ %%", [int(v)])
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])

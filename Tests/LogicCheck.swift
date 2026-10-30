@@ -124,6 +124,7 @@ assert(historyText(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)
 assert(historyText(HistoryEntry(event: .taskRun, action: .setLimit, late: true, value: 60)) == "Missed task run on wake: Set charge limit (60 %)")
 assert(historyText(HistoryEntry(event: .taskRun, action: .topUp, late: false)) == "Scheduled task: Charge to 100%")
 assert(historyText(HistoryEntry(event: .heatProtect, temperature: 36.24)) == "Heat protection: charging paused at 36.2 °C")
+assert(historyText(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS charged the battery above 85 %")
 assert(historyText(HistoryEntry(event: .limitChanged, value: 75)) == "Charge limit set to 75 %")
 
 // History: free text from an older service maps to its event, unknown text stays as is.
@@ -167,9 +168,19 @@ assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter
 assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
 assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
 assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
+assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS a chargé la batterie au-delà de 85\u{00A0}%")
+assert(localizedHistory(HistoryEntry(event: .chargedPastLimit)) == "macOS a chargé la batterie au-delà de la limite")
+assert(tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit.")
+       == "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper maintient ce niveau sans décharger. Activez la décharge automatique pour revenir à la limite.")
+assert(tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper discharges it back to the limit.") == "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper la décharge jusqu'à la limite.")
+assert(tr("Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.", "80")
+       == "La limite de recharge d'Apple est réglée à 80 % dans Réglages Système. Réglez-la sur 100 % pour laisser ChargeKeeper gérer la recharge.")
+for k in ["macOS battery settings", "Open Battery Settings",
+          "Turn off Optimized Battery Charging in System Settings > Battery: it can conflict with ChargeKeeper's limit."] { assert(tr(k) != k, k) }
 let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
-               HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
+               HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),
+               HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, value: 80)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
     + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
 var templates: Set<String> = []
@@ -239,6 +250,57 @@ r = Runtime(); r.calibration = .hold
 _ = tick(c, &r, 100, at: 1000); assert(r.calibration == .hold && r.phaseStart == Date(timeIntervalSince1970: 1000))
 _ = tick(c, &r, 100, at: 4500); assert(r.calibration == .hold)
 _ = tick(c, &r, 100, at: 4700); assert(r.calibration == .returnToLimit)
+
+// macOS charging past the limit: one episode from 5 points above the held level while the battery charges, kept until the
+// level is back, ended by unplugging or a mode that charges on purpose.
+var since: Date? = nil
+func past(_ a: Action, _ pct: Int, _ st: ChargeState = .pause, settled: Bool = true, inControl: Bool = true, ac: Bool = true, mA: Int? = 900, at s: Double = 0) -> Bool {
+    nil != pastLimitEpisode(a, state: st, settled: settled, inControl: inControl, adapter: ac, limit: 80, percent: pct, amperage: mA, watts: 0, since: &since,
+                     now: Date(timeIntervalSince1970: s))
+}
+assert(!past(.hold(at: 80), 84) && since == nil)  // native limit rounding 81 → 85
+assert(!past(.hold(at: 80), 85, mA: 0) && since == nil)  // above, not charging
+assert(past(.hold(at: 80), 85, at: 10) && since == Date(timeIntervalSince1970: 10))
+assert(!past(.hold(at: 80), 99, at: 20) && !past(.hold(at: 80), 100, mA: 0, at: 30) && since == Date(timeIntervalSince1970: 10))
+assert(!past(.hold(at: 80), 80) && since == nil)
+// The event carries the held level, above the limit when the hold started above it.
+assert(pastLimitEpisode(.hold(at: 90), state: .pause, settled: true, inControl: true, adapter: true, limit: 80, percent: 95, amperage: 900,
+                        watts: 0, since: &since, now: Date()) == 90)
+since = nil
+assert(past(.hold(at: 80), 90) && !past(.hold(at: 80), 92, ac: false) && since == nil)
+assert(!past(.charge(to: 100), 95, .topup) && !past(.hold(at: 100), 100, .calibration) && since == nil)
+assert(!past(.hold(at: 60), 70, .heatProtect) && since == nil)
+// Draining toward the limit while macOS charges; the current comes from the watts when the service does not report it.
+assert(80 == pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: 10,
+                        since: &since, now: Date()))
+since = nil
+assert(nil == pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: -10,
+                         since: &since, now: Date()))
+// The service's own discharge or hold has no effect (no discharge key, failed SMC write): the charge is not blamed on macOS.
+assert(!past(.discharge, 90, .discharging, inControl: false) && !past(.hold(at: 70), 80, inControl: false) && since == nil)
+// Tick that changes mode: charging at 78 % (+2000 mA, read before the new action applies), limit lowered to 70 with automatic
+// discharge. No episode on that tick; on the next one the discharge has taken over.
+since = nil
+var pc = Config(); pc.limit = 80; pc.autoDischarge = true
+var pr = Runtime()
+assert(tick(pc, &pr, 78) == .charge(to: 80) && pr.state == .charging)
+pc.limit = 70
+let pa = tick(pc, &pr, 78)
+assert(pa == .discharge && pr.state == .discharging)
+assert(nil == pastLimitEpisode(pa, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
+assert(nil == pastLimitEpisode(pa, state: pr.state, settled: true, inControl: true, adapter: true, limit: 70, percent: 78, amperage: -2000, watts: 0, since: &since, now: Date()))
+assert(since == nil)
+// Same with dischargeTo(70): the service sets the limit and the discharge flag.
+pc.autoDischarge = false; pc.limit = 80; pr = Runtime()
+_ = tick(pc, &pr, 78)
+pc.limit = 70; pr.discharge = true
+assert(tick(pc, &pr, 78) == .discharge)
+assert(nil == pastLimitEpisode(.discharge, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
+
+// Apple Charge Limit from System Settings: only an enabled limit in 50...99 counts; a failed read (-1) or 100 is no cap.
+assert(userChargeLimit(enabled: 1, limit: 80) == 80 && userChargeLimit(enabled: 0, limit: 80) == nil)
+assert(userChargeLimit(enabled: 1, limit: 100) == nil && userChargeLimit(enabled: -1, limit: 80) == nil)
+assert(userChargeLimit(enabled: 1, limit: -1) == nil && userChargeLimit(enabled: 1, limit: 0) == nil && userChargeLimit(enabled: 1, limit: 49) == nil)
 
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause

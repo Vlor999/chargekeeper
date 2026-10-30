@@ -336,6 +336,11 @@ struct MenuView: View {
             }
             .font(.caption)
         }
+        if r.pastLimitSince != nil && s.adapter {
+            Label(r.state == .discharging ? tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper discharges it back to the limit.") : tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit."), systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {

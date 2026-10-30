@@ -142,6 +142,21 @@ struct SettingsPaneView: View {
 
     var charge: some View {
         Form {
+            Section(tr("macOS battery settings")) {
+                if let s = m.status, let l = s.appleChargeLimit, l < s.config.limit {
+                    Label(tr("Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.", number(Double(l))),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                HStack {
+                    Text(tr("Turn off Optimized Battery Charging in System Settings > Battery: it can conflict with ChargeKeeper's limit."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(tr("Open Battery Settings")) {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
+                    }
+                }
+            }
             Section(tr("Discharge")) {
                 Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge))
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
@@ -242,6 +257,7 @@ extension HistoryEntry {
         case .limitChanged: return ("slider.horizontal.3", .blue)
         case .heatProtect: return ("thermometer.high", .red)
         case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
+        case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
         }
     }
 }
