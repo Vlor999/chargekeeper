@@ -49,9 +49,13 @@ final class Daemon {
         if (try? d.write(to: URL(fileURLWithPath: statePath), options: .atomic)) != nil { lastSaved = d }
     }
 
-    func record(_ text: String) {
-        log(text)
-        s.history.insert(HistoryEntry(date: Date(), text: text), at: 0)
+    /// Stores the event with its English text, which older apps and the log show.
+    func record(_ entry: HistoryEntry) {
+        var e = entry
+        e.date = Date()
+        e.text = historyText(e)
+        log(e.text)
+        s.history.insert(e, at: 0)
         if s.history.count > 200 { s.history.removeLast() }
     }
 
@@ -66,7 +70,9 @@ final class Daemon {
         hw.apply(a, percent: rd.percent)
         hw.setLED(ledColor(s.config, s.runtime, adapter: rd.adapter, percent: rd.percent))
         if prev != s.runtime.state { log("\(rd.percent)%: \(prev.rawValue) -> \(s.runtime.state.rawValue) (\(a))") }
-        if prevPhase != s.runtime.calibration { record("calibration: \(s.runtime.calibration?.rawValue ?? "back to limit")") }
+        if prevPhase != s.runtime.calibration {
+            record(s.runtime.calibration.map { HistoryEntry(event: .calibrationPhase, phase: $0) } ?? HistoryEntry(event: .calibrationEnded))
+        }
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
         if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
 
@@ -83,7 +89,8 @@ final class Daemon {
     func finishCalibration(_ after: BatterySnapshot) {
         let before = s.runtime.calibrationBefore
         s.runtime.calibrationBefore = nil
-        record(["calibration done", calibrationSummary(before: before, after: after)].filter { !$0.isEmpty }.joined(separator: ": "))
+        record(HistoryEntry(event: .calibrationDone, capacityBefore: before?.maxCapacity, capacityAfter: after.maxCapacity,
+                            healthBefore: before?.health, healthAfter: after.health, cycles: after.cycleCount))
         // Started by an older service: no starting point to compare with.
         guard let before else { return }
         s.lastCalibration = CalibrationResult(start: before.date, end: after.date, before: before, after: after)
@@ -97,8 +104,9 @@ final class Daemon {
             guard let o = lastOccurrence(t, after: max(t.lastRun ?? t.created, t.created), upTo: now) else { continue }
             s.config.tasks[i].lastRun = o
             let late = now.timeIntervalSince(o) > 600
-            if late && !s.config.catchUpMissedTasks { record("task skipped (missed): \(t.action.rawValue)"); continue }
-            record("task \(t.action.rawValue)\(late ? " (caught up)" : "")")
+            let value = t.action == .setLimit || t.action == .dischargeTo ? t.value : nil
+            if late && !s.config.catchUpMissedTasks { record(HistoryEntry(event: .taskSkipped, action: t.action, value: value)); continue }
+            record(HistoryEntry(event: .taskRun, action: t.action, late: late, value: value))
             switch t.action {
             case .setLimit: mutate(.setLimit(t.value))
             case .calibrate: mutate(.calibrate(true))
@@ -112,6 +120,8 @@ final class Daemon {
     }
 
     func mutate(_ cmd: Command) {
+        let limit = s.config.limit
+        defer { if s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
         case .status: break
         case .setConfig(var c):
@@ -132,7 +142,7 @@ final class Daemon {
             s.runtime.calibration = on ? .chargeFull : nil
             s.runtime.phaseStart = Date()
             s.runtime.calibrationBefore = on ? running ?? snapshot(reading) : nil
-            record("calibration \(on ? "started" : "stopped")")
+            record(HistoryEntry(event: on ? .calibrationStarted : .calibrationStopped))
         case .pause: s.config.limit = clamp(reading.percent, 20, 100); s.runtime.discharge = false
         case .led(let c): s.runtime.ledOverride = c
         case .lowPower(let on): pmset(["-a", "lowpowermode", on ? "1" : "0"])
