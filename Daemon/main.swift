@@ -12,6 +12,7 @@ struct Saved: Codable {
     var runtime = Runtime()
     var history: [HistoryEntry] = []
     var lastCalibration: CalibrationResult?
+    var healthHistory: [HealthSample] = []
 }
 
 func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
@@ -73,6 +74,7 @@ final class Daemon {
         let now = Date()
         if now.timeIntervalSince(lastScheduleCheck) >= 60 { runSchedule(now) }
         if now.timeIntervalSince(lastAppleLimitRead) >= appleLimitReadInterval { readAppleChargeLimit() }
+        if healthSampleDue(s.healthHistory, now: now), let p = healthSample(snapshot(rd, now)) { s.healthHistory = addHealthSample(s.healthHistory, p, now: now) }
 
         let prev = s.runtime.state, prevPhase = s.runtime.calibration
         let a = decide(s.config, &s.runtime, Inputs(percent: rd.percent, adapter: rd.adapter, temperature: rd.temperature, now: now))
@@ -125,6 +127,7 @@ final class Daemon {
         s.runtime.calibrationBefore = nil
         record(HistoryEntry(event: .calibrationDone, capacityBefore: before?.maxCapacity, capacityAfter: after.maxCapacity,
                             healthBefore: before?.health, healthAfter: after.health, cycles: after.cycleCount))
+        if let p = healthSample(after, calibration: true) { s.healthHistory = addHealthSample(s.healthHistory, p, now: after.date) }
         // Started by an older service: no starting point to compare with.
         guard let before else { return }
         s.lastCalibration = CalibrationResult(start: before.date, end: after.date, before: before, after: after)
@@ -158,7 +161,7 @@ final class Daemon {
         let limit = s.config.limit
         defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
-        case .status: break
+        case .status, .healthHistory: break
         case .setConfig(var c):
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)
@@ -186,12 +189,17 @@ final class Daemon {
     }
 
     func handle(_ cmd: Command) -> Status {
-        if case .status = cmd {} else { mutate(cmd); tick() }
-        return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
+        switch cmd {
+        case .status, .healthHistory: break
+        default: mutate(cmd); tick()
+        }
+        var out = Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
                       systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
+        if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
+        return out
     }
 
     /// "Stop charging during sleep": freeze at current level before sleeping.
@@ -250,7 +258,10 @@ func serve() {
         guard c >= 0 else { return }
         defer { close(c) }
         var tv = timeval(tv_sec: 2, tv_usec: 0)
-        setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        // The health series reply spans several socket buffers: a client that stops reading stalls the service 2 s at most.
+        for opt in [SO_RCVTIMEO, SO_SNDTIMEO] where setsockopt(c, SOL_SOCKET, opt, &tv, socklen_t(MemoryLayout<timeval>.size)) != 0 {
+            log("socket timeout \(opt) not set: errno \(errno)")
+        }
         guard let data = try? readLine(c), let cmd = try? JSONDecoder().decode(Command.self, from: data),
               let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
         try? writeLine(c, out)

@@ -331,4 +331,98 @@ assert(spreadLabels([100, 108], gap: 14, height: 110) == [89, 103])
 // Device icon: Apple devices by name, the rest generic.
 assert(deviceIcon("iPhone") == "iphone" && deviceIcon("AirPods Charging Case") == "airpods" && deviceIcon(nil) == "cable.connector")
 
+// Health series: a point needs both capacities; the calibration flag is only stored when set.
+let snap = BatterySnapshot(date: d("2026-10-01T12:00:00Z"), maxCapacity: 4200, nominalCapacity: 4300, designCapacity: 4800, cycleCount: 100, temperature: nil, percent: 80)
+assert(healthSample(snap)?.health == 87.5 && healthSample(snap)?.calibration == nil && healthSample(snap, calibration: true)?.calibration == true)
+var noDesign = snap; noDesign.designCapacity = 0
+assert(healthSample(noDesign) == nil)
+
+// Health series: one point per calendar day, also after the clock moved back.
+func hp(_ s: String, _ m: Int = 4200, cycles: Int? = 100, cal: Bool? = nil) -> HealthSample {
+    HealthSample(date: d(s), maxCapacity: m, nominalCapacity: m + 100, designCapacity: 4800, cycleCount: cycles, calibration: cal)
+}
+assert(healthSampleDue([], now: d("2026-10-01T12:00:00Z"), calendar: cal))
+assert(!healthSampleDue([hp("2026-10-01T00:30:00Z")], now: d("2026-10-01T23:00:00Z"), calendar: cal))
+assert(healthSampleDue([hp("2026-10-01T23:00:00Z")], now: d("2026-10-02T00:10:00Z"), calendar: cal))
+assert(!healthSampleDue([hp("2026-09-01T12:00:00Z"), hp("2026-10-01T12:00:00Z")], now: d("2026-09-01T18:00:00Z"), calendar: cal))
+
+// Health series: inserted in date order; daily kept for 180 days, then the first point of each week, calibrations always.
+var series: [HealthSample] = []
+var day = d("2025-01-01T12:00:00Z")
+while day <= d("2026-10-01T12:00:00Z") {
+    series = addHealthSample(series, HealthSample(date: day, maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil), now: day, calendar: cal)
+    day = day.addingTimeInterval(86400)
+}
+series = addHealthSample(series, hp("2025-03-05T18:00:00Z", cal: true), now: d("2026-10-01T12:00:00Z"), calendar: cal)
+assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
+let cutoff = d("2026-10-01T12:00:00Z").addingTimeInterval(-180 * 86400)
+assert(series.filter { $0.date >= cutoff }.count == 181)
+let old = series.filter { $0.date < cutoff && $0.calibration != true }
+assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
+assert(series.contains { $0.calibration == true })
+
+// Health series: over the cap, daily and weekly points go before calibration points, oldest first.
+func minute(_ i: Int, cal c: Bool?) -> HealthSample {
+    HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800,
+                 cycleCount: nil, calibration: c)
+}
+let capNow = d("2026-01-02T00:00:00Z")
+series = (0..<600).reduce([]) { s, i in addHealthSample(s, minute(i, cal: i % 2 == 0 ? true : nil), now: capNow, calendar: cal) }
+assert(series.count == healthMaxSamples && series.filter { $0.calibration == true }.count == 300)
+assert(series.last?.date == minute(599, cal: nil).date && series.first?.date == minute(0, cal: true).date)
+series = (0..<600).reduce([]) { s, i in addHealthSample(s, minute(i, cal: true), now: capNow, calendar: cal) }
+assert(series.count == healthMaxSamples && series.first?.date == minute(80, cal: true).date)
+
+// Health series: a point dated more than a day ahead is refused, and such points drop out once the clock is back.
+let base = [hp("2026-10-01T12:00:00Z")]
+assert(addHealthSample(base, hp("2026-10-03T12:00:00Z"), now: d("2026-10-01T12:00:00Z"), calendar: cal) == base)
+assert(addHealthSample([hp("2026-10-01T12:00:00Z"), hp("2027-10-01T12:00:00Z")], hp("2026-10-02T12:00:00Z"), now: d("2026-10-02T12:00:00Z"), calendar: cal)
+       == [hp("2026-10-01T12:00:00Z"), hp("2026-10-02T12:00:00Z")])
+// The thinning cutoff follows the current time, not the inserted point.
+let daily = (0..<200).map { i in HealthSample(date: d("2026-10-01T12:00:00Z").addingTimeInterval(-Double(i) * 86400), maxCapacity: 4200,
+                                              nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil) }.reversed()
+let thinned = addHealthSample(Array(daily), hp("2026-03-01T12:00:00Z", cal: true), now: d("2026-10-01T12:00:00Z"), calendar: cal)
+assert(thinned.filter { $0.calibration != true && $0.date < cutoff }.count <= 3)
+
+// Health series: one point per date; the calibration point replaces the daily point of the same tick, never the reverse.
+let tickDaily = hp("2026-10-01T12:00:00Z"), tickCal = hp("2026-10-01T12:00:00Z", 4300, cal: true)
+assert(addHealthSample([tickDaily], tickCal, now: tickDaily.date, calendar: cal) == [tickCal])
+assert(addHealthSample([tickCal], tickDaily, now: tickDaily.date, calendar: cal) == [tickCal])
+assert(addHealthSample([tickDaily], tickDaily, now: tickDaily.date, calendar: cal) == [tickDaily])
+
+// Health series on the wire: the request round-trips, the series rides only in its reply, older payloads decode.
+let enc = JSONEncoder(), dec = JSONDecoder()
+if case .healthHistory = try! dec.decode(Command.self, from: enc.encode(Command.healthHistory)) {} else { assert(false) }
+var wire = Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0,
+                  adapterRatedWatts: nil, systemWatts: 0, batteryWatts: 0, batteryAmperage: nil, ports: nil, nativeLimit: true, sleepDisabled: false,
+                  history: [], battery: nil, lastCalibration: nil, appleChargeLimit: nil)
+assert(!String(decoding: try! enc.encode(wire), as: UTF8.self).contains("healthHistory"))
+wire.healthHistory = [tickDaily, tickCal]
+assert(try! dec.decode(Status.self, from: enc.encode(wire)).healthHistory == [tickDaily, tickCal])
+var oldJSON = try! JSONSerialization.jsonObject(with: enc.encode(wire)) as! [String: Any]
+oldJSON["healthHistory"] = nil
+assert(try! dec.decode(Status.self, from: JSONSerialization.data(withJSONObject: oldJSON)).healthHistory == nil)
+let noFlag = #"{"date":0,"maxCapacity":4200,"designCapacity":4800}"#.data(using: .utf8)!
+assert(try! dec.decode(HealthSample.self, from: noFlag) == HealthSample(date: Date(timeIntervalSinceReferenceDate: 0), maxCapacity: 4200,
+                                                                        nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil))
+
+// Health range: starts 3 months or 1 year back.
+assert(healthRangeStart(.threeMonths, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2026-07-30T12:00:00Z"))
+assert(healthRangeStart(.year, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2025-10-30T12:00:00Z"))
+
+// Health change: first to last point, cycles only when both are known; needs two points.
+let change = healthChange([hp("2026-07-01T12:00:00Z", 4260, cycles: 100), hp("2026-08-01T12:00:00Z"), hp("2026-10-01T12:00:00Z", 4200, cycles: 114)])!
+assert(abs(change.points - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92)
+assert(healthChange([hp("2026-07-01T12:00:00Z", cycles: nil), hp("2026-10-01T12:00:00Z")])?.cycles == nil)
+assert(healthChange([hp("2026-07-01T12:00:00Z")]) == nil)
+assert(healthSpan(days: 0) == (1, .days) && healthSpan(days: 59) == (59, .days) && healthSpan(days: 92) == (3, .months) && healthSpan(days: 365) == (1, .years) && healthSpan(days: 400) == (13, .months) && healthSpan(days: 800) == (2, .years))
+
+// Health chart strings in French.
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
+for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet: one point is recorded per day.", "Period",
+          "%d days", "1 day", "%d months", "%d years", "%@ points in %@", "no new cycle", "+1 cycle", "+%d cycles",
+          "Health history unavailable: the ChargeKeeper service did not answer (restart it after an update)."] { assert(tr(k) != k, k) }
+assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois" && tr("+%d cycles", 14) == "14 cycles de plus")
+UserDefaults.standard.register(defaults: [languageKey: "system"])
+
 print("logic ok")

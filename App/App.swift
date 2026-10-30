@@ -84,6 +84,12 @@ final class AppModel: ObservableObject {
         if let s = status { notifyCalibration(s.lastCalibration) }
     }
 
+    /// Battery health series, asked when the Battery pane opens. nil when the service does not answer (not running, or older
+    /// than this request until it restarts).
+    func healthHistory() -> [HealthSample]? {
+        (try? send(.healthHistory))?.healthHistory
+    }
+
     /// Asked when a calibration is started or scheduled, not at launch. No prompt once the user has answered.
     func requestNotifications() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }

@@ -10,6 +10,10 @@ let heatProtectNotification = "com.vlor999.jauge.heatProtect"
 let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
 /// Posted when the battery level reaches the charge limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
+/// Battery health series: one point per day for this many days, one per week before.
+let healthDailyDays = 180
+/// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
+let healthMaxSamples = 520
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -146,6 +150,21 @@ struct BatterySnapshot: Codable, Equatable {
     }
 }
 
+/// One point of the battery health series: one per day, plus one per calibration result. Capacities in mAh.
+struct HealthSample: Codable, Equatable {
+    var date: Date
+    var maxCapacity: Int
+    var nominalCapacity: Int?
+    var designCapacity: Int
+    var cycleCount: Int?
+    var calibration: Bool?  // taken when a calibration finished
+
+    /// Full charge capacity over design capacity, in %.
+    var health: Double { Double(maxCapacity) * 100 / Double(max(designCapacity, 1)) }
+    /// Nominal capacity over design capacity, in %.
+    var nominalHealth: Double? { nominalCapacity.map { Double($0) * 100 / Double(max(designCapacity, 1)) } }
+}
+
 struct CalibrationResult: Codable, Equatable {
     var start: Date
     var end: Date
@@ -178,6 +197,7 @@ struct Status: Codable {
     var battery: BatterySnapshot?  // nil from an older service
     var lastCalibration: CalibrationResult?
     var appleChargeLimit: Int?  // Charge Limit set in System Settings below 100 %, on Macs where the service never sets it
+    var healthHistory: [HealthSample]?  // only in the reply to .healthHistory, to keep the periodic status small
 }
 
 enum Command: Codable {
@@ -192,4 +212,5 @@ enum Command: Codable {
     case led(LEDColor?)
     case lowPower(Bool)
     case highPower(Bool)
+    case healthHistory  // a service older than this command closes the connection without a reply
 }
