@@ -208,21 +208,23 @@ func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) ->
 /// Notification the service posts on a state change.
 enum ServiceNotice: Equatable { case heatProtect, limitReached }
 
-/// What has already been notified: heat until the episode ends, the limit until the charger is unplugged.
+/// The limit notice already sent this charging session (until the charger is unplugged or the limit changes).
 struct NoticeLatch: Equatable {
-    var heat = false
     var limit = false
+    var seenLimit: Int?  // charge limit at the previous tick
 }
 
-/// Notices for this tick: one heat notice per heat episode, one limit notice per charging session.
-func serviceNotices(from prev: ChargeState, to now: ChargeState, adapter: Bool, latch l: inout NoticeLatch) -> [ServiceNotice] {
-    guard adapter else { l = NoticeLatch(); return [] }
+/// Notices for this tick: one heat notice each time heat protection pauses charging (an episode ends when the
+/// state leaves heat protection), one limit notice per charging session when the battery level reaches the limit.
+/// A pause caused by a limit change (Pause, a lower limit, a scheduled task) is not "limit reached".
+func serviceNotices(from prev: ChargeState, to now: ChargeState, adapter: Bool, limit: Int, latch l: inout NoticeLatch) -> [ServiceNotice] {
+    let changed = l.seenLimit != limit
+    l.seenLimit = limit
+    if changed || !adapter { l.limit = false }
+    guard adapter else { return [] }
     var out: [ServiceNotice] = []
-    if now == .heatProtect && prev != .heatProtect && !l.heat { l.heat = true; out.append(.heatProtect) }
-    if now == .pause && prev == .charging {
-        l.heat = false
-        if !l.limit { l.limit = true; out.append(.limitReached) }
-    }
+    if now == .heatProtect && prev != .heatProtect { out.append(.heatProtect) }
+    if now == .pause && prev == .charging && !changed && !l.limit { l.limit = true; out.append(.limitReached) }
     return out
 }
 
