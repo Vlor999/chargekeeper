@@ -163,8 +163,6 @@ private let french: [String: String] = [
     "Temperature": "Température",
     "%d h %02d min": "%d h %02d min",
     "Calibration complete": "Calibration terminée",
-    "Capacity: %d → %d mAh": "Capacité : %d → %d mAh",
-    "Health: %.1f → %.1f %%": "Santé : %.1f → %.1f %%",
     "Finished %@": "Terminée le %@",
     "Action": "Action",
     "Repeat": "Répétition",
@@ -190,4 +188,14 @@ private let french: [String: String] = [
     "Charge limit set to %@ %%": "Limite de recharge réglée à %@ %%",
     "Heat protection: charging paused": "Protection thermique : charge suspendue",
     "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
+    // Notifications
+    "Notifications": "Notifications",
+    "Heat protection paused charging": "Charge suspendue par la protection thermique",
+    "Charge limit reached": "Limite de recharge atteinte",
+    "Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications.":
+        "Affichées seulement quand ChargeKeeper est ouvert. Autorisez ChargeKeeper dans Réglages Système > Notifications.",
+    "Charging paused: battery at %@ °C (max %@ °C).": "Charge suspendue : batterie à %@ °C (max %@ °C).",
+    "Battery at %@ %%. Charging paused at the limit.": "Batterie à %@ %%. Charge suspendue à la limite.",
+    "Capacity: %@ → %@ mAh": "Capacité : %@ → %@ mAh",
+    "Health: %@ → %@ %%": "Santé : %@ → %@ %%",
 ]

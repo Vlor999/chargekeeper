@@ -1,6 +1,7 @@
 import ServiceManagement
 import Sparkle
 import SwiftUI
+import UserNotifications
 
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general, charge, sleep, led, schedule, battery
@@ -103,6 +104,14 @@ struct SettingsPaneView: View {
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
+            Section {
+                ForEach(NoticeKind.allCases) { NoticeToggle(kind: $0) }
+            } header: {
+                Text(tr("Notifications"))
+            } footer: {
+                Text(tr("Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(tr("Updates")) {
                 let u = m.updater.updater
                 Toggle(tr("Install updates automatically"), isOn: Binding(
@@ -186,6 +195,23 @@ struct SettingsPaneView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
+    }
+}
+
+struct NoticeToggle: View {
+    let kind: NoticeKind
+    @AppStorage private var on: Bool
+
+    init(kind: NoticeKind) {
+        self.kind = kind
+        _on = AppStorage(wrappedValue: kind.defaultOn, kind.key)
+    }
+
+    var body: some View {
+        Toggle(kind.label, isOn: $on)
+            .onChange(of: on) { _, v in
+                if v { UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in } }
+            }
     }
 }
 
