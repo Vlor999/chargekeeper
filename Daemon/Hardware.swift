@@ -12,6 +12,10 @@ struct Reading {
     var systemWatts = 0.0
     var batteryWatts = 0.0
     var ports: [PortPower] = []
+    var rawMaxCapacity: Int?  // mAh
+    var nominalCapacity: Int?
+    var designCapacity: Int?
+    var cycleCount: Int?
 }
 
 func readBattery() -> Reading? {
@@ -27,6 +31,12 @@ func readBattery() -> Reading? {
     r.percent = max > 0 ? cur * 100 / max : cur  // Intel reports mAh, Apple Silicon percent
     r.adapter = p["ExternalConnected"] as? Bool ?? false
     let data = p["BatteryData"] as? [String: Any] ?? [:]
+    // Apple Silicon keeps the mAh capacities only in BatteryData; top level first for other models.
+    func int(_ k: String) -> Int? { p[k] as? Int ?? data[k] as? Int }
+    r.rawMaxCapacity = int("AppleRawMaxCapacity") ?? data["FullChargeCapacity"] as? Int
+    r.nominalCapacity = int("NominalChargeCapacity")
+    r.designCapacity = int("DesignCapacity")
+    r.cycleCount = int("CycleCount")
     if let raw = p["AppleRawCurrentCapacity"] as? Int, let rawMax = p["AppleRawMaxCapacity"] as? Int, rawMax > 0 {
         r.hardwarePercent = raw * 100 / rawMax
     } else if let rem = data["RemainingCapacity"] as? Int, let full = data["FullChargeCapacity"] as? Int, full > 0 {

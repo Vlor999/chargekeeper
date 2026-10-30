@@ -1,5 +1,6 @@
 import Foundation
 import IOKit.pwr_mgt
+import notify
 
 let stateDir = "/Library/Application Support/Jauge"
 let statePath = stateDir + "/state.json"
@@ -8,6 +9,7 @@ struct Saved: Codable {
     var config = Config()
     var runtime = Runtime()
     var history: [HistoryEntry] = []
+    var lastCalibration: CalibrationResult?
 }
 
 func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
@@ -64,11 +66,28 @@ final class Daemon {
         hw.apply(a, percent: rd.percent)
         hw.setLED(ledColor(s.config, s.runtime, adapter: rd.adapter, percent: rd.percent))
         if prev != s.runtime.state { log("\(rd.percent)%: \(prev.rawValue) -> \(s.runtime.state.rawValue) (\(a))") }
-        if prevPhase != s.runtime.calibration { record("calibration: \(s.runtime.calibration?.rawValue ?? "done")") }
+        if prevPhase != s.runtime.calibration { record("calibration: \(s.runtime.calibration?.rawValue ?? "back to limit")") }
+        // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
+        if prevPhase == .hold && s.runtime.calibration == .returnToLimit { finishCalibration(snapshot(rd, now)) }
 
         let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }
         save()
+    }
+
+    func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {
+        BatterySnapshot(date: date, maxCapacity: rd.rawMaxCapacity, nominalCapacity: rd.nominalCapacity, designCapacity: rd.designCapacity,
+                        cycleCount: rd.cycleCount, temperature: rd.temperature, percent: rd.percent)
+    }
+
+    func finishCalibration(_ after: BatterySnapshot) {
+        let before = s.runtime.calibrationBefore
+        s.runtime.calibrationBefore = nil
+        record(["calibration done", calibrationSummary(before: before, after: after)].filter { !$0.isEmpty }.joined(separator: ": "))
+        // Started by an older service: no starting point to compare with.
+        guard let before else { return }
+        s.lastCalibration = CalibrationResult(start: before.date, end: after.date, before: before, after: after)
+        notify_post(calibrationDoneNotification)
     }
 
     func runSchedule(_ now: Date) {
@@ -110,6 +129,7 @@ final class Daemon {
         case .calibrate(let on):
             s.runtime.calibration = on ? .chargeFull : nil
             s.runtime.phaseStart = Date()
+            s.runtime.calibrationBefore = on ? snapshot(reading) : nil
             record("calibration \(on ? "started" : "stopped")")
         case .pause: s.config.limit = clamp(reading.percent, 20, 100); s.runtime.discharge = false
         case .led(let c): s.runtime.ledOverride = c
@@ -123,7 +143,8 @@ final class Daemon {
         return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
                       systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, ports: reading.ports, nativeLimit: hw.native,
-                      sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)))
+                      sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
+                      lastCalibration: s.lastCalibration)
     }
 
     /// "Stop charging during sleep": freeze at current level before sleeping.
@@ -242,6 +263,12 @@ func printStatus(_ s: Status) {
     let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
     if !ports.isEmpty {
         print("usb-c: " + ports.map { "\($0.name ?? "device") \(String(format: "%.1fW", $0.watts))\($0.maxWatts.map { String(format: "/%gW", $0) } ?? "")" }.joined(separator: ", "))
+    }
+    if let b = s.battery {
+        print("health: \(calibrationSummary(before: nil, after: b))\(b.nominalHealth.map { String(format: " (nominal %.1f %%)", $0) } ?? ""), design \(b.designCapacity.map { "\($0) mAh" } ?? "--")")
+    }
+    if let c = s.lastCalibration {
+        print("last calibration \(c.end.formatted(date: .abbreviated, time: .shortened)): \(calibrationSummary(before: c.before, after: c.after))")
     }
 }
 
