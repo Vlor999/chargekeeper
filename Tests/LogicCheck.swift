@@ -144,6 +144,8 @@ var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifi
 let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
 assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !dateTime(oct30).contains("PM"), dateTime(oct30))
 assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+assert(tr("%@ to %@ %%", approxDuration(1500), "80") == "~25 min jusqu'à 80 %")
+assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter to continue calibration")
 let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]

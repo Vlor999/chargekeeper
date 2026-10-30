@@ -211,14 +211,59 @@ extension ChargeState {
 }
 
 extension CalibrationPhase {
-    var label: String {
+    func label(limit: Int) -> String {
         switch self {
-        case .chargeFull: tr("1/5 Charging to 100%")
-        case .dischargeTo10: tr("2/5 Discharging to 10%")
-        case .rechargeFull: tr("3/5 Recharging to 100%")
-        case .hold: tr("4/5 Resting 1 h at 100%")
-        case .returnToLimit: tr("5/5 Back to the limit")
+        case .chargeFull: tr("Charge to %@ %%", number(100))
+        case .dischargeTo10: tr("Discharge to %@ %%", number(10))
+        case .rechargeFull: tr("Recharge to %@ %%", number(100))
+        case .hold: tr("Rest 1 h at %@ %%", number(100))
+        case .returnToLimit: tr("Back to %@ %%", number(Double(limit)))
         }
+    }
+}
+
+extension Status {
+    /// Time to reach `target` at the present battery current, as "~25 min".
+    func eta(_ target: Int) -> String? {
+        timeToTarget(percent: percent, target: target, capacity: battery?.maxCapacity, amperage: batteryAmperage, watts: batteryWatts)
+            .map(approxDuration)
+    }
+
+    /// Menu status line: the state, then what it is heading to.
+    var headline: (title: String, detail: String?) {
+        let r = runtime
+        let to = { (t: Int) in eta(t).map { tr("%@ to %@ %%", $0, number(Double(t))) } }
+        switch r.state {
+        case .pause: return (tr("Paused"), tr("%@ %% reached", number(Double(config.limit))))
+        case .charging: return (r.state.label, to(config.limit))
+        case .topup: return (r.state.label, to(100))
+        case .discharging where adapter: return (r.state.label, to(config.limit))
+        default: return (r.state.label, nil)
+        }
+    }
+
+    /// "Step 2/5 · Discharge to 10 % · ~1 h 10 min" while calibrating.
+    var calibrationLine: String? {
+        guard let p = runtime.calibration else { return nil }
+        let (n, of) = calibrationStep(p)
+        var parts = [tr("Step %d/%d", n, of), p.label(limit: config.limit)]
+        if !(calibrationNeedsAdapter(p) && !adapter) {
+            if p == .hold {
+                let left = holdRemaining(phaseStart: runtime.phaseStart, now: Date())
+                parts.append(tr("%@ min left", number((left / 60).rounded(.up))))
+            } else if let t = calibrationTarget(p, limit: config.limit), let e = eta(t) {
+                parts.append(e)
+            }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Capacity and health when the running calibration started.
+    var calibrationBaseline: String? {
+        guard runtime.calibration != nil, let b = runtime.calibrationBefore else { return nil }
+        let parts = [b.maxCapacity.map { tr("%@ mAh", number(Double($0))) }, b.health.map { tr("health %@ %%", number($0, decimals: 1)) }]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : tr("Before: %@", parts.joined(separator: " · "))
     }
 }
 
@@ -268,12 +313,22 @@ struct MenuView: View {
         HStack(alignment: .center) {
             Text("\(s.percent) %").font(.system(size: 34, weight: .semibold))
             VStack(alignment: .leading) {
-                Text(r.state.label).font(.headline)
+                let h = s.headline
+                Text("\(Text(h.title).font(.headline))\(Text(h.detail.map { " · " + $0 } ?? "").font(.subheadline).foregroundStyle(.secondary))")
                 Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", celsius(s.temperature)))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        if let p = r.calibration { Text(p.label).font(.caption).foregroundStyle(.orange) }
+        if let line = s.calibrationLine {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line).foregroundStyle(.orange)
+                if let b = s.calibrationBaseline { Text(b).foregroundStyle(.secondary) }
+                if calibrationNeedsAdapter(r.calibration) && !s.adapter {
+                    Label(tr("Plug in the adapter to continue calibration"), systemImage: "powerplug.fill").foregroundStyle(.red)
+                }
+            }
+            .font(.caption)
+        }
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
