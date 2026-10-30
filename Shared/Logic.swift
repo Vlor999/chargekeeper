@@ -189,24 +189,24 @@ let pastLimitMargin = 5
 
 /// Tracks macOS charging past the limit while the service holds or drains the battery: the gauge recalibration of
 /// macOS 26.4+ ("Your Mac will occasionally charge to 100 %"), or any other system override. Detected from the effect,
-/// since the cause is not readable without a private entitlement. Returns true when a new episode starts.
+/// since the cause is not readable without a private entitlement. Returns the held level when a new episode starts.
 /// The episode lasts until the level is back to the held level, the adapter is unplugged or the service changes mode.
 /// `inControl`: the service's own hold or discharge is in effect (keys present, writes succeeded); otherwise the charge
 /// may come from the service's own limitation, not from macOS.
 /// `settled`: same state and action as the previous tick. The reading is taken before the action is applied, so on the
 /// tick that changes mode the current still reflects the previous mode (charging before a new discharge).
 func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
-                      watts: Double, since: inout Date?, now: Date) -> Bool {
+                      watts: Double, since: inout Date?, now: Date) -> Int? {
     let held: Int? = switch a {
     case .hold(let level) where state == .pause: level
     case .discharge where state == .discharging: limit
     default: nil
     }
-    guard adapter, let held, percent > held else { since = nil; return false }
+    guard adapter, let held, percent > held else { since = nil; return nil }
     let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
-    guard since == nil, settled, inControl, percent >= held + pastLimitMargin, mA >= 50 else { return false }
+    guard since == nil, settled, inControl, percent >= held + pastLimitMargin, mA >= 50 else { return nil }
     since = now
-    return true
+    return held
 }
 
 /// Charge Limit of System Settings when it caps charging. Read only on Macs where the service never sets it (it charges

@@ -234,7 +234,7 @@ _ = tick(c, &r, 100, at: 4700); assert(r.calibration == .returnToLimit)
 // level is back, ended by unplugging or a mode that charges on purpose.
 var since: Date? = nil
 func past(_ a: Action, _ pct: Int, _ st: ChargeState = .pause, settled: Bool = true, inControl: Bool = true, ac: Bool = true, mA: Int? = 900, at s: Double = 0) -> Bool {
-    pastLimitEpisode(a, state: st, settled: settled, inControl: inControl, adapter: ac, limit: 80, percent: pct, amperage: mA, watts: 0, since: &since,
+    nil != pastLimitEpisode(a, state: st, settled: settled, inControl: inControl, adapter: ac, limit: 80, percent: pct, amperage: mA, watts: 0, since: &since,
                      now: Date(timeIntervalSince1970: s))
 }
 assert(!past(.hold(at: 80), 84) && since == nil)  // native limit rounding 81 → 85
@@ -242,14 +242,18 @@ assert(!past(.hold(at: 80), 85, mA: 0) && since == nil)  // above, not charging
 assert(past(.hold(at: 80), 85, at: 10) && since == Date(timeIntervalSince1970: 10))
 assert(!past(.hold(at: 80), 99, at: 20) && !past(.hold(at: 80), 100, mA: 0, at: 30) && since == Date(timeIntervalSince1970: 10))
 assert(!past(.hold(at: 80), 80) && since == nil)
+// The event carries the held level, above the limit when the hold started above it.
+assert(pastLimitEpisode(.hold(at: 90), state: .pause, settled: true, inControl: true, adapter: true, limit: 80, percent: 95, amperage: 900,
+                        watts: 0, since: &since, now: Date()) == 90)
+since = nil
 assert(past(.hold(at: 80), 90) && !past(.hold(at: 80), 92, ac: false) && since == nil)
 assert(!past(.charge(to: 100), 95, .topup) && !past(.hold(at: 100), 100, .calibration) && since == nil)
 assert(!past(.hold(at: 60), 70, .heatProtect) && since == nil)
 // Draining toward the limit while macOS charges; the current comes from the watts when the service does not report it.
-assert(pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: 10,
+assert(80 == pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: 10,
                         since: &since, now: Date()))
 since = nil
-assert(!pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: -10,
+assert(nil == pastLimitEpisode(.discharge, state: .discharging, settled: true, inControl: true, adapter: true, limit: 80, percent: 90, amperage: nil, watts: -10,
                          since: &since, now: Date()))
 // The service's own discharge or hold has no effect (no discharge key, failed SMC write): the charge is not blamed on macOS.
 assert(!past(.discharge, 90, .discharging, inControl: false) && !past(.hold(at: 70), 80, inControl: false) && since == nil)
@@ -262,15 +266,15 @@ assert(tick(pc, &pr, 78) == .charge(to: 80) && pr.state == .charging)
 pc.limit = 70
 let pa = tick(pc, &pr, 78)
 assert(pa == .discharge && pr.state == .discharging)
-assert(!pastLimitEpisode(pa, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
-assert(!pastLimitEpisode(pa, state: pr.state, settled: true, inControl: true, adapter: true, limit: 70, percent: 78, amperage: -2000, watts: 0, since: &since, now: Date()))
+assert(nil == pastLimitEpisode(pa, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
+assert(nil == pastLimitEpisode(pa, state: pr.state, settled: true, inControl: true, adapter: true, limit: 70, percent: 78, amperage: -2000, watts: 0, since: &since, now: Date()))
 assert(since == nil)
 // Same with dischargeTo(70): the service sets the limit and the discharge flag.
 pc.autoDischarge = false; pc.limit = 80; pr = Runtime()
 _ = tick(pc, &pr, 78)
 pc.limit = 70; pr.discharge = true
 assert(tick(pc, &pr, 78) == .discharge)
-assert(!pastLimitEpisode(.discharge, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
+assert(nil == pastLimitEpisode(.discharge, state: pr.state, settled: false, inControl: true, adapter: true, limit: 70, percent: 78, amperage: 2000, watts: 0, since: &since, now: Date()))
 
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause

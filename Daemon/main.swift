@@ -87,9 +87,9 @@ final class Daemon {
         }
         let settled = prev == s.runtime.state && lastAction == a
         lastAction = a
-        if pastLimitEpisode(a, state: s.runtime.state, settled: settled, inControl: hw.inControl, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent,
+        if let held = pastLimitEpisode(a, state: s.runtime.state, settled: settled, inControl: hw.inControl, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent,
                             amperage: rd.amperage, watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
-            record(HistoryEntry(event: .chargedPastLimit, value: s.config.limit))
+            record(HistoryEntry(event: .chargedPastLimit, value: held))
         }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, latch: &notices) {
             switch n {
