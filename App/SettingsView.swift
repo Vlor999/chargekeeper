@@ -190,15 +190,30 @@ struct SettingsPaneView: View {
 }
 
 extension TaskAction {
-    var label: String {
-        switch self {
-        case .setLimit: tr("Set charge limit")
-        case .calibrate: tr("Start Calibration")
-        case .topUp: tr("Charge to 100%")
-        case .pause: tr("Pause charging")
-        case .dischargeTo: tr("Discharge to")
-        case .lowPowerOn: tr("Turn on Low Power Mode")
-        case .lowPowerOff: tr("Turn off Low Power Mode")
+    var label: String { tr(title) }
+}
+
+extension HistoryEntry {
+    /// SF Symbol and tint of the entry; free text from an older service gets a neutral clock.
+    var symbol: (name: String, color: Color) {
+        let e = parsedHistory(self)
+        switch e.event {
+        case nil: return ("clock", .secondary)
+        case .calibrationStarted: return ("play.circle.fill", .orange)
+        case .calibrationStopped: return ("stop.circle.fill", .secondary)
+        case .calibrationEnded: return ("checkmark.circle.fill", .orange)
+        case .calibrationDone: return ("checkmark.seal.fill", .green)
+        case .calibrationPhase:
+            switch e.phase {
+            case .chargeFull?, .rechargeFull?: return ("battery.100percent.bolt", .orange)
+            case .dischargeTo10?: return ("battery.25percent", .orange)
+            case .hold?: return ("hourglass", .orange)
+            case .returnToLimit?, nil: return ("arrow.down.to.line", .orange)
+            }
+        case .taskRun: return ("calendar", .red)
+        case .taskSkipped: return ("calendar.badge.exclamationmark", .secondary)
+        case .limitChanged: return ("slider.horizontal.3", .blue)
+        case .heatProtect: return ("thermometer.high", .red)
         }
     }
 }
@@ -236,10 +251,13 @@ struct ScheduleView: View {
             }
             Section(tr("History")) {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
-                    HStack {
-                        Text(h.date, style: .date); Text(h.date, style: .time)
-                        Text(h.text).foregroundStyle(.secondary)
-                    }.font(.caption)
+                    HStack(alignment: .firstTextBaseline) {
+                        Image(systemName: h.symbol.name).foregroundStyle(h.symbol.color).frame(width: 18)
+                        Text(localizedHistory(h))
+                        Spacer()
+                        Text(h.date, format: .dateTime.day().month(.abbreviated).hour().minute())
+                            .foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
             }
         }

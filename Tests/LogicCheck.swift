@@ -121,6 +121,17 @@ var stored = done; stored.text = historyText(done)
 assert(try! JSONDecoder().decode(OldEntry.self, from: JSONEncoder().encode(stored)).text == historyText(done))
 assert(try! JSONDecoder().decode(HistoryEntry.self, from: JSONEncoder().encode(stored)) == stored)
 
+// History in French: locale numbers, and every event template has a translation.
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
+assert(localizedHistory(done) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
+assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
+let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
+               HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
+               HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
+    + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
+    + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
+for e in samples { assert(localizedHistory(e) != historyText(e), historyText(e)) }
+
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause
 assert(ledColor(c, r, adapter: true, percent: 80) == .green)

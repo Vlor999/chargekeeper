@@ -10,9 +10,22 @@ var appLanguage: String {
 }
 
 /// English is the source text; French comes from the table below. Placeholders follow String(format:).
-func tr(_ en: String, _ args: CVarArg...) -> String {
+func tr(_ en: String, _ args: CVarArg...) -> String { tr(en, args) }
+
+func tr(_ en: String, _ args: [CVarArg]) -> String {
     let s = appLanguage == "fr" ? (french[en] ?? en) : en
     return args.isEmpty ? s : String(format: s, arguments: args)
+}
+
+/// Number in the UI language ("82.8" in English, "82,8" in French), without grouping like the mAh values elsewhere.
+func number(_ v: Double, decimals: Int = 0) -> String {
+    v.formatted(.number.precision(.fractionLength(decimals)).grouping(.never).locale(Locale(identifier: appLanguage)))
+}
+
+/// History entry in the UI language. Units stay on the line of their number.
+func localizedHistory(_ e: HistoryEntry) -> String {
+    historyText(e, { tr($0, $1) }, { number($0, decimals: $1) })
+        .replacingOccurrences(of: #" (%|mAh|°C)"#, with: "\u{00A0}$1", options: .regularExpression)
 }
 
 private let french: [String: String] = [
@@ -156,4 +169,25 @@ private let french: [String: String] = [
     "Action": "Action",
     "Repeat": "Répétition",
     "Value: %d %%": "Valeur : %d %%",
+    // History
+    "Calibration started": "Calibration démarrée",
+    "Calibration stopped": "Calibration arrêtée",
+    "Calibration over: back at the limit": "Fin de la calibration : retour à la limite",
+    "Calibration: charging to 100 %": "Calibration : charge jusqu'à 100 %",
+    "Calibration: discharging to 10 %": "Calibration : décharge jusqu'à 10 %",
+    "Calibration: recharging to 100 %": "Calibration : recharge jusqu'à 100 %",
+    "Calibration: resting 1 h at 100 %": "Calibration : pause d'1 h à 100 %",
+    "Calibration: discharging back to the limit": "Calibration : décharge jusqu'à la limite",
+    "Calibration complete: %@": "Calibration terminée : %@",
+    "%@ → %@": "%@ → %@",
+    "%@ mAh": "%@ mAh",
+    "health %@ %%": "santé %@ %%",
+    "%@ cycles": "%@ cycles",
+    "%@ (%@ %%)": "%@ (%@ %%)",
+    "Scheduled task: %@": "Tâche planifiée : %@",
+    "Missed task run on wake: %@": "Tâche manquée exécutée au réveil : %@",
+    "Missed task skipped: %@": "Tâche manquée ignorée : %@",
+    "Charge limit set to %@ %%": "Limite de recharge réglée à %@ %%",
+    "Heat protection: charging paused": "Protection thermique : charge suspendue",
+    "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
 ]
