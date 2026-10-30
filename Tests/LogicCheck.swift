@@ -346,4 +346,22 @@ series = (0..<600).reduce([]) { s, i in addHealthSample(s, HealthSample(date: d(
                                                                         nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: true), calendar: cal) }
 assert(series.count == healthMaxSamples && series.last?.date == d("2026-01-01T00:00:00Z").addingTimeInterval(599 * 60))
 
+// Health range: starts 3 months or 1 year back.
+assert(healthRangeStart(.threeMonths, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2026-07-30T12:00:00Z"))
+assert(healthRangeStart(.year, now: d("2026-10-30T12:00:00Z"), calendar: cal) == d("2025-10-30T12:00:00Z"))
+
+// Health change: first to last point, cycles only when both are known; needs two points.
+let change = healthChange([hp("2026-07-01T12:00:00Z", 4260, cycles: 100), hp("2026-08-01T12:00:00Z"), hp("2026-10-01T12:00:00Z", 4200, cycles: 114)])!
+assert(abs(change.points - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92 && abs(change.nominalPoints! - -1.25) < 1e-9)
+assert(healthChange([hp("2026-07-01T12:00:00Z", cycles: nil), hp("2026-10-01T12:00:00Z")])?.cycles == nil)
+assert(healthChange([hp("2026-07-01T12:00:00Z")]) == nil)
+assert(healthSpan(days: 0) == (1, .days) && healthSpan(days: 59) == (59, .days) && healthSpan(days: 92) == (3, .months) && healthSpan(days: 365) == (1, .years) && healthSpan(days: 400) == (13, .months) && healthSpan(days: 800) == (2, .years))
+
+// Health chart strings in French.
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
+for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet: one point is recorded per day.", "Period",
+          "%d days", "1 day", "%d months", "%d years", "%@ points in %@", "no new cycle"] { assert(tr(k) != k, k) }
+assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois")
+UserDefaults.standard.register(defaults: [languageKey: "system"])
+
 print("logic ok")

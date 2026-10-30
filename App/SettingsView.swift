@@ -314,10 +314,12 @@ struct ScheduleView: View {
 
 struct BatteryView: View {
     @EnvironmentObject var m: AppModel
+    @State private var series: [HealthSample] = []
 
     var body: some View {
         Form {
             if let b = m.status?.battery {
+                HealthChartSection(series: series)
                 Section(tr("Battery health")) {
                     row(tr("Health"), percent(b.health))
                     row(tr("Health (nominal)"), percent(b.nominalHealth))
@@ -345,6 +347,8 @@ struct BatteryView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { series = m.healthHistory() }
+        .onChange(of: m.status?.lastCalibration?.end) { series = m.healthHistory() }
     }
 
     func row(_ label: String, _ value: String) -> some View {

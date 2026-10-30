@@ -265,6 +265,44 @@ func addHealthSample(_ series: [HealthSample], _ p: HealthSample, calendar cal: 
     return Array(kept.suffix(healthMaxSamples))
 }
 
+enum HealthRange: String, CaseIterable { case threeMonths, year, all }
+
+/// First date shown by the range.
+func healthRangeStart(_ r: HealthRange, now: Date, calendar cal: Calendar = .current) -> Date {
+    switch r {
+    case .threeMonths: return cal.date(byAdding: .month, value: -3, to: now) ?? now
+    case .year: return cal.date(byAdding: .year, value: -1, to: now) ?? now
+    case .all: return .distantPast
+    }
+}
+
+/// Change between the first and last points of the period. Health in percentage points.
+struct HealthChange: Equatable {
+    var points: Double
+    var nominalPoints: Double?
+    var cycles: Int?
+    var days: Int
+}
+
+func healthChange(_ series: [HealthSample]) -> HealthChange? {
+    guard series.count >= 2, let a = series.first, let b = series.last else { return nil }
+    let nominal = b.nominalHealth.flatMap { y in a.nominalHealth.map { y - $0 } }
+    let cycles = b.cycleCount.flatMap { y in a.cycleCount.map { y - $0 } }
+    return HealthChange(points: b.health - a.health, nominalPoints: nominal, cycles: cycles,
+                        days: Int((b.date.timeIntervalSince(a.date) / 86400).rounded()))
+}
+
+enum SpanUnit: Equatable { case days, months, years }
+
+/// Period length as shown: days under 60 days, months under 2 years (12 months reads 1 year), whole years beyond. At least 1.
+func healthSpan(days: Int) -> (value: Int, unit: SpanUnit) {
+    if days < 60 { return (max(days, 1), .days) }
+    let months = Int((Double(days) / 30.44).rounded())
+    if months == 12 { return (1, .years) }
+    if days < 730 { return (months, .months) }
+    return (Int((Double(days) / 365.25).rounded()), .years)
+}
+
 /// Notification the service posts on a state change.
 enum ServiceNotice: Equatable { case heatProtect, limitReached }
 
