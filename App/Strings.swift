@@ -17,9 +17,12 @@ func tr(_ en: String, _ args: [CVarArg]) -> String {
     return args.isEmpty ? s : String(format: s, arguments: args)
 }
 
-/// Locale for dates and numbers: the language chosen in Settings, or the Mac's own locale for "system".
-var appLocale: Locale {
-    (UserDefaults.standard.string(forKey: languageKey) ?? "system") == "system" ? .current : Locale(identifier: appLanguage)
+/// Locale for dates and numbers, always in the language of the text: the Mac's preferred language with its region when it
+/// is that language ("en-GB" dates for English), the bare language otherwise (English text on a German Mac).
+var appLocale: Locale { uiLocale(language: appLanguage, preferred: Locale.preferredLanguages.first) }
+
+func uiLocale(language: String, preferred: String?) -> Locale {
+    Locale(identifier: preferred.map { $0.hasPrefix(language) ? $0 : language } ?? language)
 }
 
 /// Number in the UI language ("82.8" in English, "82,8" in French), without grouping like the mAh values elsewhere.

@@ -138,7 +138,13 @@ assert(try! JSONDecoder().decode(HistoryEntry.self, from: JSONEncoder().encode(s
 UserDefaults.standard.register(defaults: [languageKey: "fr"])
 assert(localizedHistory(done) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
 assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
-// App language drives decimals and dates, not the Mac's locale.
+// Decimals and dates follow the language of the text, in "system" mode too; the region is kept when the language matches.
+assert(uiLocale(language: "en", preferred: "fr-FR").language.languageCode?.identifier == "en")
+assert(uiLocale(language: "fr", preferred: "fr-CA").region?.identifier == "CA")
+assert(uiLocale(language: "en", preferred: nil).identifier == "en")
+UserDefaults.standard.register(defaults: [languageKey: "system"])
+assert(appLocale.language.languageCode?.identifier == appLanguage)
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
 assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--" && watts(13.4) == "13,4 W")
 var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifier: "Europe/Paris")!
 let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
