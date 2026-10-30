@@ -127,9 +127,11 @@ final class Daemon {
         case .dischargeTo(let n): s.config.limit = clamp(n, 20, 100); s.runtime.discharge = true
         case .topUp(let on): s.runtime.topUp = on
         case .calibrate(let on):
+            // A restart while running keeps the original baseline, so the report covers the whole calibration.
+            let running = s.runtime.calibration != nil ? s.runtime.calibrationBefore : nil
             s.runtime.calibration = on ? .chargeFull : nil
             s.runtime.phaseStart = Date()
-            s.runtime.calibrationBefore = on ? snapshot(reading) : nil
+            s.runtime.calibrationBefore = on ? running ?? snapshot(reading) : nil
             record("calibration \(on ? "started" : "stopped")")
         case .pause: s.config.limit = clamp(reading.percent, 20, 100); s.runtime.discharge = false
         case .led(let c): s.runtime.ledOverride = c
