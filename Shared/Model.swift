@@ -6,6 +6,8 @@ let socketPath = "/var/run/jauge.sock"
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
 /// Posted when heat protection pauses charging, once per heat episode.
 let heatProtectNotification = "com.vlor999.jauge.heatProtect"
+/// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
+let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
 /// Posted when the battery level reaches the charge limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
 
@@ -14,7 +16,7 @@ enum ChargeState: String, Codable {
     case topup = "FullCharge", heatProtect = "HeatProtect", calibration = "Calibration", exit = "Exit"
 }
 
-enum CalibrationPhase: String, Codable {
+enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
 }
 
@@ -41,7 +43,7 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 
 enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
-    case taskRun, taskSkipped, limitChanged, heatProtect
+    case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
@@ -167,6 +169,7 @@ struct Status: Codable {
     var adapterRatedWatts: Int?
     var systemWatts: Double
     var batteryWatts: Double  // >0 charging, <0 discharging
+    var batteryAmperage: Int?  // mA, >0 charging; nil from an older service
     var ports: [PortPower]?  // USB-C power out, included in systemWatts; nil from an older service
     var nativeLimit: Bool
     var sleepDisabled: Bool

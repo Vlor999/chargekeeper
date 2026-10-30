@@ -22,6 +22,7 @@ final class Daemon {
     var lastScheduleCheck = Date()
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
+    var adapterNotices = AdapterNoticeState()
 
     init() {
         s = Daemon.load()
@@ -76,6 +77,11 @@ final class Daemon {
         }
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
         if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
+        switch adapterNotice(phase: s.runtime.calibration, adapter: rd.adapter, now: now, &adapterNotices) {
+        case .first: record(HistoryEntry(event: .calibrationNeedsAdapter, phase: s.runtime.calibration)); notify_post(calibrationNeedsAdapterNotification)
+        case .reminder: notify_post(calibrationNeedsAdapterNotification)
+        case .none: break
+        }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, latch: &notices) {
             switch n {
             case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(heatProtectNotification)
@@ -162,7 +168,7 @@ final class Daemon {
         if case .status = cmd {} else { mutate(cmd); tick() }
         return Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
-                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, ports: reading.ports, nativeLimit: hw.native,
+                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration)
     }

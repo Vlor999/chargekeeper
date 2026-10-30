@@ -44,7 +44,14 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
             if pct <= 10 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
             return .discharge
         case .hold:
-            if i.now.timeIntervalSince(r.phaseStart ?? i.now) >= calibrationHold { advance(&r, to: .returnToLimit, i.now) }
+            // The rest only counts on the adapter: unplugged, it starts over on replug, or recharges first if the level fell.
+            if !i.adapter {
+                if pct < 100 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
+                r.phaseStart = nil  // not now: the saved state would change every tick
+            } else {
+                if r.phaseStart == nil { r.phaseStart = i.now }
+                if i.now.timeIntervalSince(r.phaseStart!) >= calibrationHold { advance(&r, to: .returnToLimit, i.now) }
+            }
             return hold(100, &r)
         case .returnToLimit:
             if pct > c.limit { return .discharge }
@@ -101,6 +108,79 @@ private func advance(_ r: inout Runtime, to p: CalibrationPhase, _ now: Date) {
 /// The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the calibration result is final.
 func calibrationFinished(from: CalibrationPhase?, to: CalibrationPhase?) -> Bool {
     from == .hold && to == .returnToLimit
+}
+
+/// Calibration phases that only progress on the adapter: unplugged, charging stalls and the rest is not a rest.
+func calibrationNeedsAdapter(_ p: CalibrationPhase?) -> Bool {
+    p == .chargeFull || p == .rechargeFull || p == .hold
+}
+
+let adapterNoticeGap: TimeInterval = 10 * 60
+let adapterReminderAfter: TimeInterval = 60 * 60
+
+/// Service memory of the "calibration needs the adapter" notices. In memory only: after a restart the first tick that finds
+/// the adapter missing starts a new episode, since the adapter state before the restart is unknown.
+struct AdapterNoticeState: Equatable {
+    var waitingSince: Date?  // start of the current wait for the adapter
+    var lastNotice: Date?
+    var reminded = false
+}
+
+enum AdapterNotice: Equatable { case none, first, reminder }
+
+/// One notice when a wait for the adapter starts (unplugged in a phase that needs it, or such a phase reached unplugged),
+/// at most one per 10 min across short unplugs, and one reminder when the wait reaches 1 h.
+/// Moving between two such phases while unplugged (rest back to recharge) is the same wait.
+func adapterNotice(phase: CalibrationPhase?, adapter: Bool, now: Date, _ s: inout AdapterNoticeState) -> AdapterNotice {
+    guard calibrationNeedsAdapter(phase) && !adapter else { s.waitingSince = nil; s.reminded = false; return .none }
+    guard let since = s.waitingSince else {
+        s.waitingSince = now
+        if let last = s.lastNotice, now.timeIntervalSince(last) < adapterNoticeGap { return .none }
+        s.lastNotice = now
+        return .first
+    }
+    guard !s.reminded, now.timeIntervalSince(since) >= adapterReminderAfter else { return .none }
+    s.reminded = true
+    s.lastNotice = now
+    return .reminder
+}
+
+/// Step of the phase in the calibration, from 1, and the step count.
+func calibrationStep(_ p: CalibrationPhase) -> (step: Int, of: Int) {
+    let all = CalibrationPhase.allCases
+    return (all.firstIndex(of: p)! + 1, all.count)
+}
+
+/// Charge level the phase is heading to; nil for the timed rest.
+func calibrationTarget(_ p: CalibrationPhase, limit: Int) -> Int? {
+    switch p {
+    case .chargeFull, .rechargeFull: 100
+    case .dischargeTo10: 10
+    case .hold: nil
+    case .returnToLimit: limit
+    }
+}
+
+/// Time left in the 1 h rest at 100 %.
+func holdRemaining(phaseStart: Date?, now: Date) -> TimeInterval {
+    max(0, calibrationHold - now.timeIntervalSince(phaseStart ?? now))
+}
+
+/// Pack voltage assumed when the service does not report the battery current (3-cell Li-ion, nominal).
+let nominalPackVolts = 11.4
+
+/// Time to go from `percent` to `target` at the present battery current, or nil when the estimate is not worth showing:
+/// target reached, no capacity, current near zero or going the wrong way, or more than 24 h.
+/// `amperage` in mA (>0 charging); without it the current comes from `watts` at the nominal pack voltage.
+// ponytail: linear at the present current. Charging tapers above ~80 %, so the time to 100 % comes out short;
+// the menu refreshes every 2 s while open, so the figure corrects itself as the current falls.
+func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
+    guard let capacity, capacity > 0, target != percent else { return nil }
+    let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
+    let toGo = Double(target - percent) / 100 * Double(capacity)  // mAh, signed like the current
+    guard abs(mA) >= 50, (toGo > 0) == (mA > 0) else { return nil }
+    let t = toGo / mA * 3600
+    return t <= 24 * 3600 ? max(t, 60) : nil
 }
 
 /// What the app does with the service's last calibration, given the last result it handled.
@@ -207,6 +287,7 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
     case .limitChanged:
         guard let v = e.value else { return e.text }
         return t("Charge limit set to %@ %%", [int(v)])
+    case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])

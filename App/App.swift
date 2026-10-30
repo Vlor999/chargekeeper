@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
-    private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0
+    private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
@@ -55,6 +55,7 @@ final class AppModel: ObservableObject {
         notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
         notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
+        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -105,7 +106,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Heat and limit banners follow the service's signal live: a signal sent while the app was not running is not replayed.
+    /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
     private func notice(_ kind: NoticeKind) {
         guard kind.enabled else { return }
         run(.status)
@@ -118,6 +119,11 @@ final class AppModel: ObservableObject {
         case .limit:
             n.title = tr("Charge limit reached")
             n.body = tr("Battery at %@ %%. Charging paused at the limit.", number(Double(s.percent)))
+        case .adapter:
+            // Plugged back in before the signal was handled: nothing to ask.
+            guard calibrationNeedsAdapter(s.runtime.calibration) && !s.adapter else { return }
+            n.title = tr("Calibration paused")
+            n.body = tr("Plug in the adapter to continue calibration.")
         case .calibration: return
         }
         deliver(kind.rawValue, n) { _ in }
@@ -147,7 +153,7 @@ final class AppModel: ObservableObject {
         let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %@ → %@ mAh", number(Double(b)), number(Double($0))) } },
                      c.before.health.flatMap { b in c.after.health.map { tr("Health: %@ → %@ %%", number(b, decimals: 1), number($0, decimals: 1)) } }]
             .compactMap { $0 }
-        n.body = lines.isEmpty ? tr("Finished %@", c.end.formatted(date: .abbreviated, time: .shortened)) : lines.joined(separator: "\n")
+        n.body = lines.isEmpty ? tr("Finished %@", dateTime(c.end)) : lines.joined(separator: "\n")
         return n
     }
 
@@ -160,7 +166,7 @@ final class AppModel: ObservableObject {
 
 /// Banners the user can turn off in Settings > General.
 enum NoticeKind: String, CaseIterable, Identifiable {
-    case calibration, heat, limit
+    case calibration, adapter, heat, limit
 
     var id: Self { self }
     var key: String { "notify." + rawValue }
@@ -170,6 +176,7 @@ enum NoticeKind: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .calibration: tr("Calibration complete")
+        case .adapter: tr("Calibration needs the adapter")
         case .heat: tr("Heat protection paused charging")
         case .limit: tr("Charge limit reached")
         }
@@ -211,14 +218,59 @@ extension ChargeState {
 }
 
 extension CalibrationPhase {
-    var label: String {
+    func label(limit: Int) -> String {
         switch self {
-        case .chargeFull: tr("1/5 Charging to 100%")
-        case .dischargeTo10: tr("2/5 Discharging to 10%")
-        case .rechargeFull: tr("3/5 Recharging to 100%")
-        case .hold: tr("4/5 Resting 1 h at 100%")
-        case .returnToLimit: tr("5/5 Back to the limit")
+        case .chargeFull: tr("Charge to %@ %%", number(100))
+        case .dischargeTo10: tr("Discharge to %@ %%", number(10))
+        case .rechargeFull: tr("Recharge to %@ %%", number(100))
+        case .hold: tr("Rest 1 h at %@ %%", number(100))
+        case .returnToLimit: tr("Back to %@ %%", number(Double(limit)))
         }
+    }
+}
+
+extension Status {
+    /// Time to reach `target` at the present battery current, as "~25 min".
+    func eta(_ target: Int) -> String? {
+        timeToTarget(percent: percent, target: target, capacity: battery?.maxCapacity, amperage: batteryAmperage, watts: batteryWatts)
+            .map(approxDuration)
+    }
+
+    /// Menu status line: the state, then what it is heading to.
+    var headline: (title: String, detail: String?) {
+        let r = runtime
+        let to = { (t: Int) in eta(t).map { tr("%@ to %@ %%", $0, number(Double(t))) } }
+        switch r.state {
+        case .pause: return (tr("Paused"), tr("%@ %% reached", number(Double(config.limit))))
+        case .charging: return (r.state.label, to(config.limit))
+        case .topup: return (r.state.label, to(100))
+        case .discharging where adapter: return (r.state.label, to(config.limit))
+        default: return (r.state.label, nil)
+        }
+    }
+
+    /// "Step 2/5 · Discharge to 10 % · ~1 h 10 min" while calibrating.
+    var calibrationLine: String? {
+        guard let p = runtime.calibration else { return nil }
+        let (n, of) = calibrationStep(p)
+        var parts = [tr("Step %d/%d", n, of), p.label(limit: config.limit)]
+        if !(calibrationNeedsAdapter(p) && !adapter) {
+            if p == .hold {
+                let left = holdRemaining(phaseStart: runtime.phaseStart, now: Date())
+                parts.append(tr("%@ min left", number((left / 60).rounded(.up))))
+            } else if let t = calibrationTarget(p, limit: config.limit), let e = eta(t) {
+                parts.append(e)
+            }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Capacity and health when the running calibration started.
+    var calibrationBaseline: String? {
+        guard runtime.calibration != nil, let b = runtime.calibrationBefore else { return nil }
+        let parts = [b.maxCapacity.map { tr("%@ mAh", number(Double($0))) }, b.health.map { tr("health %@ %%", number($0, decimals: 1)) }]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : tr("Before: %@", parts.joined(separator: " · "))
     }
 }
 
@@ -268,12 +320,22 @@ struct MenuView: View {
         HStack(alignment: .center) {
             Text("\(s.percent) %").font(.system(size: 34, weight: .semibold))
             VStack(alignment: .leading) {
-                Text(r.state.label).font(.headline)
-                Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", s.temperature.map { String(format: "%.1f °C", $0) } ?? "--"))
+                let h = s.headline
+                Text("\(Text(h.title).font(.headline))\(Text(h.detail.map { " · " + $0 } ?? "").font(.subheadline).foregroundStyle(.secondary))")
+                Text(tr("Hardware %@ · %@", s.hardwarePercent.map { "\($0) %" } ?? "--", celsius(s.temperature)))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        if let p = r.calibration { Text(p.label).font(.caption).foregroundStyle(.orange) }
+        if let line = s.calibrationLine {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line).foregroundStyle(.orange)
+                if let b = s.calibrationBaseline { Text(b).foregroundStyle(.secondary) }
+                if calibrationNeedsAdapter(r.calibration) && !s.adapter {
+                    Label(tr("Plug in the adapter to continue calibration"), systemImage: "powerplug.fill").foregroundStyle(.red)
+                }
+            }
+            .font(.caption)
+        }
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -327,6 +389,6 @@ struct UpdateBanner: View {
 extension View {
     /// Rebuilds the view tree when the language changes and formats dates in that language.
     func localized(_ language: String) -> some View {
-        id(language).environment(\.locale, Locale(identifier: appLanguage))
+        id(language).environment(\.locale, appLocale)
     }
 }

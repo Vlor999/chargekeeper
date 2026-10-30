@@ -149,7 +149,25 @@ assert(try! JSONDecoder().decode(HistoryEntry.self, from: JSONEncoder().encode(s
 UserDefaults.standard.register(defaults: [languageKey: "fr"])
 assert(localizedHistory(done) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
 assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
-let samples = [done, HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
+// Decimals and dates follow the language of the text, in "system" mode too; the region is kept when the language matches.
+assert(uiLocale(language: "en", preferred: "fr-FR").language.languageCode?.identifier == "en")
+assert(uiLocale(language: "fr", preferred: "fr-CA").region?.identifier == "CA")
+assert(uiLocale(language: "en", preferred: nil).identifier == "en")
+UserDefaults.standard.register(defaults: [languageKey: "system"])
+assert(appLocale.language.languageCode?.identifier == appLanguage)
+UserDefaults.standard.register(defaults: [languageKey: "fr"])
+assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--" && watts(13.4) == "13,4 W")
+var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifier: "Europe/Paris")!
+let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
+assert(dateTime(oct30).contains("oct.") && dateTime(oct30).contains("2026") && !dateTime(oct30).contains("PM"), dateTime(oct30))
+assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+assert(tr("%@ to %@ %%", approxDuration(1500), "80") == "~25 min jusqu'à 80 %")
+assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter to continue calibration")
+// Menu and notification strings have their French text.
+assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
+assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
+assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
+let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
@@ -162,6 +180,65 @@ templates.formUnion(["Heat protection", "Charge limit reached", "Calibration com
                      "Charging paused: battery at %@ °C (max %@ °C).", "Battery at %@ %%. Charging paused at the limit.",
                      "Capacity: %@ → %@ mAh", "Health: %@ → %@ %%", "Finished %@"])
 for k in templates { assert(french[k] != nil, "no French for \(k)") }
+
+// Time to target: from the current and the capacity; nil when reached, idle, going the wrong way or over 24 h.
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 2000, watts: 0) == 1800)
+assert(timeToTarget(percent: 90, target: 80, capacity: 5000, amperage: -1000, watts: 0) == 1800)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: nil, watts: 22.8) == 1800)  // 2000 mA at 11.4 V
+assert(timeToTarget(percent: 80, target: 80, capacity: 5000, amperage: 2000, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 20, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: -2000, watts: 0) == nil)
+assert(timeToTarget(percent: 60, target: 80, capacity: nil, amperage: 2000, watts: 0) == nil)
+assert(timeToTarget(percent: 10, target: 100, capacity: 5000, amperage: 60, watts: 0) == nil)
+assert(timeToTarget(percent: 79, target: 80, capacity: 1000, amperage: 5000, watts: 0) == 60)
+
+// Calibration progress: 5 steps in order, a target per phase except the timed rest, rest time left.
+assert(calibrationStep(.chargeFull) == (1, 5) && calibrationStep(.dischargeTo10) == (2, 5) && calibrationStep(.returnToLimit) == (5, 5))
+assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.returnToLimit, limit: 80) == 80 && calibrationTarget(.hold, limit: 80) == nil)
+assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 1500)) == 2100)
+assert(holdRemaining(phaseStart: Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 5000)) == 0)
+
+// Adapter needed: charging and rest phases only.
+assert(calibrationNeedsAdapter(.hold) && !calibrationNeedsAdapter(.dischargeTo10) && !calibrationNeedsAdapter(nil))
+
+// Adapter notice: once per wait, also on the first tick after a service restart; same wait across rest -> recharge;
+// at most one per 10 min across short unplugs; one reminder after 1 h of waiting.
+func at(_ t: TimeInterval) -> Date { Date(timeIntervalSince1970: t) }
+var an = AdapterNoticeState()
+assert(adapterNotice(phase: .hold, adapter: false, now: at(0), &an) == .first)  // fresh state = restart while unplugged
+assert(adapterNotice(phase: .hold, adapter: false, now: at(5), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(10), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: true, now: at(60), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(120), &an) == .none)  // within 10 min
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(3000), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(3720), &an) == .reminder)
+assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(9000), &an) == .none)
+assert(adapterNotice(phase: .rechargeFull, adapter: true, now: at(9100), &an) == .none)
+assert(adapterNotice(phase: .chargeFull, adapter: false, now: at(9200), &an) == .first)
+assert(adapterNotice(phase: .dischargeTo10, adapter: false, now: at(20000), &an) == .none)
+assert(adapterNotice(phase: nil, adapter: false, now: at(30000), &an) == .none)
+
+// Calibration rest: only counts on the adapter. Unplugged at 100 % it restarts on replug; below 100 % it recharges first.
+r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)
+assert(tick(c, &r, 100, at: 1800) == .hold(at: 100))
+_ = tick(c, &r, 100, ac: false, at: 3000)
+_ = tick(c, &r, 100, ac: false, at: 4000); assert(r.calibration == .hold)
+assert(!calibrationFinished(from: .hold, to: r.calibration))
+_ = tick(c, &r, 100, at: 7000); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 10500); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 10700); assert(r.calibration == .returnToLimit)
+r = Runtime(); r.calibration = .hold; r.phaseStart = Date(timeIntervalSince1970: 0)
+assert(tick(c, &r, 99, ac: false, at: 3700) == .charge(to: 100) && r.calibration == .rechargeFull)
+assert(tick(c, &r, 99, at: 3800) == .charge(to: 100))
+_ = tick(c, &r, 100, at: 3900); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 7400); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 7500); assert(r.calibration == .returnToLimit)
+
+// Calibration rest reloaded without a start (unplugged before a restart): the hour starts on the adapter.
+r = Runtime(); r.calibration = .hold
+_ = tick(c, &r, 100, at: 1000); assert(r.calibration == .hold && r.phaseStart == Date(timeIntervalSince1970: 1000))
+_ = tick(c, &r, 100, at: 4500); assert(r.calibration == .hold)
+_ = tick(c, &r, 100, at: 4700); assert(r.calibration == .returnToLimit)
 
 // LED.
 c.led = .indicate; r = Runtime(); r.state = .pause

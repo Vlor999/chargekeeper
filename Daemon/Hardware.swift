@@ -11,6 +11,7 @@ struct Reading {
     var adapterRatedWatts: Int?
     var systemWatts = 0.0
     var batteryWatts = 0.0
+    var amperage: Int?  // mA, >0 charging
     var ports: [PortPower] = []
     var rawMaxCapacity: Int?  // mAh
     var nominalCapacity: Int?
@@ -46,6 +47,7 @@ func readBattery() -> Reading? {
     let amps = Double(Int64(truncatingIfNeeded: (p["Amperage"] as? NSNumber)?.int64Value ?? 0))
     let volts = Double(p["Voltage"] as? Int ?? 0)
     r.batteryWatts = amps * volts / 1e6
+    r.amperage = p["Amperage"] == nil ? nil : Int(amps)
     let tele = p["PowerTelemetryData"] as? [String: Any] ?? [:]
     r.adapterWatts = r.adapter ? Double(tele["SystemPowerIn"] as? Int ?? 0) / 1000 : 0
     r.adapterRatedWatts = (p["AdapterDetails"] as? [String: Any])?["Watts"] as? Int

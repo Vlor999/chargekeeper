@@ -121,7 +121,7 @@ struct SettingsPaneView: View {
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
-                        Text(u.lastUpdateCheckDate.map { tr("Last check: %@", $0.formatted(date: .abbreviated, time: .shortened)) } ?? tr("Never checked"))
+                        Text(u.lastUpdateCheckDate.map { tr("Last check: %@", dateTime($0)) } ?? tr("Never checked"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -241,6 +241,7 @@ extension HistoryEntry {
         case .taskSkipped: return ("calendar.badge.exclamationmark", .secondary)
         case .limitChanged: return ("slider.horizontal.3", .blue)
         case .heatProtect: return ("thermometer.high", .red)
+        case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
         }
     }
 }
@@ -313,14 +314,14 @@ struct BatteryView: View {
             }
             if let c = m.status?.lastCalibration {
                 Section(tr("Last calibration")) {
-                    row(tr("Date"), c.end.formatted(date: .abbreviated, time: .shortened))
+                    row(tr("Date"), dateTime(c.end))
                     row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
                     row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
                     row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
                     row(tr("Health (nominal)"), "\(percent(c.before.nominalHealth)) → \(percent(c.after.nominalHealth))")
                     row(tr("Cycle count"), "\(c.before.cycleCount.map(String.init) ?? "--") → \(c.after.cycleCount.map(String.init) ?? "--")")
                     row(tr("Design capacity"), mAh(c.after.designCapacity))
-                    row(tr("Temperature"), c.after.temperature.map { String(format: "%.1f °C", $0) } ?? "--")
+                    row(tr("Temperature"), celsius(c.after.temperature))
                 }
             }
             if m.status?.battery == nil && m.status?.lastCalibration == nil {
@@ -336,7 +337,7 @@ struct BatteryView: View {
     }
 
     func mAh(_ v: Int?) -> String { v.map { "\($0) mAh" } ?? "--" }
-    func percent(_ v: Double?) -> String { v.map { String(format: "%.1f %%", $0) } ?? "--" }
+    func percent(_ v: Double?) -> String { v.map { number($0, decimals: 1) + " %" } ?? "--" }
     func duration(_ s: TimeInterval) -> String { tr("%d h %02d min", Int(s) / 3600, Int(s) % 3600 / 60) }
 }
 
