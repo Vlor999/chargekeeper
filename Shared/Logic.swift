@@ -296,16 +296,14 @@ func healthRangeStart(_ r: HealthRange, now: Date, calendar cal: Calendar = .cur
 /// Change between the first and last points of the period. Health in percentage points.
 struct HealthChange: Equatable {
     var points: Double
-    var nominalPoints: Double?
     var cycles: Int?
     var days: Int
 }
 
 func healthChange(_ series: [HealthSample]) -> HealthChange? {
     guard series.count >= 2, let a = series.first, let b = series.last else { return nil }
-    let nominal = b.nominalHealth.flatMap { y in a.nominalHealth.map { y - $0 } }
     let cycles = b.cycleCount.flatMap { y in a.cycleCount.map { y - $0 } }
-    return HealthChange(points: b.health - a.health, nominalPoints: nominal, cycles: cycles,
+    return HealthChange(points: b.health - a.health, cycles: cycles,
                         days: Int((b.date.timeIntervalSince(a.date) / 86400).rounded()))
 }
 

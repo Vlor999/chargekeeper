@@ -394,7 +394,7 @@ assert(healthRangeStart(.year, now: d("2026-10-30T12:00:00Z"), calendar: cal) ==
 
 // Health change: first to last point, cycles only when both are known; needs two points.
 let change = healthChange([hp("2026-07-01T12:00:00Z", 4260, cycles: 100), hp("2026-08-01T12:00:00Z"), hp("2026-10-01T12:00:00Z", 4200, cycles: 114)])!
-assert(abs(change.points - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92 && abs(change.nominalPoints! - -1.25) < 1e-9)
+assert(abs(change.points - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92)
 assert(healthChange([hp("2026-07-01T12:00:00Z", cycles: nil), hp("2026-10-01T12:00:00Z")])?.cycles == nil)
 assert(healthChange([hp("2026-07-01T12:00:00Z")]) == nil)
 assert(healthSpan(days: 0) == (1, .days) && healthSpan(days: 59) == (59, .days) && healthSpan(days: 92) == (3, .months) && healthSpan(days: 365) == (1, .years) && healthSpan(days: 400) == (13, .months) && healthSpan(days: 800) == (2, .years))

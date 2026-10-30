@@ -10,6 +10,9 @@ struct HealthChartSection: View {
     private static let raw = Color.viz(light: 0x2a78d6, dark: 0x3987e5)
     private static let nominal = Color.viz(light: 0xeb6834, dark: 0xd95926)
     private static let surface = Color(nsColor: .controlBackgroundColor)
+    private static let line = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+    /// Nominal health is dashed so the two lines differ by more than color.
+    private static let dashed = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4])
 
     var body: some View {
         let all = series ?? []
@@ -28,12 +31,15 @@ struct HealthChartSection: View {
                 Text(tr("Not enough data yet: one point is recorded per day."))
                     .font(.caption).foregroundStyle(.secondary)
             } else {
+                let text = healthChange(shown).map(summary)
                 VStack(alignment: .leading, spacing: 8) {
                     legend(nominal: shown.contains { $0.nominalCapacity != nil }, calibrations: shown.contains { $0.calibration == true })
+                    // One accessibility element for the whole chart: hundreds of marks are not navigable one by one.
                     chart(shown)
-                    if let c = healthChange(shown) {
-                        Text(summary(c)).font(.caption).foregroundStyle(.secondary)
-                    }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(tr("Health over time") + ", " + range.label)
+                        .accessibilityValue(text ?? "")
+                    if let text { Text(text).font(.caption).foregroundStyle(.secondary) }
                 }
             }
         }
@@ -42,29 +48,26 @@ struct HealthChartSection: View {
     func chart(_ shown: [HealthSample]) -> some View {
         let focus = hovered.flatMap { h in shown.min { abs($0.date.timeIntervalSince(h)) < abs($1.date.timeIntervalSince(h)) } }
         return Chart {
-            ForEach(shown, id: \.date) { s in
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, s in
                 LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health), series: .value("", "raw"))
                     .foregroundStyle(Self.raw)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    .accessibilityLabel(day(s.date))
-                    .accessibilityValue(tr("Health") + " " + percent(s.health))
+                    .lineStyle(Self.line)
+                    .accessibilityHidden(true)
                 if let n = s.nominalHealth {
                     LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health (nominal)"), n), series: .value("", "nominal"))
                         .foregroundStyle(Self.nominal)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                        .accessibilityLabel(day(s.date))
-                        .accessibilityValue(tr("Health (nominal)") + " " + percent(n))
+                        .lineStyle(Self.dashed)
+                        .accessibilityHidden(true)
                 }
             }
             // Calibration results: a dot on the health line, ringed with the surface so it stays legible on the line.
-            ForEach(shown.filter { $0.calibration == true }, id: \.date) { s in
+            ForEach(Array(shown.filter { $0.calibration == true }.enumerated()), id: \.offset) { _, s in
                 PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
                     .symbolSize(160).foregroundStyle(Self.surface)
                     .accessibilityHidden(true)
                 PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
                     .symbolSize(64).foregroundStyle(Self.raw)
-                    .accessibilityLabel(tr("Calibration") + ", " + day(s.date))
-                    .accessibilityValue(percent(s.health))
+                    .accessibilityHidden(true)
             }
             if let f = focus {
                 RuleMark(x: .value(tr("Date"), f.date))
@@ -96,7 +99,7 @@ struct HealthChartSection: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(day(s.date)).font(.caption.weight(.semibold))
             key(Self.raw, tr("Health") + " " + percent(s.health))
-            if let n = s.nominalHealth { key(Self.nominal, tr("Health (nominal)") + " " + percent(n)) }
+            if let n = s.nominalHealth { key(Self.nominal, tr("Health (nominal)") + " " + percent(n), dashed: true) }
             if let c = s.cycleCount { Text(tr("Cycle count") + " " + String(c)).font(.caption).foregroundStyle(.secondary) }
             if s.calibration == true { Text(tr("Calibration")).font(.caption).foregroundStyle(.secondary) }
         }
@@ -107,7 +110,7 @@ struct HealthChartSection: View {
     func legend(nominal: Bool, calibrations: Bool) -> some View {
         HStack(spacing: 14) {
             key(Self.raw, tr("Health"))
-            if nominal { key(Self.nominal, tr("Health (nominal)")) }
+            if nominal { key(Self.nominal, tr("Health (nominal)"), dashed: true) }
             if calibrations {
                 HStack(spacing: 5) {
                     Circle().fill(Self.raw).frame(width: 8, height: 8).padding(2).background(Circle().fill(Self.surface))
@@ -120,9 +123,11 @@ struct HealthChartSection: View {
     }
 
     /// Short line key beside text in text ink: identity comes from the mark, never from colored text.
-    func key(_ color: Color, _ label: String) -> some View {
+    func key(_ color: Color, _ label: String, dashed: Bool = false) -> some View {
         HStack(spacing: 5) {
-            Capsule().fill(color).frame(width: 12, height: 2)
+            Path { $0.move(to: CGPoint(x: 1, y: 1)); $0.addLine(to: CGPoint(x: 15, y: 1)) }
+                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [4, 3] : []))
+                .frame(width: 16, height: 2)
             Text(label).monospacedDigit()
         }
         .font(.caption).foregroundStyle(.secondary)
