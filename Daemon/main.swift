@@ -257,9 +257,10 @@ func serve() {
         guard c >= 0 else { return }
         defer { close(c) }
         var tv = timeval(tv_sec: 2, tv_usec: 0)
-        setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        // The health series reply spans several socket buffers: a client that stops reading must not stall the service.
-        setsockopt(c, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        // The health series reply spans several socket buffers: a client that stops reading stalls the service 2 s at most.
+        for opt in [SO_RCVTIMEO, SO_SNDTIMEO] where setsockopt(c, SOL_SOCKET, opt, &tv, socklen_t(MemoryLayout<timeval>.size)) != 0 {
+            log("socket timeout \(opt) not set: errno \(errno)")
+        }
         guard let data = try? readLine(c), let cmd = try? JSONDecoder().decode(Command.self, from: data),
               let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
         try? writeLine(c, out)
