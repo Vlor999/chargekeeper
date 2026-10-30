@@ -24,7 +24,7 @@ struct ChargeKeeperApp: App {
         .menuBarExtraStyle(.window)
         Window(tr("Dashboard"), id: "dashboard") { DashboardView().environmentObject(model).localized(language) }
             .windowResizability(.contentSize)
-        Settings { SettingsView().environmentObject(model).localized(language) }
+        Settings { SettingsView(model: model).environmentObject(model).localized(language) }
     }
 }
 

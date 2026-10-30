@@ -74,7 +74,6 @@ private let french: [String: String] = [
     " · charging from the Mac: %@": " · rechargé par le Mac : %@",
     "Show in menu": "Afficher dans le menu",
     // Settings
-    "Charge control": "Contrôle de la charge",
     "Sleep": "Suspension",
     "MagSafe LED": "LED MagSafe",
     "Schedule": "Planification",

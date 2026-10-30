@@ -2,20 +2,89 @@ import ServiceManagement
 import Sparkle
 import SwiftUI
 
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, charge, sleep, led, schedule
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .general: tr("General")
+        case .charge: tr("Charge")
+        case .sleep: tr("Sleep")
+        case .led: tr("MagSafe LED")
+        case .schedule: tr("Schedule")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .charge: "bolt.fill"
+        case .sleep: "moon.fill"
+        case .led: "lightbulb.fill"
+        case .schedule: "calendar"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .general: .gray
+        case .charge: .orange
+        case .sleep: .indigo
+        case .led: .teal
+        case .schedule: .red
+        }
+    }
+}
+
+/// Sidebar navigation like System Settings. Does not observe the model: the status refresh while the
+/// window is open re-renders the selected pane only, never the navigation.
 struct SettingsView: View {
-    @EnvironmentObject var m: AppModel
+    let model: AppModel
+    @AppStorage("settingsPane") private var pane = SettingsPane.general
 
     var body: some View {
-        TabView {
-            general.tabItem { Label(tr("General"), systemImage: "gearshape") }
-            charge.tabItem { Label(tr("Charge control"), systemImage: "bolt") }
-            sleep.tabItem { Label(tr("Sleep"), systemImage: "moon") }
-            led.tabItem { Label(tr("MagSafe LED"), systemImage: "lightbulb") }
-            ScheduleView().tabItem { Label(tr("Schedule"), systemImage: "calendar") }
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            List(selection: Binding(get: { pane }, set: { if let p = $0 { pane = p } })) {
+                ForEach(SettingsPane.allCases) { p in
+                    Label {
+                        Text(p.title)
+                    } icon: {
+                        Image(systemName: p.icon)
+                            .resizable().scaledToFit()
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(width: 13, height: 13)
+                            .frame(width: 20, height: 20)
+                            .background(p.color.gradient, in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .tag(p)
+                }
+            }
+            .navigationSplitViewColumnWidth(180)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            SettingsPaneView(pane: pane).navigationTitle(pane.title)
         }
-        .frame(width: 560, height: 440)
-        .onAppear { NSApp.activate(ignoringOtherApps: true); m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .frame(width: 720, height: 480)
+        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
+        .onDisappear { model.visible -= 1 }
+    }
+}
+
+struct SettingsPaneView: View {
+    @EnvironmentObject var m: AppModel
+    let pane: SettingsPane
+
+    var body: some View {
+        switch pane {
+        case .general: general
+        case .charge: charge
+        case .sleep: sleep
+        case .led: led
+        case .schedule: ScheduleView()
+        }
     }
 
     @AppStorage(languageKey) private var language = "system"
