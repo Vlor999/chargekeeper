@@ -402,8 +402,8 @@ assert(healthSpan(days: 0) == (1, .days) && healthSpan(days: 59) == (59, .days) 
 // Health chart strings in French.
 UserDefaults.standard.register(defaults: [languageKey: "fr"])
 for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet: one point is recorded per day.", "Period",
-          "%d days", "1 day", "%d months", "%d years", "%@ points in %@", "no new cycle"] { assert(tr(k) != k, k) }
-assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois")
+          "%d days", "1 day", "%d months", "%d years", "%@ points in %@", "no new cycle", "+1 cycle", "+%d cycles"] { assert(tr(k) != k, k) }
+assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois" && tr("+%d cycles", 14) == "14 cycles de plus")
 UserDefaults.standard.register(defaults: [languageKey: "system"])
 
 print("logic ok")

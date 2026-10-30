@@ -201,6 +201,8 @@ private let french: [String: String] = [
     "%d months": "%d mois",
     "%d years": "%d ans",
     "no new cycle": "aucun nouveau cycle",
+    "+1 cycle": "1 cycle de plus",
+    "+%d cycles": "%d cycles de plus",
     "Date": "Date",
     "Duration": "Durée",
     "Capacity": "Capacité",
