@@ -336,6 +336,12 @@ struct MenuView: View {
             }
             .font(.caption)
         }
+        if r.pastLimitSince != nil && s.adapter {
+            Label(tr("macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it."),
+                  systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {

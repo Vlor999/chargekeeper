@@ -158,6 +158,7 @@ assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration nee
 assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
 assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
 assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, value: 80)) == "macOS a chargé au-delà de la limite de 80\u{00A0}%")
+assert(tr("macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.") != "macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.")
 let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),

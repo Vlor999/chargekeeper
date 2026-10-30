@@ -223,6 +223,8 @@ private let french: [String: String] = [
     "Heat protection: charging paused at %@ °C": "Protection thermique : charge suspendue à %@ °C",
     "macOS charged past the limit": "macOS a chargé au-delà de la limite",
     "macOS charged past the %@ %% limit": "macOS a chargé au-delà de la limite de %@ %%",
+    "macOS charged past the limit (battery recalibration or system override). The limit applies again once the level falls back to it.":
+        "macOS a chargé au-delà de la limite (recalibrage de la batterie ou décision du système). La limite s'appliquera de nouveau quand le niveau y sera redescendu.",
     // Notifications
     "Notifications": "Notifications",
     "Heat protection paused charging": "Charge suspendue par la protection thermique",
