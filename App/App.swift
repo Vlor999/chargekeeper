@@ -1,6 +1,8 @@
 import ServiceManagement
 import Sparkle
 import SwiftUI
+import UserNotifications
+import notify
 
 @main
 struct ChargeKeeperApp: App {
@@ -35,7 +37,9 @@ final class AppModel: ObservableObject {
     @Published var readyUpdate: (version: String, install: () -> Void)?
     let updater: SPUStandardUpdaterController
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
+    private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
+    private var calibrationToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
 
@@ -46,6 +50,9 @@ final class AppModel: ObservableObject {
         w.onReady = { [weak self] in self?.readyUpdate = ($0, $1) }
         // First launch: register the root service; macOS then asks for approval in Login Items.
         if service.status == .notRegistered { enableService() }
+        UNUserNotificationCenter.current().delegate = banner
+        // Posted by the service when a calibration finishes: event driven, nothing runs in between.
+        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
         refresh()
         // ponytail: 2s polling of a local socket; push notifications if it ever matters
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -65,7 +72,27 @@ final class AppModel: ObservableObject {
     }
 
     func run(_ cmd: Command) {
+        if case .calibrate(true) = cmd { requestNotifications() }
         do { status = try send(cmd); error = nil } catch { self.error = error.localizedDescription }
+        if let c = status?.lastCalibration { notifyCalibration(c) }
+    }
+
+    /// Asked when a calibration is started or scheduled, not at launch.
+    func requestNotifications() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Once per calibration: on the service's signal, or at the next status if the app was not running then.
+    private func notifyCalibration(_ c: CalibrationResult) {
+        let key = "lastNotifiedCalibration"
+        guard c.end > (UserDefaults.standard.object(forKey: key) as? Date ?? .distantPast) else { return }
+        UserDefaults.standard.set(c.end, forKey: key)
+        let n = UNMutableNotificationContent()
+        n.title = tr("Calibration complete")
+        n.body = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %d → %d mAh", b, $0) } },
+                  c.before.health.flatMap { b in c.after.health.map { tr("Health: %.1f → %.1f %%", b, $0) } }]
+            .compactMap { $0 }.joined(separator: "\n")
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "calibration", content: n, trigger: nil))
     }
 
     /// Binding into the daemon's config; every edit is pushed immediately.
@@ -83,6 +110,14 @@ final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
         onReady?(item.displayVersionString, immediateInstallationBlock)
         return true
+    }
+}
+
+/// Shows the banner even while the menu or a window has the app active.
+final class BannerDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
     }
 }
 
