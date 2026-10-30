@@ -191,8 +191,10 @@ let pastLimitMargin = 5
 /// macOS 26.4+ ("Your Mac will occasionally charge to 100 %"), or any other system override. Detected from the effect,
 /// since the cause is not readable without a private entitlement. Returns true when a new episode starts.
 /// The episode lasts until the level is back to the held level, the adapter is unplugged or the service changes mode.
-func pastLimitEpisode(_ a: Action, state: ChargeState, adapter: Bool, limit: Int, percent: Int, amperage: Int?, watts: Double,
-                      since: inout Date?, now: Date) -> Bool {
+/// `settled`: same state and action as the previous tick. The reading is taken before the action is applied, so on the
+/// tick that changes mode the current still reflects the previous mode (charging before a new discharge).
+func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
+                      watts: Double, since: inout Date?, now: Date) -> Bool {
     let held: Int? = switch a {
     case .hold(let level) where state == .pause: level
     case .discharge where state == .discharging: limit
@@ -200,7 +202,7 @@ func pastLimitEpisode(_ a: Action, state: ChargeState, adapter: Bool, limit: Int
     }
     guard adapter, let held, percent > held else { since = nil; return false }
     let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
-    guard since == nil, percent >= held + pastLimitMargin, mA >= 50 else { return false }
+    guard since == nil, settled, percent >= held + pastLimitMargin, mA >= 50 else { return false }
     since = now
     return true
 }

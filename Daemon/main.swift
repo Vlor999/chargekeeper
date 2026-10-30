@@ -24,6 +24,7 @@ final class Daemon {
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
     var adapterNotices = AdapterNoticeState()
     var appleChargeLimit: Int?
+    var lastAction: Action?  // in memory: the first tick after a restart counts as a mode change
 
     init() {
         s = Daemon.load()
@@ -84,8 +85,10 @@ final class Daemon {
         case .reminder: notify_post(calibrationNeedsAdapterNotification)
         case .none: break
         }
-        if pastLimitEpisode(a, state: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent, amperage: rd.amperage,
-                            watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
+        let settled = prev == s.runtime.state && lastAction == a
+        lastAction = a
+        if pastLimitEpisode(a, state: s.runtime.state, settled: settled, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent,
+                            amperage: rd.amperage, watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
             record(HistoryEntry(event: .chargedPastLimit, value: s.config.limit))
         }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, latch: &notices) {
