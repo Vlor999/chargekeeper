@@ -22,7 +22,7 @@ description: "ChargeKeeper project rules: branches, commits, PRs, validation, re
 
 - Green checks before any push (`CLAUDE.md` § Checks). Never `--no-verify`.
 - Visible change: local demo and explicit user validation before commit.
-- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first (`ponytail`).
+- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first.
 - Menu bar app: nothing may run while no window is open (no animation, no polling). Measure CPU and memory with the menu closed after a UI change.
 
 ## Security

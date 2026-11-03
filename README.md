@@ -4,7 +4,7 @@
 
 <p align="center">Keeps your MacBook battery at the level you choose: charge limit, discharge while plugged in, calibration, heat protection, scheduling. A menu bar app for Apple silicon Macs.</p>
 
-<p align="center"><a href="https://vlor999.github.io/chargekeeper/">Website</a> · <a href="https://github.com/Vlor999/chargekeeper/releases/latest">Download</a> · <code>brew install --cask vlor999/tap/chargekeeper</code></p>
+<p align="center"><a href="https://vlor999.github.io/chargekeeper/">Website</a> · <a href="https://github.com/Vlor999/chargekeeper/releases/latest">Download</a> · <a href="https://buymeacoffee.com/Vlor999">Buy me a coffee</a> · <code>brew install --cask vlor999/tap/chargekeeper</code></p>
 
 ## Features
 
@@ -42,6 +42,7 @@ Command line: `chargekeeperctl status`, `chargekeeperctl limit 70`, `chargekeepe
 - macOS 26+: Apple's Manual Charge Limit (80–100%) through the private `PowerUI` framework; below 80%, the SMC discharge key `CHIE` alternates battery and adapter.
 - Older firmware: SMC keys `CHTE` or `CH0B`/`CH0C` stop charging, `CHIE`/`CH0I` force discharge.
 - The app and the CLI talk to the service over `/var/run/jauge.sock` (root:admin, 0660).
+- Diagnostic log: the service writes one file per UTC day in `/Library/Application Support/Jauge/Logs` (root, 0644), shown in Settings > Diagnostic. `/var/log/jauge.log` only receives startup errors and crash output.
 
 ## Build
 

@@ -3,11 +3,7 @@ import Sparkle
 import SwiftUI
 import UserNotifications
 
-enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, charge, sleep, led, schedule, battery
-
-    var id: Self { self }
-
+extension SettingsPane {
     var title: String {
         switch self {
         case .general: tr("General")
@@ -16,6 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: tr("MagSafe LED")
         case .schedule: tr("Schedule")
         case .battery: tr("Battery")
+        case .diagnostic: tr("Diagnostic")
         }
     }
 
@@ -27,6 +24,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: "lightbulb.fill"
         case .schedule: "calendar"
         case .battery: "battery.100percent"
+        case .diagnostic: "stethoscope"
         }
     }
 
@@ -38,6 +36,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: .teal
         case .schedule: .red
         case .battery: .green
+        case .diagnostic: .blue
         }
     }
 }
@@ -47,9 +46,31 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     let model: AppModel
     @AppStorage("settingsPane") private var pane = SettingsPane.general
+    @State private var query = ""
+    @State private var target: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
+            sidebar
+                .searchable(text: $query, placement: .sidebar, prompt: Text(tr("Search")))
+                .onSubmit(of: .search) { target = searchSettings(query).first?.id }
+                .onChange(of: query) { _, q in if let t = target, !searchSettings(q).contains(where: { $0.id == t }) { target = nil } }
+                .onChange(of: target) { _, id in if let e = settingsIndex.first(where: { $0.id == id }) { pane = e.pane } }
+                .navigationSplitViewColumnWidth(180)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
+            SettingsPaneView(pane: pane, target: target)
+                .id(pane)
+                .environment(\.settingsTarget, target)
+                .navigationTitle(pane.title)
+        }
+        .frame(width: 720, height: 480)
+        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
+        .onDisappear { model.visible -= 1 }
+    }
+
+    @ViewBuilder var sidebar: some View {
+        if query.isEmpty {
             List(selection: Binding(get: { pane }, set: { if let p = $0 { pane = p } })) {
                 ForEach(SettingsPane.allCases) { p in
                     Label {
@@ -67,22 +88,37 @@ struct SettingsView: View {
                     .tag(p)
                 }
             }
-            .navigationSplitViewColumnWidth(180)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
-            SettingsPaneView(pane: pane).navigationTitle(pane.title)
+        } else {
+            let results = searchSettings(query)
+            List(selection: $target) {
+                ForEach(results) { e in
+                    VStack(alignment: .leading) {
+                        Text(tr(e.label))
+                        Text(e.pane.title).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .tag(e.id)
+                }
+            }
+            .overlay { if results.isEmpty { Text(tr("No results")).foregroundStyle(.secondary) } }
         }
-        .frame(width: 720, height: 480)
-        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
-        .onDisappear { model.visible -= 1 }
     }
 }
 
 struct SettingsPaneView: View {
     @EnvironmentObject var m: AppModel
     let pane: SettingsPane
+    let target: String?
 
     var body: some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: target, initial: true) { _, id in
+                // Next run loop: the pane switched with the target and its rows are not laid out yet.
+                if let id { DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) } }
+            }
+        }
+    }
+
+    @ViewBuilder var content: some View {
         switch pane {
         case .general: general
         case .charge: charge
@@ -90,6 +126,7 @@ struct SettingsPaneView: View {
         case .led: led
         case .schedule: ScheduleView()
         case .battery: BatteryView()
+        case .diagnostic: DiagnosticView()
         }
     }
 
@@ -102,13 +139,15 @@ struct SettingsPaneView: View {
                 Text("English").tag("en")
                 Text("Français").tag("fr")
             }
+            .settingsRow("language")
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
+                .settingsRow("openAtLogin")
             Section {
                 ForEach(NoticeKind.allCases) { NoticeToggle(kind: $0) }
             } header: {
-                Text(tr("Notifications"))
+                Text(tr("Notifications")).settingsRow("notifications")
             } footer: {
                 Text(tr("Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications."))
                     .font(.caption).foregroundStyle(.secondary)
@@ -118,6 +157,7 @@ struct SettingsPaneView: View {
                 Toggle(tr("Install updates automatically"), isOn: Binding(
                     get: { u.automaticallyChecksForUpdates && u.automaticallyDownloadsUpdates },
                     set: { u.automaticallyChecksForUpdates = $0; u.automaticallyDownloadsUpdates = $0 }))
+                    .settingsRow("autoUpdate")
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
@@ -127,14 +167,58 @@ struct SettingsPaneView: View {
                     Spacer()
                     Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
                 }
+                .settingsRow("version")
             }
             Section(tr("About")) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(tr("Support ChargeKeeper"))
+                        Text(tr("Free and ad-free. A coffee helps keep it going."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(buyMeACoffeeURL)
+                    } label: {
+                        Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
+                    }
+                }
+                .settingsRow("support")
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(tr("Send feedback"))
+                        Text(tr("An idea, a question, a bug? Opens a prefilled GitHub discussion, to write and post in your browser."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(feedbackURL())
+                    } label: {
+                        Label(tr("Give feedback"), systemImage: "bubble.left")
+                    }
+                }
+                .settingsRow("feedback")
+                // Label above: the five links do not fit on one line next to it in French.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(tr("Links"))
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), alignment: .leading)], alignment: .leading, spacing: 4) {
+                        Link(tr("Source code"), destination: repoURL)
+                        Link(tr("Download page"), destination: siteURL)
+                        Button(tr("Report an issue")) { NSWorkspace.shared.open(bugReportURL(config: m.status?.config)) }
+                            .buttonStyle(.link)
+                        Link(tr("Privacy"), destination: privacyURL)
+                        Link(tr("Third-party licenses"), destination: thirdPartyNoticesURL)
+                    }
+                }
+                .settingsRow("links")
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
+                    .settingsRow("about")
             }
             Section {
                 Button(tr("Quit ChargeKeeper")) { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
+                    .settingsRow("quit")
             }
         }
         .formStyle(.grouped)
@@ -156,22 +240,23 @@ struct SettingsPaneView: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
                     }
                 }
+                .settingsRow("macOSBattery")
             }
             Section(tr("Discharge")) {
-                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge))
+                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge)).settingsRow("autoDischarge")
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(tr("Idle range")) {
-                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle))
+                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle)).settingsRow("idle")
                 Stepper(tr("Range: %d %%", m.config(\.idleRange).wrappedValue), value: m.config(\.idleRange), in: 1...30)
             }
             Section(tr("Heat protection")) {
-                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect))
+                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect)).settingsRow("heat")
                 Stepper(tr("Max temp: %.0f °C", m.config(\.maxTemp).wrappedValue), value: m.config(\.maxTemp), in: 25...50, step: 1)
             }
             Section(tr("Shutdown")) {
-                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped))
+                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped)).settingsRow("keepLimit")
                 Text(tr("The system service applies the limit for every user account. This keeps it active if the service stops."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -181,8 +266,8 @@ struct SettingsPaneView: View {
 
     var sleep: some View {
         Form {
-            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep))
-            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit))
+            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).settingsRow("sleepFreeze")
+            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).settingsRow("sleepPrevent")
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
             Section(tr("macOS energy mode")) {
@@ -190,6 +275,7 @@ struct SettingsPaneView: View {
                     Button(tr("Low Power Mode: on")) { m.run(.lowPower(true)) }
                     Button(tr("off")) { m.run(.lowPower(false)) }
                 }
+                .settingsRow("energyMode")
                 HStack {
                     Button(tr("Performance mode: on")) { m.run(.highPower(true)) }
                     Button(tr("off")) { m.run(.highPower(false)) }
@@ -206,7 +292,8 @@ struct SettingsPaneView: View {
                 Text(tr("Color by charge state")).tag(LEDSetting.indicate)
                 Text(tr("Always off")).tag(LEDSetting.alwaysOff)
             }
-            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge))
+            .settingsRow("led")
+            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge)).settingsRow("ledBlink")
             Text(tr("Green: limit reached · Orange: charging or discharging toward the limit."))
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -291,9 +378,10 @@ struct ScheduleView: View {
                     Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
                     Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
-                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks))
+                .settingsRow("tasks")
+                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks)).settingsRow("catchUp")
             }
-            Section(tr("History")) {
+            Section {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
                     HStack(alignment: .firstTextBaseline) {
                         Image(systemName: h.symbol.name).foregroundStyle(h.symbol.color).frame(width: 18)
@@ -303,6 +391,8 @@ struct ScheduleView: View {
                             .foregroundStyle(.secondary).monospacedDigit()
                     }
                 }
+            } header: {
+                Text(tr("History")).settingsRow("history")
             }
         }
         .formStyle(.grouped)
@@ -324,7 +414,7 @@ struct BatteryView: View {
             if let b = m.status?.battery {
                 if fetched { HealthChartSection(series: series) }
                 Section(tr("Battery health")) {
-                    row(tr("Health"), percent(b.health))
+                    row(tr("Health"), percent(b.health)).settingsRow("health")
                     row(tr("Health (nominal)"), percent(b.nominalHealth))
                     row(tr("Full charge capacity"), mAh(b.maxCapacity))
                     row(tr("Nominal capacity"), mAh(b.nominalCapacity))
@@ -334,7 +424,7 @@ struct BatteryView: View {
             }
             if let c = m.status?.lastCalibration {
                 Section(tr("Last calibration")) {
-                    row(tr("Date"), dateTime(c.end))
+                    row(tr("Date"), dateTime(c.end)).settingsRow("lastCalibration")
                     row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
                     row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
                     row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
