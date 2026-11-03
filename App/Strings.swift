@@ -266,4 +266,6 @@ let french: [String: String] = [
     "Health: %@ → %@ %%": "Santé : %@ → %@ %%",
     // Settings search
     "Scheduled tasks": "Tâches planifiées",
+    "Search": "Rechercher",
+    "No results": "Aucun résultat",
 ]
