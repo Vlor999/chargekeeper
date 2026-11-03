@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in ChargeKeeper does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. This issue is public: do not paste serial numbers or other personal data.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead (battery level, plugged in or not).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+  - type: input
+    id: version
+    attributes:
+      label: ChargeKeeper version
+      description: Settings › General › Updates.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model
+      description: Model identifier (System Information › Hardware) or name.
+      placeholder: "Mac15,3 or MacBook Pro 14-inch, M3, 2023"
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: ChargeKeeper settings
+      description: Optional. Charge limit, discharge, idle range, heat protection, sleep and schedule settings. Filled in when you use Settings › General › Report an issue.
+      render: json

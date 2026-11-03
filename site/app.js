@@ -43,7 +43,7 @@
     q4: 'Comment se font les mises à jour ?',
     a4: 'ChargeKeeper vérifie la dernière version GitHub au démarrage, puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature, l\'installe et redémarre son service.',
     q5: 'Comment le désinstaller ?', a5: 'Quittez ChargeKeeper et mettez-le à la corbeille. Avec Homebrew : <code>brew uninstall --zap chargekeeper</code>.',
-    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT',
+    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', coffee: 'Offrir un café',
     legal: 'Mentions légales',
     lg1: '<strong>Éditeur :</strong> Vlor999, particulier, à titre non professionnel. Contact : <a href="https://github.com/Vlor999/chargekeeper/issues">issues GitHub</a>.',
     lg2: '<strong>Hébergeur :</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',

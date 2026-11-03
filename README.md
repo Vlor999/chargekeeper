@@ -4,7 +4,7 @@
 
 <p align="center">Keeps your MacBook battery at the level you choose: charge limit, discharge while plugged in, calibration, heat protection, scheduling. A menu bar app for Apple silicon Macs.</p>
 
-<p align="center"><a href="https://vlor999.github.io/chargekeeper/">Website</a> · <a href="https://github.com/Vlor999/chargekeeper/releases/latest">Download</a> · <code>brew install --cask vlor999/tap/chargekeeper</code></p>
+<p align="center"><a href="https://vlor999.github.io/chargekeeper/">Website</a> · <a href="https://github.com/Vlor999/chargekeeper/releases/latest">Download</a> · <a href="https://buymeacoffee.com/Vlor999">Buy me a coffee</a> · <code>brew install --cask vlor999/tap/chargekeeper</code></p>
 
 ## Features
 
