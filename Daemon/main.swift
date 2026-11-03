@@ -32,10 +32,15 @@ final class Daemon {
 
     init() {
         s = Daemon.load()
+        DiagnosticLog.configure(s.config)
         // A crash may have left sleep disabled: start from the system default.
         _ = setSleepDisabled(false)
         readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
+        // Only stop() saves the Exit state: anything else is a crash, a kill or a restart for an update.
+        if FileManager.default.fileExists(atPath: statePath) && s.runtime.state != .exit {
+            log("previous run ended without a stop (state \(s.runtime.state.rawValue)): sleep setting reset", .warn)
+        }
     }
 
     /// Saved JSON overlaid on defaults, so fields added in a newer build don't wipe the user's settings.
@@ -166,10 +171,13 @@ final class Daemon {
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)
             c.maxTemp = min(max(c.maxTemp, 25), 50)
+            c.logDays = clamp(c.logDays, logDaysRange.lowerBound, logDaysRange.upperBound)
             // Clients may hold a stale lastRun; never move it backwards or a task re-runs.
             let old = Dictionary(s.config.tasks.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
             for i in c.tasks.indices { if let l = old[c.tasks[i].id] ?? nil, l > (c.tasks[i].lastRun ?? .distantPast) { c.tasks[i].lastRun = l } }
+            let logChanged = c.logEnabled != s.config.logEnabled || c.logDays != s.config.logDays
             s.config = c
+            if logChanged { DiagnosticLog.configure(c) }
         case .setLimit(let n): s.config.limit = clamp(n, 20, 100)
         case .discharge(let on): s.runtime.discharge = on
         case .dischargeTo(let n): s.config.limit = clamp(n, 20, 100); s.runtime.discharge = true
@@ -247,7 +255,7 @@ func serve() {
     let bound = withUnsafePointer(to: &addr) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
     }
-    guard bound == 0, listen(fd, 8) == 0 else { log("cannot bind \(socketPath)"); exit(1) }
+    guard bound == 0, listen(fd, 8) == 0 else { log("cannot bind \(socketPath): errno \(errno)", .error); exit(1) }
     // Only root and admins may drive the charger.
     chown(socketPath, 0, getgrnam("admin")?.pointee.gr_gid ?? 80)
     chmod(socketPath, 0o660)
@@ -255,16 +263,17 @@ func serve() {
     let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
     src.setEventHandler {
         let c = accept(fd, nil, nil)
-        guard c >= 0 else { return }
+        guard c >= 0 else { log("socket accept failed: errno \(errno)", .error); return }
         defer { close(c) }
         var tv = timeval(tv_sec: 2, tv_usec: 0)
         // The health series reply spans several socket buffers: a client that stops reading stalls the service 2 s at most.
         for opt in [SO_RCVTIMEO, SO_SNDTIMEO] where setsockopt(c, SOL_SOCKET, opt, &tv, socklen_t(MemoryLayout<timeval>.size)) != 0 {
-            log("socket timeout \(opt) not set: errno \(errno)")
+            log("socket timeout \(opt) not set: errno \(errno)", .warn)
         }
-        guard let data = try? readLine(c), let cmd = try? JSONDecoder().decode(Command.self, from: data),
-              let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
-        try? writeLine(c, out)
+        guard let data = try? readLine(c) else { log("socket: no request read", .warn); return }
+        guard let cmd = try? JSONDecoder().decode(Command.self, from: data) else { log("socket: invalid request (\(data.count) bytes)", .warn); return }
+        guard let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
+        if (try? writeLine(c, out)) == nil { log("socket: reply not sent", .warn) }
     }
     src.resume()
     keep.append(src)

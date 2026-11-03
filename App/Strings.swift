@@ -182,6 +182,26 @@ let french: [String: String] = [
     "Blinking orange while discharging": "Orange clignotant pendant la décharge",
     "Green: limit reached · Orange: charging or discharging toward the limit.":
         "Vert : limite atteinte · Orange : charge ou décharge vers la limite.",
+    // Diagnostic
+    "Diagnostic": "Diagnostic",
+    "Keep a diagnostic log": "Tenir un journal de diagnostic",
+    "Keep: %d days": "Conserver : %d jours",
+    "Keep: 1 day": "Conserver : 1 jour",
+    "Folder": "Dossier",
+    "Open Folder": "Ouvrir le dossier",
+    "Log": "Journal",
+    "Written by the ChargeKeeper service on this Mac only: service start and stop, charge decisions, errors. Nothing is sent. Whole days older than the retention are deleted.":
+        "Écrit par le service ChargeKeeper sur ce Mac uniquement : démarrage et arrêt du service, décisions de charge, erreurs. Rien n'est envoyé. Les jours entiers plus anciens que la durée de conservation sont supprimés.",
+    "Level": "Niveau",
+    "Warnings": "Avertissements",
+    "Errors": "Erreurs",
+    "Reload": "Relire",
+    "Copy": "Copier",
+    "Log off: no new entry.": "Journal désactivé : aucune nouvelle entrée.",
+    "Error: %@": "Erreur : %@",
+    "No entry": "Aucune entrée",
+    "Latest entries": "Dernières entrées",
+    "The %d most recent, newest first.": "Les %d plus récentes, la plus récente en haut.",
     // Schedule
     "Set charge limit": "Définir la limite de recharge",
     "Pause charging": "Suspendre la charge",

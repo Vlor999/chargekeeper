@@ -15,3 +15,6 @@ let feedbackDiscussionCategory = "ideas"
 let bugIssueTemplate = "bug.yml"
 /// Longest prefilled address: beyond it, GitHub or the browser rejects it.
 let githubPrefillMaxURLLength = 8_000
+
+/// Entries shown by the Diagnostic pane's log viewer, newest first.
+let logViewLimit = 500

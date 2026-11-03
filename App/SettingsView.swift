@@ -4,7 +4,7 @@ import SwiftUI
 import UserNotifications
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, charge, sleep, led, schedule, battery
+    case general, charge, sleep, led, schedule, battery, diagnostic
 
     var id: Self { self }
 
@@ -16,6 +16,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: tr("MagSafe LED")
         case .schedule: tr("Schedule")
         case .battery: tr("Battery")
+        case .diagnostic: tr("Diagnostic")
         }
     }
 
@@ -27,6 +28,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: "lightbulb.fill"
         case .schedule: "calendar"
         case .battery: "battery.100percent"
+        case .diagnostic: "stethoscope"
         }
     }
 
@@ -38,6 +40,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .led: .teal
         case .schedule: .red
         case .battery: .green
+        case .diagnostic: .blue
         }
     }
 }
@@ -90,6 +93,7 @@ struct SettingsPaneView: View {
         case .led: led
         case .schedule: ScheduleView()
         case .battery: BatteryView()
+        case .diagnostic: DiagnosticView()
         }
     }
 

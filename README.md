@@ -42,6 +42,7 @@ Command line: `chargekeeperctl status`, `chargekeeperctl limit 70`, `chargekeepe
 - macOS 26+: Apple's Manual Charge Limit (80–100%) through the private `PowerUI` framework; below 80%, the SMC discharge key `CHIE` alternates battery and adapter.
 - Older firmware: SMC keys `CHTE` or `CH0B`/`CH0C` stop charging, `CHIE`/`CH0I` force discharge.
 - The app and the CLI talk to the service over `/var/run/jauge.sock` (root:admin, 0660).
+- Diagnostic log: the service writes one file per UTC day in `/Library/Application Support/Jauge/Logs` (root, 0644), shown in Settings > Diagnostic. `/var/log/jauge.log` only receives startup errors and crash output.
 
 ## Build
 
