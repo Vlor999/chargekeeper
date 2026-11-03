@@ -108,7 +108,7 @@ private func smcRead(_ key: String) -> [UInt8]? {
 @discardableResult
 private func smcWrite(_ key: String, _ bytes: [UInt8]) -> Bool {
     let ok = smc_write(key, bytes, UInt32(bytes.count)) == 0
-    if !ok { log("SMC write \(key) failed (root?)") }
+    if !ok { log("SMC write \(key) failed (root?)", .error) }
     return ok
 }
 
@@ -189,7 +189,7 @@ final class Backend {
         guard native else { return false }
         guard lastMCL != limit else { return true }
         let ok = mcl_set(Int32(limit)) == 0
-        if ok { lastMCL = limit } else { log("MCL \(limit) failed") }
+        if ok { lastMCL = limit } else { log("MCL \(limit) failed", .error) }
         return ok
     }
 
@@ -210,10 +210,5 @@ func pmset(_ args: [String]) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
     p.arguments = args
-    do { try p.run(); p.waitUntilExit() } catch { log("pmset failed: \(error)") }
-}
-
-func log(_ s: String) {
-    print("\(ISO8601DateFormatter().string(from: Date())) \(s)")
-    fflush(stdout)
+    do { try p.run(); p.waitUntilExit() } catch { log("pmset failed: \(error)", .error) }
 }
