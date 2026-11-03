@@ -433,4 +433,29 @@ assert(ids("niveau veille") == ["sleepFreeze"] && ids("login quit").isEmpty && i
 assert(Set(settingsIndex.map(\.id)).count == settingsIndex.count)
 for e in settingsIndex { for k in [e.label, e.description].compactMap({ $0 }) { assert(french[k] != nil, k) } }
 
+// Log file names: one per UTC day, round trip; other names and impossible dates are not log files.
+let logToday = logDay(d("2026-11-03T23:59:59Z"))
+assert(logToday == logDay(d("2026-11-03T00:00:00Z")) && logToday == logDay(d("2026-11-04T00:00:00Z")) - 1)
+assert(logFileName(day: logToday) == "chargekeeper-2026-11-03.log" && logFileDay("chargekeeper-2026-11-03.log") == logToday)
+for n in ["chargekeeper-2026-02-31.log", "chargekeeper-2026-11-3.log", "chargekeeper-2026-11-03.log.tmp", "other-2026-11-03.log",
+          "chargekeeper-2026-11-0３.log", "chargekeeper-+026-11-03.log"] { assert(logFileDay(n) == nil, n) }
+
+// Log retention: whole days, a file goes once its last second is older than the kept days.
+assert(!logFileExpired(day: logToday, now: d("2026-11-04T23:59:59Z"), keepDays: 1))
+assert(logFileExpired(day: logToday, now: d("2026-11-05T00:00:00Z"), keepDays: 1))
+assert(!logFileExpired(day: logToday, now: d("2026-11-10T23:59:59Z"), keepDays: 7) && logFileExpired(day: logToday, now: d("2026-11-11T00:00:00Z"), keepDays: 7))
+
+// Log lines: round trip, line breaks flattened so one entry stays one line, foreign lines rejected.
+let logEntry = LogLine(date: d("2026-11-03T08:33:47Z"), level: .warn, message: "socket: invalid request\nnext")
+assert(logLineText(logEntry) == "2026-11-03T08:33:47Z warn socket: invalid request next\n")
+assert(parseLogLine(logLineText(logEntry).dropLast()) == LogLine(date: logEntry.date, level: .warn, message: "socket: invalid request next"))
+assert(parseLogLine("2026-11-03T08:33:47Z 80%: Pause -> Discharging") == nil && parseLogLine("") == nil)
+assert(LogLevel.info < .warn && .warn < .error)
+
+// Config from a service older than the log settings: decodes with the log defaults.
+var oldConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) as! [String: Any]
+oldConfig["logEnabled"] = nil; oldConfig["logDays"] = nil
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: oldConfig)) == Config())
+assert(try! JSONDecoder().decode(Config.self, from: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) == Config(logEnabled: false, logDays: 30))
+
 print("logic ok")

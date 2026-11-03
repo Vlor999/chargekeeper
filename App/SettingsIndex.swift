@@ -2,7 +2,7 @@ import Foundation
 
 /// Settings sidebar panes; titles, icons and colors are in SettingsView.swift.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, charge, sleep, led, schedule, battery
+    case general, charge, sleep, led, schedule, battery, diagnostic
 
     var id: Self { self }
 }
