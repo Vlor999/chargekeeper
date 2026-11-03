@@ -444,4 +444,10 @@ assert(parseLogLine(logLineText(logEntry).dropLast()) == LogLine(date: logEntry.
 assert(parseLogLine("2026-11-03T08:33:47Z 80%: Pause -> Discharging") == nil && parseLogLine("") == nil)
 assert(LogLevel.info < .warn && .warn < .error)
 
+// Config from a service older than the log settings: decodes with the log defaults.
+var oldConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) as! [String: Any]
+oldConfig["logEnabled"] = nil; oldConfig["logDays"] = nil
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: oldConfig)) == Config())
+assert(try! JSONDecoder().decode(Config.self, from: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) == Config(logEnabled: false, logDays: 30))
+
 print("logic ok")

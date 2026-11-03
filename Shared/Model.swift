@@ -132,6 +132,28 @@ struct Config: Codable, Equatable {
     var logDays = logDaysDefault
 }
 
+extension Config {
+    /// Lenient for the log fields only: a service older than them sends a config without them.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        limit = try c.decode(Int.self, forKey: .limit)
+        autoDischarge = try c.decode(Bool.self, forKey: .autoDischarge)
+        idle = try c.decode(Bool.self, forKey: .idle)
+        idleRange = try c.decode(Int.self, forKey: .idleRange)
+        heatProtect = try c.decode(Bool.self, forKey: .heatProtect)
+        maxTemp = try c.decode(Double.self, forKey: .maxTemp)
+        led = try c.decode(LEDSetting.self, forKey: .led)
+        ledBlinkDischarge = try c.decode(Bool.self, forKey: .ledBlinkDischarge)
+        stopChargingDuringSleep = try c.decode(Bool.self, forKey: .stopChargingDuringSleep)
+        disableSleepUntilLimit = try c.decode(Bool.self, forKey: .disableSleepUntilLimit)
+        keepLimitWhenStopped = try c.decode(Bool.self, forKey: .keepLimitWhenStopped)
+        catchUpMissedTasks = try c.decode(Bool.self, forKey: .catchUpMissedTasks)
+        tasks = try c.decode([ScheduledTask].self, forKey: .tasks)
+        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? true
+        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? logDaysDefault
+    }
+}
+
 /// Daemon-owned state that survives restarts (calibration in progress, one-shot modes).
 struct Runtime: Codable, Equatable {
     var discharge = false
