@@ -51,7 +51,9 @@ enum DiagnosticLog {
         let parent = (logDir as NSString).deletingLastPathComponent
         for dir in [parent, logDir] {
             if !isRootFolder(dir) {
-                guard mkdir(dir, 0o755) == 0 || errno == EEXIST, isRootFolder(dir) else { return false }
+                // mkdir applies the umask: the mode is set again so the app can list the folder.
+                if mkdir(dir, 0o755) == 0 { chmod(dir, 0o755) } else if errno != EEXIST { return false }
+                guard isRootFolder(dir) else { return false }
             }
         }
         return true
