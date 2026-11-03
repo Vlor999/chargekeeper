@@ -425,4 +425,12 @@ for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet:
 assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois" && tr("+%d cycles", 14) == "14 cycles de plus")
 UserDefaults.standard.register(defaults: [languageKey: "system"])
 
+// Settings search: English and French text, accents and case ignored, every word required.
+let ids = { (q: String) in searchSettings(q).map(\.id) }
+assert(ids("login") == ["openAtLogin"] && ids("connexion") == ["openAtLogin"])
+assert(ids("REVEIL") == ["catchUp"] && ids("réveil") == ids("reveil"))
+assert(ids("niveau veille") == ["sleepFreeze"] && ids("login quit").isEmpty && ids("  ").isEmpty)
+assert(Set(settingsIndex.map(\.id)).count == settingsIndex.count)
+for e in settingsIndex { for k in [e.label, e.description].compactMap({ $0 }) { assert(french[k] != nil, k) } }
+
 print("logic ok")
