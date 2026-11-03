@@ -105,10 +105,13 @@ private func smcRead(_ key: String) -> [UInt8]? {
     return smc_read(key, &buf, &len) == 0 ? Array(buf.prefix(Int(len))) : nil
 }
 
+/// Keys whose last write failed: a lasting failure is retried every tick but logged once, until a write succeeds.
+private var failedSMCKeys: Set<String> = []
+
 @discardableResult
 private func smcWrite(_ key: String, _ bytes: [UInt8]) -> Bool {
     let ok = smc_write(key, bytes, UInt32(bytes.count)) == 0
-    if !ok { log("SMC write \(key) failed (root?)", .error) }
+    if ok { failedSMCKeys.remove(key) } else if failedSMCKeys.insert(key).inserted { log("SMC write \(key) failed (root?)", .error) }
     return ok
 }
 
