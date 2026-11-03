@@ -142,6 +142,19 @@ struct SettingsPaneView: View {
                         Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
                     }
                 }
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(tr("Send feedback"))
+                        Text(tr("An idea, a question, a bug? Opens a prefilled GitHub discussion, to write and post in your browser."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(feedbackURL())
+                    } label: {
+                        Label(tr("Give feedback"), systemImage: "bubble.left")
+                    }
+                }
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
             }

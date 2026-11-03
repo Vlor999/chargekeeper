@@ -135,6 +135,16 @@ let french: [String: String] = [
     "Support ChargeKeeper": "Soutenir ChargeKeeper",
     "Free and ad-free. A coffee helps keep it going.": "Gratuit et sans publicité. Un café aide à le faire vivre.",
     "Buy me a coffee": "Offrir un café",
+    "Send feedback": "Envoyer un avis",
+    "An idea, a question, a bug? Opens a prefilled GitHub discussion, to write and post in your browser.":
+        "Une idée, une question, un bug ? Ouvre une discussion GitHub préremplie, à écrire et publier dans le navigateur.",
+    "Give feedback": "Donner mon avis",
+    "Feedback on ChargeKeeper": "Avis sur ChargeKeeper",
+    "<!-- Your idea, question or remark. The context below helps understand it. -->":
+        "<!-- Votre idée, question ou remarque. Le contexte ci-dessous aide à la comprendre. -->",
+    "Context": "Contexte",
+    "Version: %@": "Version : %@",
+    "System: %@": "Système : %@",
     "Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple.":
         "Fourni tel quel, sans garantie (licence MIT). ChargeKeeper utilise des interfaces de macOS non documentées, susceptibles de changer : utilisation à vos risques. Projet indépendant, ni affilié à Apple ni approuvé par Apple.",
     "System": "Système",
