@@ -425,4 +425,23 @@ for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet:
 assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois" && tr("+%d cycles", 14) == "14 cycles de plus")
 UserDefaults.standard.register(defaults: [languageKey: "system"])
 
+// Log file names: one per UTC day, round trip; other names and impossible dates are not log files.
+let logToday = logDay(d("2026-11-03T23:59:59Z"))
+assert(logToday == logDay(d("2026-11-03T00:00:00Z")) && logToday == logDay(d("2026-11-04T00:00:00Z")) - 1)
+assert(logFileName(day: logToday) == "chargekeeper-2026-11-03.log" && logFileDay("chargekeeper-2026-11-03.log") == logToday)
+for n in ["chargekeeper-2026-02-31.log", "chargekeeper-2026-11-3.log", "chargekeeper-2026-11-03.log.tmp", "other-2026-11-03.log",
+          "chargekeeper-2026-11-0３.log", "chargekeeper-+026-11-03.log"] { assert(logFileDay(n) == nil, n) }
+
+// Log retention: whole days, a file goes once its last second is older than the kept days.
+assert(!logFileExpired(day: logToday, now: d("2026-11-04T23:59:59Z"), keepDays: 1))
+assert(logFileExpired(day: logToday, now: d("2026-11-05T00:00:00Z"), keepDays: 1))
+assert(!logFileExpired(day: logToday, now: d("2026-11-10T23:59:59Z"), keepDays: 7) && logFileExpired(day: logToday, now: d("2026-11-11T00:00:00Z"), keepDays: 7))
+
+// Log lines: round trip, line breaks flattened so one entry stays one line, foreign lines rejected.
+let logEntry = LogLine(date: d("2026-11-03T08:33:47Z"), level: .warn, message: "socket: invalid request\nnext")
+assert(logLineText(logEntry) == "2026-11-03T08:33:47Z warn socket: invalid request next\n")
+assert(parseLogLine(logLineText(logEntry).dropLast()) == LogLine(date: logEntry.date, level: .warn, message: "socket: invalid request next"))
+assert(parseLogLine("2026-11-03T08:33:47Z 80%: Pause -> Discharging") == nil && parseLogLine("") == nil)
+assert(LogLevel.info < .warn && .warn < .error)
+
 print("logic ok")

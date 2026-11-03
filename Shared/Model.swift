@@ -14,6 +14,17 @@ let limitReachedNotification = "com.vlor999.jauge.limitReached"
 let healthDailyDays = 180
 /// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
 let healthMaxSamples = 520
+/// Diagnostic log: one file per UTC day, written by the service (root, 0644 in a root-owned 0755 folder), read by the app.
+let logDir = "/Library/Application Support/Jauge/Logs"
+let logFilePrefix = "chargekeeper-"
+let logFileExtension = ".log"
+/// Days kept, counted in whole UTC days; the user picks within this range.
+let logDaysRange = 1...90
+let logDaysDefault = 7
+/// One day's file stops growing at this size: later entries of that day are dropped after one notice line.
+let logMaxFileBytes = 5 * 1024 * 1024
+/// Room left above the cap for the notice line.
+let logFullReserveBytes = 1024
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -22,6 +33,12 @@ enum ChargeState: String, Codable {
 
 enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
+}
+
+/// Diagnostic log levels, least to most severe.
+enum LogLevel: String, CaseIterable, Comparable {
+    case info, warn, error
+    static func < (a: LogLevel, b: LogLevel) -> Bool { allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)! }
 }
 
 enum LEDColor: String, Codable, CaseIterable { case system, off, green, orange, orangeBlink }
@@ -111,6 +128,8 @@ struct Config: Codable, Equatable {
     var keepLimitWhenStopped = true
     var catchUpMissedTasks = false
     var tasks: [ScheduledTask] = []
+    var logEnabled = true
+    var logDays = logDaysDefault
 }
 
 /// Daemon-owned state that survives restarts (calibration in progress, one-shot modes).
