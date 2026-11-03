@@ -129,6 +129,19 @@ struct SettingsPaneView: View {
                 }
             }
             Section(tr("About")) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(tr("Support ChargeKeeper"))
+                        Text(tr("Free and ad-free. A coffee helps keep it going."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(buyMeACoffeeURL)
+                    } label: {
+                        Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
+                    }
+                }
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
             }
