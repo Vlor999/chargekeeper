@@ -167,6 +167,7 @@ let french: [String: String] = [
     "Diagnostic": "Diagnostic",
     "Keep a diagnostic log": "Tenir un journal de diagnostic",
     "Keep: %d days": "Conserver : %d jours",
+    "Keep: 1 day": "Conserver : 1 jour",
     "Folder": "Dossier",
     "Open Folder": "Ouvrir le dossier",
     "Log": "Journal",

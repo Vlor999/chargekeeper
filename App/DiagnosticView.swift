@@ -7,12 +7,14 @@ struct DiagnosticView: View {
     @State private var minLevel = LogLevel.info
     @State private var lines: [LogLine]?
     @State private var error: String?
+    /// Only the latest load publishes: an earlier one finishing late is dropped.
+    @State private var generation = 0
 
     var body: some View {
         Form {
             Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
-                Stepper(tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
+                Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
                 LabeledContent(tr("Folder")) {
                     HStack {
                         Text(logDir).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
@@ -72,9 +74,12 @@ struct DiagnosticView: View {
     /// Files read off the main thread: a day's file can reach a few MB.
     func load() {
         let level = minLevel
+        generation += 1
+        let g = generation
         DispatchQueue.global(qos: .userInitiated).async {
             let r = Result { try readLog(limit: logViewLimit, minLevel: level) }
             DispatchQueue.main.async {
+                guard g == generation else { return }
                 switch r {
                 case .success(let l): lines = l; error = nil
                 case .failure(let e): error = e.localizedDescription
@@ -101,9 +106,14 @@ struct LogRow: View {
 }
 
 /// Latest entries at `minLevel` or above, newest first, from the newest files back. Files are opened without following a
-/// link and must be regular; unreadable lines are skipped. No folder yet (service never logged): no entry.
+/// link and must be regular; unreadable files and lines are skipped. No folder yet (service never logged): no entry; a folder
+/// that exists but cannot be listed: error.
 func readLog(limit: Int, minLevel: LogLevel) throws -> [LogLine] {
-    guard let names = try? FileManager.default.contentsOfDirectory(atPath: logDir) else { return [] }
+    let names: [String]
+    do { names = try FileManager.default.contentsOfDirectory(atPath: logDir) } catch {
+        if FileManager.default.fileExists(atPath: logDir) { throw error }
+        return []
+    }
     var out: [LogLine] = []
     for (_, name) in names.compactMap({ n in logFileDay(n).map { ($0, n) } }).sorted(by: { $0.0 > $1.0 }) {
         let fd = open(logDir + "/" + name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
@@ -111,7 +121,7 @@ func readLog(limit: Int, minLevel: LogLevel) throws -> [LogLine] {
         let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         var st = stat()
         guard fstat(fd, &st) == 0, st.st_mode & S_IFMT == S_IFREG,
-              let data = try h.read(upToCount: logMaxFileBytes + logFullReserveBytes) else { continue }
+              let data = try? h.read(upToCount: logMaxFileBytes + logFullReserveBytes) else { continue }
         for l in String(decoding: data, as: UTF8.self).split(separator: "\n").reversed() {
             guard let e = parseLogLine(l), e.level >= minLevel else { continue }
             out.append(e)
