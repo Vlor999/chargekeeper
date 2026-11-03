@@ -14,13 +14,16 @@ struct DiagnosticView: View {
         Form {
             Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
+                    .settingsRow("logEnabled")
                 Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
+                    .settingsRow("logDays")
                 LabeledContent(tr("Folder")) {
                     HStack {
                         Text(logDir).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                         Button(tr("Open Folder")) { NSWorkspace.shared.open(URL(fileURLWithPath: logDir, isDirectory: true)) }
                     }
                 }
+                .settingsRow("logFolder")
             } header: {
                 Text(tr("Log"))
             } footer: {
@@ -43,6 +46,7 @@ struct DiagnosticView: View {
                     }
                     .disabled(lines?.isEmpty ?? true)
                 }
+                .settingsRow("logViewer")
                 if m.status.map({ !$0.config.logEnabled }) == true {
                     Text(tr("Log off: no new entry.")).font(.caption).foregroundStyle(.secondary)
                 }

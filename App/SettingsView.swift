@@ -183,6 +183,7 @@ struct SettingsPaneView: View {
                         Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
                     }
                 }
+                .settingsRow("support")
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Send feedback"))
@@ -196,6 +197,7 @@ struct SettingsPaneView: View {
                         Label(tr("Give feedback"), systemImage: "bubble.left")
                     }
                 }
+                .settingsRow("feedback")
                 // Label above: the five links do not fit on one line next to it in French.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(tr("Links"))
@@ -208,6 +210,7 @@ struct SettingsPaneView: View {
                         Link(tr("Third-party licenses"), destination: thirdPartyNoticesURL)
                     }
                 }
+                .settingsRow("links")
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
                     .settingsRow("about")

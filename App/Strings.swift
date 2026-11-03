@@ -188,6 +188,7 @@ let french: [String: String] = [
     "Keep: %d days": "Conserver : %d jours",
     "Keep: 1 day": "Conserver : 1 jour",
     "Folder": "Dossier",
+    "Retention": "Conservation",
     "Open Folder": "Ouvrir le dossier",
     "Log": "Journal",
     "Written by the ChargeKeeper service on this Mac only: service start and stop, charge decisions, errors. Nothing is sent. Whole days older than the retention are deleted.":
