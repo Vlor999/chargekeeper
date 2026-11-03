@@ -3,11 +3,7 @@ import Sparkle
 import SwiftUI
 import UserNotifications
 
-enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, charge, sleep, led, schedule, battery
-
-    var id: Self { self }
-
+extension SettingsPane {
     var title: String {
         switch self {
         case .general: tr("General")
