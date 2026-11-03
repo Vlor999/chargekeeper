@@ -139,6 +139,12 @@ let french: [String: String] = [
     "An idea, a question, a bug? Opens a prefilled GitHub discussion, to write and post in your browser.":
         "Une idée, une question, un bug ? Ouvre une discussion GitHub préremplie, à écrire et publier dans le navigateur.",
     "Give feedback": "Donner mon avis",
+    "Links": "Liens",
+    "Source code": "Code source",
+    "Download page": "Page de téléchargement",
+    "Report an issue": "Signaler un problème",
+    "Privacy": "Confidentialité",
+    "Third-party licenses": "Licences tierces",
     "Feedback on ChargeKeeper": "Avis sur ChargeKeeper",
     "<!-- Your idea, question or remark. The context below helps understand it. -->":
         "<!-- Votre idée, question ou remarque. Le contexte ci-dessous aide à la comprendre. -->",

@@ -155,6 +155,18 @@ struct SettingsPaneView: View {
                         Label(tr("Give feedback"), systemImage: "bubble.left")
                     }
                 }
+                // Label above: the five links do not fit on one line next to it in French.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(tr("Links"))
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), alignment: .leading)], alignment: .leading, spacing: 4) {
+                        Link(tr("Source code"), destination: repoURL)
+                        Link(tr("Download page"), destination: siteURL)
+                        Button(tr("Report an issue")) { NSWorkspace.shared.open(bugReportURL(config: m.status?.config)) }
+                            .buttonStyle(.link)
+                        Link(tr("Privacy"), destination: privacyURL)
+                        Link(tr("Third-party licenses"), destination: thirdPartyNoticesURL)
+                    }
+                }
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
             }
