@@ -55,7 +55,7 @@ struct SettingsView: View {
             sidebar
                 .searchable(text: $query, placement: .sidebar, prompt: Text(tr("Search")))
                 .onSubmit(of: .search) { target = searchSettings(query).first?.id }
-                .onChange(of: query) { _, q in if q.isEmpty { target = nil } }
+                .onChange(of: query) { _, q in if let t = target, !searchSettings(q).contains(where: { $0.id == t }) { target = nil } }
                 .onChange(of: target) { _, id in if let e = settingsIndex.first(where: { $0.id == id }) { pane = e.pane } }
                 .navigationSplitViewColumnWidth(180)
                 .toolbar(removing: .sidebarToggle)
