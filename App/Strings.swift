@@ -264,4 +264,6 @@ let french: [String: String] = [
     "Battery at %@ %%. Charging paused at the limit.": "Batterie à %@ %%. Charge suspendue à la limite.",
     "Capacity: %@ → %@ mAh": "Capacité : %@ → %@ mAh",
     "Health: %@ → %@ %%": "Santé : %@ → %@ %%",
+    // Settings search
+    "Scheduled tasks": "Tâches planifiées",
 ]
