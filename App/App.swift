@@ -14,12 +14,7 @@ struct ChargeKeeperApp: App {
         MenuBarExtra {
             MenuView().environmentObject(model).localized(language)
         } label: {
-            Image(nsImage: {
-                let i = NSImage(named: "MenuIcon")!
-                i.size = NSSize(width: 18, height: 18)
-                i.isTemplate = true
-                return i
-            }())
+            MenuIconLabel(battery: model.battery)
         }
         .menuBarExtraStyle(.window)
         Window(tr("Dashboard"), id: "dashboard") { DashboardView().environmentObject(model).localized(language) }
@@ -32,6 +27,7 @@ final class AppModel: ObservableObject {
     @Published var status: Status?
     @Published var error: String?
     @Published var serviceStatus: SMAppService.Status = .notRegistered
+    let battery = BatteryLevel()
     let service = SMAppService.daemon(plistName: "com.vlor999.jauge.daemon.plist")
     /// Downloaded update waiting for the app to quit; the menu offers to install it now.
     @Published var readyUpdate: (version: String, install: () -> Void)?

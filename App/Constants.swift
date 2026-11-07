@@ -18,3 +18,6 @@ let githubPrefillMaxURLLength = 8_000
 
 /// Entries shown by the Diagnostic pane's log viewer, newest first.
 let logViewLimit = 500
+
+/// Menu bar icon side, in points.
+let menuIconSize: CGFloat = 18
