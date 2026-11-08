@@ -38,6 +38,15 @@ final class AppModel: ObservableObject {
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    /// Component power charts on screen: while > 0, status refreshes ask the service for its power history.
+    private var charts = 0
+    /// The service's CPU, GPU and Neural Engine power history, as of the last refresh with a chart on screen.
+    @Published private(set) var socHistory: [SoCPowerPoint] = []
+
+    func chartOnScreen(_ on: Bool) {
+        charts = max(charts + (on ? 1 : -1), 0)
+        if charts == 0 { socHistory = [] } else if on && charts == 1 { refresh() }
+    }
 
     init() {
         let w = UpdateWatcher()
@@ -60,7 +69,8 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        run(.status())
+        run(.status(soc: charts > 0 ? true : nil))
+        if charts > 0, error == nil, let h = status?.socHistory, h != socHistory { socHistory = h }
         serviceStatus = service.status
     }
 
@@ -375,6 +385,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
+        PowerGraph(history: m.socHistory, onScreen: m.chartOnScreen)
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }
