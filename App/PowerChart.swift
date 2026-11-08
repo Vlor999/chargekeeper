@@ -40,12 +40,14 @@ private extension View {
 }
 
 /// The three curves on one W scale from 0 to the window's peak (at least 1 W, so idle stays flat), smoothed with
-/// monotone interpolation: no overshoot below 0 or above a measured peak. Before the first points: the empty frame over
-/// the last minutes.
+/// monotone interpolation: no overshoot below 0 or above a measured peak. A gap (sleep, powermetrics restart) splits each
+/// curve. Before the first points: the empty frame over the last minutes.
 private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some ChartContent {
-    ForEach(Component.all, id: \.name) { c in
-        ForEach(history, id: \.date) { p in
-            LineMark(x: .value(tr("Time"), p.date), y: .value(tr("Power"), c.value(p.power)), series: .value("", c.name))
+    let segments = powerSegments(history, maxGap: socMaxGap)
+    return ForEach(Component.all, id: \.name) { c in
+        ForEach(history.indices, id: \.self) { i in
+            let p = history[i]
+            LineMark(x: .value(tr("Time"), p.date), y: .value(tr("Power"), c.value(p.power)), series: .value("", "\(c.name) \(segments[i])"))
                 .interpolationMethod(.monotone)
                 .foregroundStyle(c.color)
                 .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: c.dashed ? [5, 4] : []))

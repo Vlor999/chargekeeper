@@ -509,6 +509,15 @@ func currentPower(_ history: [SoCPowerPoint], now: Date, maxAge: TimeInterval) -
     return p.power
 }
 
+/// Curve segment of each point: a new segment starts after a gap longer than `maxGap`, so missing data is not drawn.
+func powerSegments(_ history: [SoCPowerPoint], maxGap: TimeInterval) -> [Int] {
+    var segment = 0
+    return history.indices.map { i in
+        if i > 0 && history[i].date.timeIntervalSince(history[i - 1].date) > maxGap { segment += 1 }
+        return segment
+    }
+}
+
 /// The points of the last `window` seconds before `now`: once powermetrics stops, its history ages out of the reply.
 func recentPowerPoints(_ history: [SoCPowerPoint], now: Date, window: TimeInterval) -> [SoCPowerPoint] {
     history.filter { now.timeIntervalSince($0.date) <= window }
