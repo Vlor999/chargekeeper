@@ -20,6 +20,7 @@ func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
 final class Daemon {
     var s: Saved
     let hw = Backend()
+    let power = PowerMetrics()
     var reading = Reading()
     var sleepDisabled = false
     var lastScheduleCheck = Date()
@@ -207,6 +208,7 @@ final class Daemon {
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
+        if case .status(soc: true) = cmd { out.socHistory = power.history }
         return out
     }
 
@@ -222,6 +224,7 @@ final class Daemon {
     /// An app update replaced our binary: exit without touching the limit, launchd (KeepAlive) starts the new one.
     func restartForUpdate() {
         hw.setDischarge(false)
+        power.terminate()
         if sleepDisabled { _ = setSleepDisabled(false) }
         save()
         unlink(socketPath)
@@ -230,6 +233,7 @@ final class Daemon {
     }
 
     func stop() {
+        power.terminate()
         hw.shutdown(keepLimit: s.config.keepLimitWhenStopped, limit: s.config.limit)
         if sleepDisabled { _ = setSleepDisabled(false) }
         s.runtime.state = .exit
@@ -308,6 +312,7 @@ func runDaemon() -> Never {
     serve()
     watchSleep()
     daemon.tick()
+    daemon.power.keepRunning()
     let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let built = { (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate]) as? Date }
     let startedFrom = built()
@@ -315,6 +320,7 @@ func runDaemon() -> Never {
     keep.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
         if built() != startedFrom { daemon.restartForUpdate() }
         daemon.tick()
+        daemon.power.keepRunning()
     })
     RunLoop.main.run()
     exit(0)
