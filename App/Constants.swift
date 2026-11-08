@@ -21,3 +21,6 @@ let logViewLimit = 500
 
 /// Menu bar icon side, in points.
 let menuIconSize: CGFloat = 18
+
+/// Window and graph visibility reports arriving within this delay share one status request.
+let refreshCoalesceDelay: TimeInterval = 0.1

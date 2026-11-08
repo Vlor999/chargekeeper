@@ -37,7 +37,7 @@ final class AppModel: ObservableObject {
     private var timer: Timer?
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
-    var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    var visible = 0 { didSet { if visible > 0 { refreshSoon() } } }
     /// Component power charts on screen: while > 0, status refreshes ask the service for its power history.
     private var charts = 0
     /// The service's CPU, GPU and Neural Engine power history, as of the last refresh with a chart on screen.
@@ -47,7 +47,21 @@ final class AppModel: ObservableObject {
 
     func chartOnScreen(_ on: Bool) {
         charts = max(charts + (on ? 1 : -1), 0)
-        if charts == 0 { socHistory = [] } else if on && charts == 1 { refresh() }
+        if charts == 0 { socHistory = [] } else if on && charts == 1 { refreshSoon() }
+    }
+
+    private var refreshPending = false
+
+    /// A window and its graph come on screen within a few run loop turns, each asking for a refresh: one socket call
+    /// after `refreshCoalesceDelay`, with the power history if a graph is on screen by then. A graph reported later still
+    /// gets its own refresh.
+    private func refreshSoon() {
+        guard !refreshPending else { return }
+        refreshPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + refreshCoalesceDelay) { [weak self] in
+            self?.refreshPending = false
+            self?.refresh()
+        }
     }
 
     init() {
