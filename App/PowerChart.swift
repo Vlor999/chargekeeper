@@ -31,11 +31,25 @@ private struct Component {
     }
 }
 
-private extension View {
-    /// Reports going on or off screen once per change: window shown, hidden or closed, view removed.
-    func onScreen(_ shown: Binding<Bool>, _ report: @escaping (Bool) -> Void) -> some View {
-        background(WindowVisibility { v in if v != shown.wrappedValue { shown.wrappedValue = v; report(v) } })
-            .onDisappear { if shown.wrappedValue { shown.wrappedValue = false; report(false) } }
+/// Reports going on or off screen once per change: window shown, hidden or closed, view removed. Visibility arrives
+/// asynchronously: a report landing after the view was removed is ignored, so the app's chart count cannot stay above 0.
+private struct OnScreen: ViewModifier {
+    let report: (Bool) -> Void
+    @State private var shown = false
+    @State private var removed = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowVisibility { v in
+                guard !removed, v != shown else { return }
+                shown = v
+                report(v)
+            })
+            .onAppear { removed = false }
+            .onDisappear {
+                removed = true
+                if shown { shown = false; report(false) }
+            }
     }
 }
 
@@ -66,7 +80,6 @@ struct PowerGraph: View {
     let history: [SoCPowerPoint]
     var now = Date()
     var onScreen: (Bool) -> Void = { _ in }
-    @State private var shown = false
 
     var body: some View {
         let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
@@ -95,7 +108,7 @@ struct PowerGraph: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tr("Power by component"))
         .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
-        .onScreen($shown, onScreen)
+        .modifier(OnScreen(report: onScreen))
     }
 }
 
@@ -104,7 +117,6 @@ struct PowerChart: View {
     let history: [SoCPowerPoint]
     var now = Date()
     var onScreen: (Bool) -> Void = { _ in }
-    @State private var shown = false
 
     var body: some View {
         let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
@@ -133,7 +145,7 @@ struct PowerChart: View {
                 .accessibilityLabel(tr("Power by component"))
                 .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
         }
-        .onScreen($shown, onScreen)
+        .modifier(OnScreen(report: onScreen))
     }
 
     /// Line key and latest value of each component, in text ink: identity comes from the mark, never from colored text.
