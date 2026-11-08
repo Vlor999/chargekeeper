@@ -33,6 +33,8 @@ let powermetricsArguments = ["--samplers", "cpu_power,gpu_power", "-i", "5000", 
 let powermetricsInterval: TimeInterval = 5
 /// Power history kept by the service in memory: 60 points at one per 5 s.
 let socHistoryWindow: TimeInterval = 5 * 60
+/// A newest point older than this (two samples missed) is no longer shown as the current value.
+let socMaxGap: TimeInterval = 2 * powermetricsInterval
 /// After powermetrics fails or exits on its own, the service waits this long before starting it again.
 let socRetryDelay: TimeInterval = 60
 /// One sample is a few KB: a partial sample past this size is dropped.

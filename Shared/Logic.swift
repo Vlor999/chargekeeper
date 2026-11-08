@@ -503,6 +503,12 @@ func appendPowerPoint(_ history: [SoCPowerPoint], _ p: SoCPowerPoint, window: Ti
     (history + [p]).filter { p.date.timeIntervalSince($0.date) <= window && $0.date <= p.date }
 }
 
+/// The newest power, unless it is older than `maxAge` at `now` (powermetrics stopped or the service is stuck).
+func currentPower(_ history: [SoCPowerPoint], now: Date, maxAge: TimeInterval) -> SoCPower? {
+    guard let p = history.last, now.timeIntervalSince(p.date) <= maxAge else { return nil }
+    return p.power
+}
+
 /// The points of the last `window` seconds before `now`: once powermetrics stops, its history ages out of the reply.
 func recentPowerPoints(_ history: [SoCPowerPoint], now: Date, window: TimeInterval) -> [SoCPowerPoint] {
     history.filter { now.timeIntervalSince($0.date) <= window }

@@ -218,7 +218,7 @@ struct DashboardView: View {
                     }
                 }
                 PowerFlow(s: s).frame(height: 220)
-                PowerChart(history: m.socHistory, onScreen: m.chartOnScreen)
+                PowerChart(history: m.socHistory, now: m.socAsOf, onScreen: m.chartOnScreen)
             } else {
                 Text(m.error ?? tr("Connecting…")).foregroundStyle(.secondary)
             }

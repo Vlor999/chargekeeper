@@ -53,8 +53,8 @@ private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some
     }
 }
 
-private func powerScale(_ history: [SoCPowerPoint]) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
-    let end = history.last?.date ?? Date()
+/// The window ends at `now` (the history's arrival), so a stopped feed slides out instead of looking current.
+private func powerScale(_ history: [SoCPowerPoint], now end: Date) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
     let peak = history.map { max($0.power.cpuWatts, $0.power.gpuWatts, $0.power.aneWatts) }.max() ?? 0
     return (end.addingTimeInterval(-socHistoryWindow)...end, 0...max(peak, 1))
 }
@@ -62,11 +62,12 @@ private func powerScale(_ history: [SoCPowerPoint]) -> (x: ClosedRange<Date>, y:
 /// Menu: one compact card, the latest values above the three curves, no axes.
 struct PowerGraph: View {
     let history: [SoCPowerPoint]
+    var now = Date()
     var onScreen: (Bool) -> Void = { _ in }
     @State private var shown = false
 
     var body: some View {
-        let latest = history.last?.power, scale = powerScale(history)
+        let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 ForEach(Component.all, id: \.name) { c in
@@ -99,11 +100,12 @@ struct PowerGraph: View {
 /// Dashboard: the three components on one axis in W, with the latest values in the legend.
 struct PowerChart: View {
     let history: [SoCPowerPoint]
+    var now = Date()
     var onScreen: (Bool) -> Void = { _ in }
     @State private var shown = false
 
     var body: some View {
-        let latest = history.last?.power, scale = powerScale(history)
+        let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Power by component")).font(.caption).foregroundStyle(.secondary)
             legend(latest)

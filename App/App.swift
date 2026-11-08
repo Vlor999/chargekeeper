@@ -42,6 +42,8 @@ final class AppModel: ObservableObject {
     private var charts = 0
     /// The service's CPU, GPU and Neural Engine power history, as of the last refresh with a chart on screen.
     @Published private(set) var socHistory: [SoCPowerPoint] = []
+    /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
+    @Published private(set) var socAsOf = Date()
 
     func chartOnScreen(_ on: Bool) {
         charts = max(charts + (on ? 1 : -1), 0)
@@ -70,7 +72,12 @@ final class AppModel: ObservableObject {
 
     func refresh() {
         run(.status(soc: charts > 0 ? true : nil))
-        if charts > 0, error == nil, let h = status?.socHistory, h != socHistory { socHistory = h }
+        if charts > 0 {
+            // No answer (or an older service): no history rather than the last one shown as current.
+            let h = error == nil ? status?.socHistory ?? [] : []
+            if h != socHistory { socHistory = h }
+            socAsOf = Date()
+        }
         serviceStatus = service.status
     }
 
@@ -385,7 +392,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
-        PowerGraph(history: m.socHistory, onScreen: m.chartOnScreen)
+        PowerGraph(history: m.socHistory, now: m.socAsOf, onScreen: m.chartOnScreen)
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }
