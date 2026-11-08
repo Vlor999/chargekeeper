@@ -13,7 +13,7 @@ final class PowerMetrics {
     /// When SIGTERM was sent, by the service or after powermetrics closed its output.
     private var termAt: Date?
     private var failedAt = Date.distantPast
-    private var lastWarn = Date.distantPast
+    private var lastWarn = Date.distantPast, lastFailureLog = Date.distantPast
     private(set) var history: [SoCPowerPoint] = []
 
     /// Called at launch and by the service timer: starts powermetrics (again, after the retry delay), reaps it, and
@@ -121,14 +121,17 @@ final class PowerMetrics {
         buffer = Data()
     }
 
+    /// Retried every `socRetryDelay`; logged on the first failure, then at most once per `socWarnInterval`.
     private func failed(_ why: String) {
         failedAt = Date()
-        log("powermetrics: \(why), retry in \(Int(socRetryDelay)) s", .warn)
+        rateLimited(&lastFailureLog, "\(why), retry every \(Int(socRetryDelay)) s")
     }
 
-    private func warn(_ why: String) {
-        guard Date().timeIntervalSince(lastWarn) >= socWarnInterval else { return }
-        lastWarn = Date()
+    private func warn(_ why: String) { rateLimited(&lastWarn, why) }
+
+    private func rateLimited(_ last: inout Date, _ why: String) {
+        guard Date().timeIntervalSince(last) >= socWarnInterval else { return }
+        last = Date()
         log("powermetrics: \(why)", .warn)
     }
 }
