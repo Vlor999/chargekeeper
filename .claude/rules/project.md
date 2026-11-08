@@ -24,6 +24,7 @@ description: "ChargeKeeper project rules: branches, commits, PRs, validation, re
 - Visible change: local demo and explicit user validation before commit.
 - Stay inside the requested scope: no refactor, no speculative feature. Simplicity first.
 - Menu bar app: nothing may run while no window is open (no animation, no polling). Measure CPU and memory with the menu closed after a UI change.
+  - Single exception, in the root service: it runs `powermetrics` continuously (one sample per 5 s) for the CPU, GPU and Neural Engine power history. Measured with the menu closed on M4 Pro / macOS 27.2: 0.68 % CPU, 5 MB RSS. The app still runs nothing while no window is open.
 
 ## Security
 
