@@ -208,7 +208,7 @@ final class Daemon {
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
-        if case .status(soc: true) = cmd { out.socHistory = power.history }
+        if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryWindow) }
         return out
     }
 

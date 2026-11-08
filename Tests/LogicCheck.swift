@@ -329,6 +329,9 @@ let pw = SoCPower(cpuWatts: 1, gpuWatts: 0, aneWatts: 0)
 var pwHistory = [0.0, 100, 200].map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0), power: pw) }
 pwHistory = appendPowerPoint(pwHistory, SoCPowerPoint(date: Date(timeIntervalSince1970: 300), power: pw), window: 250)
 assert(pwHistory.map(\.date.timeIntervalSince1970) == [100, 200, 300])
+// Reply: only the points of the window before now, so a stopped powermetrics leaves no stale history.
+assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 420), window: 250).map(\.date.timeIntervalSince1970) == [200, 300])
+assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 1000), window: 250).isEmpty)
 
 // powermetrics stream: NUL-terminated samples are taken off, the partial tail stays, an oversized tail is dropped.
 var pmBuffer = Data("a\0\0b\0par".utf8)

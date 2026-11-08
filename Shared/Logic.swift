@@ -503,6 +503,11 @@ func appendPowerPoint(_ history: [SoCPowerPoint], _ p: SoCPowerPoint, window: Ti
     (history + [p]).filter { p.date.timeIntervalSince($0.date) <= window && $0.date <= p.date }
 }
 
+/// The points of the last `window` seconds before `now`: once powermetrics stops, its history ages out of the reply.
+func recentPowerPoints(_ history: [SoCPowerPoint], now: Date, window: TimeInterval) -> [SoCPowerPoint] {
+    history.filter { now.timeIntervalSince($0.date) <= window }
+}
+
 /// Takes the complete samples off a powermetrics plist stream, where each sample ends with a NUL byte. The partial
 /// sample at the end stays in the buffer; one that grows past `maxBytes` is dropped (`dropped`).
 func takePlistSamples(_ buffer: inout Data, maxBytes: Int) -> (samples: [Data], dropped: Bool) {
