@@ -2,8 +2,7 @@ import Charts
 import SwiftUI
 
 /// CPU, GPU and Neural Engine power over the service's last minutes (`socHistoryWindow`). Both views redraw only when
-/// a refresh brings a new history: no timeline of their own. Either one counts as a chart on screen, which makes the
-/// status refresh ask for the history.
+/// a refresh brings a new history: no timeline of their own.
 private struct Component {
     let name: String
     let color: Color
@@ -28,28 +27,6 @@ private struct Component {
         Path { $0.move(to: CGPoint(x: 1, y: 1)); $0.addLine(to: CGPoint(x: width - 1, y: 1)) }
             .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [3, 2] : []))
             .frame(width: width, height: 2)
-    }
-}
-
-/// Reports going on or off screen once per change: window shown, hidden or closed, view removed. Visibility arrives
-/// asynchronously: a report landing after the view was removed is ignored, so the app's chart count cannot stay above 0.
-private struct OnScreen: ViewModifier {
-    let report: (Bool) -> Void
-    @State private var shown = false
-    @State private var removed = false
-
-    func body(content: Content) -> some View {
-        content
-            .background(WindowVisibility { v in
-                guard !removed, v != shown else { return }
-                shown = v
-                report(v)
-            })
-            .onAppear { removed = false }
-            .onDisappear {
-                removed = true
-                if shown { shown = false; report(false) }
-            }
     }
 }
 
@@ -79,7 +56,6 @@ private func powerScale(_ history: [SoCPowerPoint], now end: Date) -> (x: Closed
 struct PowerGraph: View {
     let history: [SoCPowerPoint]
     var now = Date()
-    var onScreen: (Bool) -> Void = { _ in }
 
     var body: some View {
         let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
@@ -108,7 +84,6 @@ struct PowerGraph: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tr("Power by component"))
         .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
-        .modifier(OnScreen(report: onScreen))
     }
 }
 
@@ -116,7 +91,6 @@ struct PowerGraph: View {
 struct PowerChart: View {
     let history: [SoCPowerPoint]
     var now = Date()
-    var onScreen: (Bool) -> Void = { _ in }
 
     var body: some View {
         let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
@@ -145,7 +119,6 @@ struct PowerChart: View {
                 .accessibilityLabel(tr("Power by component"))
                 .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
         }
-        .modifier(OnScreen(report: onScreen))
     }
 
     /// Line key and latest value of each component, in text ink: identity comes from the mark, never from colored text.

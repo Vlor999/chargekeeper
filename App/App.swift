@@ -37,32 +37,12 @@ final class AppModel: ObservableObject {
     private var timer: Timer?
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
-    var visible = 0 { didSet { if visible > 0 { refreshSoon() } } }
-    /// Component power charts on screen: while > 0, status refreshes ask the service for its power history.
-    private var charts = 0
-    /// The service's CPU, GPU and Neural Engine power history, as of the last refresh with a chart on screen.
+    var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    /// The service's CPU, GPU and Neural Engine power history (60 points at most). Kept when the windows close, so an
+    /// opening window draws the last curves at once; its first refresh replaces them.
     @Published private(set) var socHistory: [SoCPowerPoint] = []
     /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
     @Published private(set) var socAsOf = Date()
-
-    func chartOnScreen(_ on: Bool) {
-        charts = max(charts + (on ? 1 : -1), 0)
-        if charts == 0 { socHistory = [] } else if on && charts == 1 { refreshSoon() }
-    }
-
-    private var refreshPending = false
-
-    /// A window and its graph come on screen within a few run loop turns, each asking for a refresh: one socket call
-    /// after `refreshCoalesceDelay`, with the power history if a graph is on screen by then. A graph reported later still
-    /// gets its own refresh.
-    private func refreshSoon() {
-        guard !refreshPending else { return }
-        refreshPending = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + refreshCoalesceDelay) { [weak self] in
-            self?.refreshPending = false
-            self?.refresh()
-        }
-    }
 
     init() {
         let w = UpdateWatcher()
@@ -84,14 +64,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// With the power history: the menu and the dashboard both show it (Settings only adds a few KB per refresh).
     func refresh() {
-        run(.status(soc: charts > 0 ? true : nil))
-        if charts > 0 {
-            // No answer (or an older service): no history rather than the last one shown as current.
-            let h = error == nil ? status?.socHistory ?? [] : []
-            if h != socHistory { socHistory = h }
-            socAsOf = Date()
-        }
+        run(.status(soc: true))
+        // No answer (or an older service): no history rather than the last one shown as current.
+        let h = error == nil ? status?.socHistory ?? [] : []
+        if h != socHistory { socHistory = h }
+        socAsOf = Date()
         serviceStatus = service.status
     }
 
@@ -406,7 +385,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
-        PowerGraph(history: m.socHistory, now: m.socAsOf, onScreen: m.chartOnScreen)
+        PowerGraph(history: m.socHistory, now: m.socAsOf)
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }
