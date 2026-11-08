@@ -114,6 +114,10 @@ let french: [String: String] = [
     "13.3 / 15 W: what a device draws, out of the most its port can supply.":
         "13.3 / 15 W : ce que consomme un appareil, sur le maximum que son port peut fournir.",
     "Adapter": "Adaptateur",
+    "Power by component": "Consommation par composant",
+    "Neural Engine": "Neural Engine",
+    "Time": "Heure",
+    "Power": "Puissance",
     "Battery": "Batterie",
     "Adapter too weak: the battery supplies %@": "Adaptateur trop faible : la batterie complète %@",
     " (adapter %d W)": " (adaptateur %d W)",

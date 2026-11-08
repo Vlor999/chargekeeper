@@ -38,6 +38,11 @@ final class AppModel: ObservableObject {
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    /// The service's CPU, GPU and Neural Engine power history (60 points at most). Kept when the windows close, so an
+    /// opening window draws the last curves at once; its first refresh replaces them.
+    @Published private(set) var socHistory: [SoCPowerPoint] = []
+    /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
+    @Published private(set) var socAsOf = Date()
 
     init() {
         let w = UpdateWatcher()
@@ -48,7 +53,7 @@ final class AppModel: ObservableObject {
         if service.status == .notRegistered { enableService() }
         UNUserNotificationCenter.current().delegate = banner
         // Posted by the service when a calibration finishes: event driven, nothing runs in between.
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
+        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
         notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
@@ -59,8 +64,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// With the power history: the menu and the dashboard both show it (Settings only adds a few KB per refresh).
     func refresh() {
-        run(.status)
+        run(.status(soc: true))
+        // No answer (or an older service): no history rather than the last one shown as current.
+        let h = error == nil ? status?.socHistory ?? [] : []
+        if h != socHistory { socHistory = h }
+        socAsOf = Date()
         serviceStatus = service.status
     }
 
@@ -111,7 +121,7 @@ final class AppModel: ObservableObject {
     /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
     private func notice(_ kind: NoticeKind) {
         guard kind.enabled else { return }
-        run(.status)
+        run(.status())
         guard let s = status, error == nil else { return }
         let n = UNMutableNotificationContent()
         switch kind {
@@ -375,6 +385,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
+        PowerGraph(history: m.socHistory, now: m.socAsOf)
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }
