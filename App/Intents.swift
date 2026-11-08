@@ -4,22 +4,22 @@ import AppIntents
 
 struct GetBatteryPercentage: AppIntent {
     static var title: LocalizedStringResource = "Get Battery Percentage"
-    func perform() async throws -> some IntentResult & ReturnsValue<Int> { .result(value: try send(.status).percent) }
+    func perform() async throws -> some IntentResult & ReturnsValue<Int> { .result(value: try send(.status()).percent) }
 }
 
 struct GetChargeLimit: AppIntent {
     static var title: LocalizedStringResource = "Get Charge Limit"
-    func perform() async throws -> some IntentResult & ReturnsValue<Int> { .result(value: try send(.status).config.limit) }
+    func perform() async throws -> some IntentResult & ReturnsValue<Int> { .result(value: try send(.status()).config.limit) }
 }
 
 struct GetState: AppIntent {
     static var title: LocalizedStringResource = "Get State"
-    func perform() async throws -> some IntentResult & ReturnsValue<String> { .result(value: try send(.status).runtime.state.rawValue) }
+    func perform() async throws -> some IntentResult & ReturnsValue<String> { .result(value: try send(.status()).runtime.state.rawValue) }
 }
 
 struct GetTemperature: AppIntent {
     static var title: LocalizedStringResource = "Get Temperature"
-    func perform() async throws -> some IntentResult & ReturnsValue<Double> { .result(value: try send(.status).temperature ?? 0) }
+    func perform() async throws -> some IntentResult & ReturnsValue<Double> { .result(value: try send(.status()).temperature ?? 0) }
 }
 
 struct SetChargeLimit: AppIntent {

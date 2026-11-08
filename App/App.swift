@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
         if service.status == .notRegistered { enableService() }
         UNUserNotificationCenter.current().delegate = banner
         // Posted by the service when a calibration finishes: event driven, nothing runs in between.
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
+        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
         notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
@@ -60,7 +60,7 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        run(.status)
+        run(.status())
         serviceStatus = service.status
     }
 
@@ -111,7 +111,7 @@ final class AppModel: ObservableObject {
     /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
     private func notice(_ kind: NoticeKind) {
         guard kind.enabled else { return }
-        run(.status)
+        run(.status())
         guard let s = status, error == nil else { return }
         let n = UNMutableNotificationContent()
         switch kind {

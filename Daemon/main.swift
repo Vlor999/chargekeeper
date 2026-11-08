@@ -344,7 +344,7 @@ func cli(_ a: [String]) -> Int32 {
     let n = a.count > 1 ? Int(a[1]) : nil
     let cmd: Command
     switch (a.first ?? "status", n) {
-    case ("status", _): cmd = .status
+    case ("status", _): cmd = .status()
     case ("limit", let n?): cmd = .setLimit(n)
     case ("discharge", let n?): cmd = .dischargeTo(n)
     case ("discharge", nil) where a.count > 1: cmd = .discharge(on)
