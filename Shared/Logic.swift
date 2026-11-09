@@ -503,17 +503,50 @@ func appendPowerPoint(_ history: [SoCPowerPoint], _ p: SoCPowerPoint, window: Ti
     (history + [p]).filter { p.date.timeIntervalSince($0.date) <= window && $0.date <= p.date }
 }
 
-/// The newest power, unless it is older than `maxAge` at `now` (powermetrics stopped or the service is stuck).
-func currentPower(_ history: [SoCPowerPoint], now: Date, maxAge: TimeInterval) -> SoCPower? {
-    guard let p = history.last, now.timeIntervalSince(p.date) <= maxAge else { return nil }
+/// powermetrics arguments for an interval, each a fixed string; nil when off (powermetrics not running).
+func powermetricsArguments(_ i: PowerInterval) -> [String]? {
+    let ms: String
+    switch i {
+    case .off: return nil
+    case .s1: ms = "1000"
+    case .s2: ms = "2000"
+    case .s5: ms = "5000"
+    case .s10: ms = "10000"
+    case .s30: ms = "30000"
+    }
+    return ["--samplers", "cpu_power,gpu_power", "-i", ms, "-f", "plist"]
+}
+
+/// The app's refresh period while a window is open: `appPollInterval`, or the power interval when shorter, so the graph
+/// gets each point as it comes. Off: `appPollInterval`.
+func appRefreshInterval(_ i: PowerInterval) -> TimeInterval {
+    i == .off ? appPollInterval : min(appPollInterval, TimeInterval(i.rawValue))
+}
+
+/// Longest normal wait for a point: `socMaxGapIntervals` of its own sampling interval, so a point taken at 30 s stays
+/// current as long as one taken at 1 s, relative to its interval.
+func powerMaxGap(_ p: SoCPowerPoint) -> TimeInterval { socMaxGapIntervals * (p.interval ?? powermetricsInterval) }
+
+/// The newest power, unless it is older than its `powerMaxGap` at `now` (powermetrics stopped or the service is stuck).
+func currentPower(_ history: [SoCPowerPoint], now: Date) -> SoCPower? {
+    guard let p = history.last, now.timeIntervalSince(p.date) <= powerMaxGap(p) else { return nil }
     return p.power
 }
 
-/// Curve segment of each point: a new segment starts after a gap longer than `maxGap`, so missing data is not drawn.
-func powerSegments(_ history: [SoCPowerPoint], maxGap: TimeInterval) -> [Int] {
+/// Longest gap from point `a` to the next point `b` that is still one curve. Same interval: `powerMaxGap`. Interval
+/// change (powermetrics restarted): also the rest of the old interval, the new process's first sample and `socRestartSlack`.
+func powerMaxGap(from a: SoCPowerPoint, to b: SoCPowerPoint) -> TimeInterval {
+    let old = a.interval ?? powermetricsInterval, new = b.interval ?? powermetricsInterval
+    let gap = max(powerMaxGap(a), powerMaxGap(b))
+    return old == new ? gap : max(gap, old + 2 * new + socRestartSlack)
+}
+
+/// Curve segment of each point: a new segment starts after a gap longer than `powerMaxGap(from:to:)`, so missing data is
+/// not drawn. Each point carries its own interval: after an interval change, the points sampled before keep their spacing.
+func powerSegments(_ history: [SoCPowerPoint]) -> [Int] {
     var segment = 0
     return history.indices.map { i in
-        if i > 0 && history[i].date.timeIntervalSince(history[i - 1].date) > maxGap { segment += 1 }
+        if i > 0 && history[i].date.timeIntervalSince(history[i - 1].date) > powerMaxGap(from: history[i - 1], to: history[i]) { segment += 1 }
         return segment
     }
 }

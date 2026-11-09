@@ -1,14 +1,20 @@
 import Foundation
 
-/// CPU, GPU and Neural Engine power from powermetrics (root only), started with the service and kept running: the
-/// last `socHistoryWindow` of samples stays in memory, so a chart opened later shows the last minutes at once.
-/// If powermetrics ends on its own, the service starts it again after `socRetryDelay`.
+/// CPU, GPU and Neural Engine power from powermetrics (root only), started with the service and kept running at the
+/// interval set in Settings: the last `socHistoryWindow` of samples stays in memory, so a chart opened later shows the
+/// last minutes at once. If powermetrics ends on its own, the service starts it again after `socRetryDelay`.
 final class PowerMetrics {
+    /// The setting. Off: powermetrics is not running and the history is empty.
+    private var interval: PowerInterval
+    /// The interval of the running powermetrics, stamped on its points.
+    private var running = PowerInterval.off
     private var pid: pid_t = 0
     private var reader: DispatchSourceRead?
     private var exitWatch: DispatchSourceProcess?
     private var buffer = Data()
-    /// The service asked powermetrics to stop: its exit is not a failure.
+    /// The service is exiting: powermetrics does not start again.
+    private var shutdown = false
+    /// The service asked powermetrics to stop (exit, interval change, off): its exit is not a failure.
     private var stopping = false
     /// When SIGTERM was sent, by the service or after powermetrics closed its output.
     private var termAt: Date?
@@ -16,13 +22,26 @@ final class PowerMetrics {
     private var lastWarn = Date.distantPast, lastFailureLog = Date.distantPast
     private(set) var history: [SoCPowerPoint] = []
 
+    init(interval: PowerInterval) { self.interval = interval }
+
+    /// Settings change. Off: stops powermetrics and clears the history. Another interval: restarts powermetrics with it
+    /// at once (on its exit), the history kept: each point carries the interval it was sampled at.
+    func configure(_ i: PowerInterval) {
+        guard i != interval else { return }
+        interval = i
+        log("powermetrics: " + (i == .off ? "off" : "every \(i.rawValue) s"))
+        if i == .off { history = [] }
+        failedAt = .distantPast
+        if pid != 0 { stopping = true; signalTerm() } else { keepRunning() }
+    }
+
     /// Called at launch and by the service timer: starts powermetrics (again, after the retry delay), reaps it, and
     /// kills one that ignores SIGTERM.
     func keepRunning() {
         // Backstop for an exit the watch missed (child gone before the watch was armed).
         if pid != 0 { exited() }
         if pid == 0 {
-            if !stopping && Date().timeIntervalSince(failedAt) >= socRetryDelay { start() }
+            if !shutdown && interval != .off && Date().timeIntervalSince(failedAt) >= socRetryDelay { start() }
             return
         }
         if let t = termAt, Date().timeIntervalSince(t) > socKillGrace { kill(pid, SIGKILL) }
@@ -30,6 +49,7 @@ final class PowerMetrics {
 
     /// Service exit or update: asks powermetrics to exit and not to start again. Reaped by launchd once the service is gone.
     func terminate() {
+        shutdown = true
         stopping = true
         guard pid != 0 else { return }
         signalTerm()
@@ -41,6 +61,7 @@ final class PowerMetrics {
     }
 
     private func start() {
+        guard let args = powermetricsArguments(interval) else { return }
         var fds: [Int32] = [-1, -1]
         guard pipe(&fds) == 0 else { return failed("pipe failed: errno \(errno)") }
         var actions: posix_spawn_file_actions_t?
@@ -60,7 +81,7 @@ final class PowerMetrics {
         posix_spawnattr_setsigmask(&attr, &mask)
         posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
 
-        let argv = ([powermetricsPath] + powermetricsArguments).map { strdup($0) } + [nil]
+        let argv = ([powermetricsPath] + args).map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
         var envp: [UnsafeMutablePointer<CChar>?] = [nil]
         var child: pid_t = 0
@@ -68,6 +89,7 @@ final class PowerMetrics {
         close(fds[1])
         guard rc == 0 else { close(fds[0]); return failed("spawn failed: \(rc)") }
         pid = child
+        running = interval
         termAt = nil
         buffer = Data()
         _ = fcntl(fds[0], F_SETFL, fcntl(fds[0], F_GETFL) | O_NONBLOCK)
@@ -79,7 +101,7 @@ final class PowerMetrics {
         r.resume()
         reader = r
         let w = DispatchSource.makeProcessSource(identifier: child, eventMask: .exit, queue: .main)
-        w.setEventHandler { [weak self] in self?.exited() }
+        w.setEventHandler { [weak self] in self?.exited(waiting: true) }
         w.resume()
         exitWatch = w
     }
@@ -94,9 +116,10 @@ final class PowerMetrics {
                 let taken = takePlistSamples(&buffer, maxBytes: socMaxSampleBytes)
                 samples += taken.samples.count
                 dropped = dropped || taken.dropped
-                // One sample per interval; a malformed one is skipped.
-                if let p = taken.samples.reversed().lazy.compactMap(socPower).first {
-                    history = appendPowerPoint(history, SoCPowerPoint(date: Date(), power: p), window: socHistoryWindow)
+                // One sample per interval; a malformed one is skipped. Turned off: the last samples before the exit are dropped.
+                if interval != .off, let p = taken.samples.reversed().lazy.compactMap(socPower).first {
+                    let point = SoCPowerPoint(date: Date(), power: p, interval: TimeInterval(running.rawValue))
+                    history = appendPowerPoint(history, point, window: socHistoryWindow)
                     parsed = true
                 }
                 continue
@@ -109,16 +132,21 @@ final class PowerMetrics {
         if samples > 0 && !parsed { warn("\(samples) unreadable sample(s)") }
     }
 
-    /// Reaps powermetrics if it has exited.
-    private func exited() {
+    /// Reaps powermetrics if it has exited. `waiting`: called by its exit event, where WNOHANG may still find it running;
+    /// the wait is for an exit already under way, so a restart after an interval change does not wait for the next tick.
+    private func exited(waiting: Bool = false) {
         var status: Int32 = 0
-        guard pid != 0, waitpid(pid, &status, WNOHANG) == pid else { return }
+        guard pid != 0, waitpid(pid, &status, waiting ? 0 : WNOHANG) == pid else { return }
         if !stopping { failed("exited on its own (status \(status))") }
         reader?.cancel(); reader = nil
         exitWatch?.cancel(); exitWatch = nil
         pid = 0
         termAt = nil
         buffer = Data()
+        // Stopped for an interval change: the new one starts now.
+        let restart = stopping && !shutdown
+        stopping = shutdown
+        if restart { keepRunning() }
     }
 
     /// Retried every `socRetryDelay`; logged on the first failure, then at most once per `socWarnInterval`.

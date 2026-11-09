@@ -25,17 +25,22 @@ let logDaysDefault = 7
 let logMaxFileBytes = 5 * 1024 * 1024
 /// Room left above the cap for the notice line.
 let logFullReserveBytes = 1024
-/// CPU, GPU and Neural Engine power: powermetrics runs as long as the service, one sample per 5 s, even with no window
-/// open (deliberate exception: the CPU and Neural Engine energy counters only move while powermetrics samples them).
+/// CPU, GPU and Neural Engine power: powermetrics runs as long as the service, at the interval set in Settings (5 s by
+/// default, or off), even with no window open (deliberate exception: the CPU and Neural Engine energy counters only move
+/// while powermetrics samples them). Its arguments come from `powermetricsArguments(_:)`, fixed per `PowerInterval`.
 let powermetricsPath = "/usr/bin/powermetrics"
-let powermetricsArguments = ["--samplers", "cpu_power,gpu_power", "-i", "5000", "-f", "plist"]
-/// Sampling period set by `-i`, used when a sample lacks its own elapsed time.
+/// Sampling period of a point from a service older than `SoCPowerPoint.interval`, and of a sample lacking its own elapsed time.
 let powermetricsInterval: TimeInterval = 5
-/// Power history kept by the service in memory: 60 points at one per 5 s.
+/// The app's status refresh while a window is open, at most this long apart; shorter when the power interval is.
+let appPollInterval: TimeInterval = 2
+/// Power history kept by the service in memory, whatever the interval: 300 points at 1 s, 10 at 30 s.
 let socHistoryWindow: TimeInterval = 5 * 60
-/// Two samples missed: a newest point older than this is no longer the current value, and a longer gap between two
-/// points (sleep, powermetrics restart) splits the curve.
-let socMaxGap: TimeInterval = 2 * powermetricsInterval
+/// Samples missed, as a multiple of the sampling interval: a newest point older than this is no longer the current
+/// value, and a longer gap between two points (sleep, powermetrics restart) splits the curve (`powerMaxGap`).
+let socMaxGapIntervals: TimeInterval = 2
+/// Across an interval change, powermetrics restarts: its first sample came 11.5 s after the last 1 s point when switching
+/// to 5 s (M4 Pro), about two new intervals. The gap there may reach the old interval, two new ones and this slack.
+let socRestartSlack: TimeInterval = 5
 /// After powermetrics fails or exits on its own, the service waits this long before starting it again.
 let socRetryDelay: TimeInterval = 60
 /// One sample is a few KB: a partial sample past this size is dropped.
@@ -59,6 +64,10 @@ enum LogLevel: String, CaseIterable, Comparable {
     case info, warn, error
     static func < (a: LogLevel, b: LogLevel) -> Bool { allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)! }
 }
+
+/// powermetrics sampling interval chosen in Settings, in seconds; `off` stops powermetrics. A closed list: a socket
+/// request with any other value fails to decode, so no free number reaches powermetrics' arguments.
+enum PowerInterval: Int, Codable, CaseIterable { case off = 0, s1 = 1, s2 = 2, s5 = 5, s10 = 10, s30 = 30 }
 
 enum LEDColor: String, Codable, CaseIterable { case system, off, green, orange, orangeBlink }
 
@@ -149,10 +158,11 @@ struct Config: Codable, Equatable {
     var tasks: [ScheduledTask] = []
     var logEnabled = true
     var logDays = logDaysDefault
+    var powerInterval = PowerInterval.s5
 }
 
 extension Config {
-    /// Lenient for the log fields only: a service older than them sends a config without them.
+    /// Lenient for the log and power interval fields only: a service older than them sends a config without them.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         limit = try c.decode(Int.self, forKey: .limit)
@@ -170,6 +180,7 @@ extension Config {
         tasks = try c.decode([ScheduledTask].self, forKey: .tasks)
         logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? true
         logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? logDaysDefault
+        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? .s5
     }
 }
 
@@ -249,6 +260,7 @@ struct SoCPower: Codable, Equatable {
 struct SoCPowerPoint: Codable, Equatable {
     var date: Date
     var power: SoCPower
+    var interval: TimeInterval?  // sampling interval in effect, in s; nil from an older service (5 s)
 }
 
 struct Status: Codable {

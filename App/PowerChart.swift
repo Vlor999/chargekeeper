@@ -34,7 +34,7 @@ private struct Component {
 /// monotone interpolation: no overshoot below 0 or above a measured peak. A gap (sleep, powermetrics restart) splits each
 /// curve. Before the first points: the empty frame over the last minutes.
 private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some ChartContent {
-    let segments = powerSegments(history, maxGap: socMaxGap)
+    let segments = powerSegments(history)
     return ForEach(Component.all, id: \.name) { c in
         ForEach(history.indices, id: \.self) { i in
             let p = history[i]
@@ -58,7 +58,7 @@ struct PowerGraph: View {
     var now = Date()
 
     var body: some View {
-        let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
+        let latest = currentPower(history, now: now), scale = powerScale(history, now: now)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 ForEach(Component.all, id: \.name) { c in
@@ -93,7 +93,7 @@ struct PowerChart: View {
     var now = Date()
 
     var body: some View {
-        let latest = currentPower(history, now: now, maxAge: socMaxGap), scale = powerScale(history, now: now)
+        let latest = currentPower(history, now: now), scale = powerScale(history, now: now)
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Power by component")).font(.caption).foregroundStyle(.secondary)
             legend(latest)

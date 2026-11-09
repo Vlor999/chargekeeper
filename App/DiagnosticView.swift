@@ -13,6 +13,18 @@ struct DiagnosticView: View {
     var body: some View {
         Form {
             Section {
+                Picker(tr("Sampling interval"), selection: m.config(\.powerInterval)) {
+                    Text(tr("Off")).tag(PowerInterval.off)
+                    ForEach(PowerInterval.allCases.filter { $0 != .off }, id: \.self) { Text(tr("%d s", $0.rawValue)).tag($0) }
+                }
+                .settingsRow("powerInterval")
+            } header: {
+                Text(tr("Power by component"))
+            } footer: {
+                Text(tr("CPU, GPU and Neural Engine power, measured by the service with powermetrics even when no window is open. Shorter is finer but costs more: about 3 % CPU at 1 s, 0.7 % at 5 s. Off hides the graphs."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
                     .settingsRow("logEnabled")
                 Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
