@@ -330,11 +330,49 @@ var pwHistory = [0.0, 100, 200].map { SoCPowerPoint(date: Date(timeIntervalSince
 pwHistory = appendPowerPoint(pwHistory, SoCPowerPoint(date: Date(timeIntervalSince1970: 300), power: pw), window: 250)
 assert(pwHistory.map(\.date.timeIntervalSince1970) == [100, 200, 300])
 // Current value: the newest point while it is recent enough, nothing once it is stale or without points.
-assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 310), maxAge: 10) == pw)
-assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 311), maxAge: 10) == nil && currentPower([], now: Date(), maxAge: 10) == nil)
-// Curve segments: a gap longer than the limit starts a new one, a gap at the limit does not.
+// A point without an interval (older service) counts as 5 s; one with an interval is current for two of its own intervals.
+assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 310)) == pw)
+assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 311)) == nil && currentPower([], now: Date()) == nil)
+let pw30 = [SoCPowerPoint(date: Date(timeIntervalSince1970: 300), power: pw, interval: 30)]
+assert(currentPower(pw30, now: Date(timeIntervalSince1970: 360)) == pw && currentPower(pw30, now: Date(timeIntervalSince1970: 361)) == nil)
+// Curve segments: a gap longer than two intervals starts a new one, a gap at the limit does not.
 let pwGaps = [0.0, 5, 10, 60, 65, 75].map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0), power: pw) }
-assert(powerSegments(pwGaps, maxGap: 10) == [0, 0, 0, 1, 1, 1] && powerSegments([], maxGap: 10).isEmpty)
+assert(powerSegments(pwGaps) == [0, 0, 0, 1, 1, 1] && powerSegments([]).isEmpty)
+// Interval change: the points before keep their spacing, the restart gap (old interval + two new ones + 5 s slack)
+// does not split, a longer one does, and a real gap at 1 s still splits.
+let pwPoints = { (pts: [(Double, Double)]) in pts.map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0.0), power: pw, interval: $0.1) } }
+let pwSplit = { (old: Double, new: Double, gap: Double) in powerSegments(pwPoints([(0, old), (old, old), (old + gap, new), (old + gap + new, new)])) }
+assert(pwSplit(1, 5, 11.55) == [0, 0, 0, 0] && pwSplit(1, 5, 16) == [0, 0, 0, 0] && pwSplit(1, 5, 16.01) == [0, 0, 1, 1])
+assert(pwSplit(5, 1, 12) == [0, 0, 0, 0] && pwSplit(5, 1, 12.01) == [0, 0, 1, 1])
+assert(pwSplit(1, 30, 66) == [0, 0, 0, 0] && pwSplit(1, 30, 66.01) == [0, 0, 1, 1])
+assert(pwSplit(30, 1, 60) == [0, 0, 0, 0] && pwSplit(30, 1, 60.01) == [0, 0, 1, 1])
+assert(powerSegments(pwPoints([(0, 30), (30, 30), (60, 30), (61.5, 1), (62.5, 1), (63.5, 1), (66, 1)])) == [0, 0, 0, 0, 0, 0, 1])
+
+// powermetrics arguments: one fixed `-i` per interval in ms, none when off; the rest never changes.
+assert(powermetricsArguments(.off) == nil)
+assert(powermetricsArguments(.s1) == ["--samplers", "cpu_power,gpu_power", "-i", "1000", "-f", "plist"])
+for i in PowerInterval.allCases where i != .off {
+    var a = powermetricsArguments(i)!
+    assert(a[3] == String(i.rawValue * 1000), "\(i)")
+    a[3] = "5000"
+    assert(a == powermetricsArguments(.s5)!)
+}
+// Power interval setting: 5 s by default and when a config lacks it (older service or state); any value outside the
+// list fails the decode, so the socket cannot carry it.
+var pwConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
+assert(Config().powerInterval == .s5 && pwConfig["powerInterval"] as? Int == 5)
+pwConfig["powerInterval"] = nil
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .s5)
+pwConfig["powerInterval"] = 1
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .s1)
+pwConfig["powerInterval"] = 0
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .off)
+pwConfig["powerInterval"] = 3
+assert((try? JSONDecoder().decode(Command.self, from: JSONSerialization.data(withJSONObject: ["setConfig": ["_0": pwConfig]]))) == nil)
+pwConfig["powerInterval"] = 2
+if case .setConfig(let c)? = try? JSONDecoder().decode(Command.self, from: JSONSerialization.data(withJSONObject: ["setConfig": ["_0": pwConfig]])) {
+    assert(c.powerInterval == .s2)
+} else { assert(false) }
 // Reply: only the points of the window before now, so a stopped powermetrics leaves no stale history.
 assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 420), window: 250).map(\.date.timeIntervalSince1970) == [200, 300])
 assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 1000), window: 250).isEmpty)

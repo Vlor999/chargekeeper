@@ -20,7 +20,7 @@ func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
 final class Daemon {
     var s: Saved
     let hw = Backend()
-    let power = PowerMetrics()
+    let power: PowerMetrics
     var reading = Reading()
     var sleepDisabled = false
     var lastScheduleCheck = Date()
@@ -33,6 +33,7 @@ final class Daemon {
 
     init() {
         s = Daemon.load()
+        power = PowerMetrics(interval: s.config.powerInterval)
         DiagnosticLog.configure(s.config)
         // A crash may have left sleep disabled: start from the system default.
         _ = setSleepDisabled(false)
@@ -173,12 +174,14 @@ final class Daemon {
             c.idleRange = clamp(c.idleRange, 1, 30)
             c.maxTemp = min(max(c.maxTemp, 25), 50)
             c.logDays = clamp(c.logDays, logDaysRange.lowerBound, logDaysRange.upperBound)
+            // powerInterval needs no clamp: a value outside `PowerInterval` fails the request's decode.
             // Clients may hold a stale lastRun; never move it backwards or a task re-runs.
             let old = Dictionary(s.config.tasks.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
             for i in c.tasks.indices { if let l = old[c.tasks[i].id] ?? nil, l > (c.tasks[i].lastRun ?? .distantPast) { c.tasks[i].lastRun = l } }
             let logChanged = c.logEnabled != s.config.logEnabled || c.logDays != s.config.logDays
             s.config = c
             if logChanged { DiagnosticLog.configure(c) }
+            power.configure(c.powerInterval)
         case .setLimit(let n): s.config.limit = clamp(n, 20, 100)
         case .discharge(let on): s.runtime.discharge = on
         case .dischargeTo(let n): s.config.limit = clamp(n, 20, 100); s.runtime.discharge = true
