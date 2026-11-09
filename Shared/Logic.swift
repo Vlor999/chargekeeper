@@ -517,6 +517,12 @@ func powermetricsArguments(_ i: PowerInterval) -> [String]? {
     return ["--samplers", "cpu_power,gpu_power", "-i", ms, "-f", "plist"]
 }
 
+/// The app's refresh period while a window is open: `appPollInterval`, or the power interval when shorter, so the graph
+/// gets each point as it comes. Off: `appPollInterval`.
+func appRefreshInterval(_ i: PowerInterval) -> TimeInterval {
+    i == .off ? appPollInterval : min(appPollInterval, TimeInterval(i.rawValue))
+}
+
 /// Longest normal wait for a point: `socMaxGapIntervals` of its own sampling interval, so a point taken at 30 s stays
 /// current as long as one taken at 1 s, relative to its interval.
 func powerMaxGap(_ p: SoCPowerPoint) -> TimeInterval { socMaxGapIntervals * (p.interval ?? powermetricsInterval) }

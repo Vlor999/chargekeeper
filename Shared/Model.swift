@@ -31,6 +31,8 @@ let logFullReserveBytes = 1024
 let powermetricsPath = "/usr/bin/powermetrics"
 /// Sampling period of a point from a service older than `SoCPowerPoint.interval`, and of a sample lacking its own elapsed time.
 let powermetricsInterval: TimeInterval = 5
+/// The app's status refresh while a window is open, at most this long apart; shorter when the power interval is.
+let appPollInterval: TimeInterval = 2
 /// Power history kept by the service in memory, whatever the interval: 300 points at 1 s, 10 at 30 s.
 let socHistoryWindow: TimeInterval = 5 * 60
 /// Samples missed, as a multiple of the sampling interval: a newest point older than this is no longer the current

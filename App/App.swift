@@ -25,7 +25,7 @@ struct ChargeKeeperApp: App {
 }
 
 final class AppModel: ObservableObject {
-    @Published var status: Status?
+    @Published var status: Status? { didSet { scheduleRefresh() } }
     @Published var error: String?
     @Published var serviceStatus: SMAppService.Status = .notRegistered
     let battery = BatteryLevel()
@@ -36,6 +36,7 @@ final class AppModel: ObservableObject {
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
+    private var refreshEvery: TimeInterval = 0
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
@@ -59,8 +60,17 @@ final class AppModel: ObservableObject {
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
         refresh()
-        // ponytail: 2s polling of a local socket; push notifications if it ever matters
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        scheduleRefresh()
+    }
+
+    /// One timer, rescheduled only when the period changes with the power interval setting.
+    /// ponytail: polling of a local socket every 1-2 s; push notifications if it ever matters
+    private func scheduleRefresh() {
+        let every = appRefreshInterval(status?.config.powerInterval ?? .s5)
+        guard every != refreshEvery else { return }
+        refreshEvery = every
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: every, repeats: true) { [weak self] _ in
             if let self, self.visible > 0 { self.refresh() }
         }
     }

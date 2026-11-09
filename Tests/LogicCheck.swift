@@ -348,6 +348,9 @@ assert(pwSplit(1, 30, 66) == [0, 0, 0, 0] && pwSplit(1, 30, 66.01) == [0, 0, 1, 
 assert(pwSplit(30, 1, 60) == [0, 0, 0, 0] && pwSplit(30, 1, 60.01) == [0, 0, 1, 1])
 assert(powerSegments(pwPoints([(0, 30), (30, 30), (60, 30), (61.5, 1), (62.5, 1), (63.5, 1), (66, 1)])) == [0, 0, 0, 0, 0, 0, 1])
 
+// App refresh: the power interval when shorter than 2 s, else 2 s; off keeps 2 s.
+assert(PowerInterval.allCases.map(appRefreshInterval) == [2, 1, 2, 2, 2, 2])
+
 // powermetrics arguments: one fixed `-i` per interval in ms, none when off; the rest never changes.
 assert(powermetricsArguments(.off) == nil)
 assert(powermetricsArguments(.s1) == ["--samplers", "cpu_power,gpu_power", "-i", "1000", "-f", "plist"])
