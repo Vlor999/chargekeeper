@@ -561,6 +561,13 @@ func spreadLabels(_ y: [Double], gap: Double, height: Double) -> [Double] {
     return y
 }
 
+/// Left edge of a menu window of `width` centred under `anchor` (the status item's x span), kept `margin` inside `screen`
+/// (the x span of the screen's visible frame, global coordinates). Wider than the screen: pinned to the left margin.
+func centeredMenuX(width: Double, under anchor: ClosedRange<Double>, in screen: ClosedRange<Double>, margin: Double) -> Double {
+    let x = (anchor.lowerBound + anchor.upperBound - width) / 2
+    return max(min(x, screen.upperBound - margin - width), screen.lowerBound + margin)
+}
+
 /// SF Symbol for a USB device name.
 // ponytail: substring match on Apple product names; anything else gets the generic connector.
 func deviceIcon(_ name: String?) -> String {

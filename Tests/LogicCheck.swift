@@ -529,4 +529,16 @@ oldConfig["logEnabled"] = nil; oldConfig["logDays"] = nil
 assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: oldConfig)) == Config())
 assert(try! JSONDecoder().decode(Config.self, from: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) == Config(logEnabled: false, logDays: 30))
 
+// Menu window: centred under the status item, clamped inside the screen, on any display origin.
+let mainScreen = 0.0...1512, leftScreen = -1920.0...0, rightScreen = 1512.0...4072
+assert(centeredMenuX(width: 320, under: 1000...1030, in: mainScreen, margin: 8) == 855)
+assert(centeredMenuX(width: 320, under: 1480...1510, in: mainScreen, margin: 8) == 1184)
+assert(centeredMenuX(width: 320, under: 20...50, in: mainScreen, margin: 8) == 8)
+assert(centeredMenuX(width: 320, under: -900...(-870), in: leftScreen, margin: 8) == -1045)
+assert(centeredMenuX(width: 320, under: -1915...(-1885), in: leftScreen, margin: 8) == -1912)
+assert(centeredMenuX(width: 320, under: -40...(-10), in: leftScreen, margin: 8) == -328)
+assert(centeredMenuX(width: 320, under: 1520...1550, in: rightScreen, margin: 8) == 1520)
+assert(centeredMenuX(width: 320, under: 3000...3030, in: rightScreen, margin: 8) == 2855)
+assert(centeredMenuX(width: 2000, under: 1000...1030, in: mainScreen, margin: 8) == 8)
+
 print("logic ok")

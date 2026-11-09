@@ -3,6 +3,7 @@ import Sparkle
 import SwiftUI
 import UserNotifications
 import notify
+import os
 
 @main
 struct ChargeKeeperApp: App {
@@ -12,7 +13,7 @@ struct ChargeKeeperApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView().environmentObject(model).localized(language)
+            MenuView().environmentObject(model).localized(language).background(MenuCentering())
         } label: {
             MenuIconLabel(battery: model.battery)
         }
@@ -173,6 +174,57 @@ final class AppModel: ObservableObject {
     func config<T>(_ kp: WritableKeyPath<Config, T>) -> Binding<T> {
         Binding(get: { self.status?.config[keyPath: kp] ?? Config()[keyPath: kp] },
                 set: { v in guard var c = self.status?.config else { return }; c[keyPath: kp] = v; self.run(.setConfig(c)) })
+    }
+}
+
+/// MenuBarExtra aligns the window's left edge on the status item; this re-centres it under the item. Driven by the window's
+/// own move/resize/key notifications, and only acts while the window is on screen. The observers stay attached while the
+/// menu is closed, but nothing polls and a notification then returns at once.
+struct MenuCentering: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    final class Probe: NSView {
+        private static var reportedMissing = false
+        private var tokens: [NSObjectProtocol] = []
+        private weak var observed: NSWindow?
+        private var moving = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, window !== observed else { return }
+            tokens.forEach(NotificationCenter.default.removeObserver)
+            observed = window
+            // didBecomeKey: if macOS places the window before ordering it in, didMove sees it hidden and skips; becoming key
+            // is the first notification once it is on screen, posted inside makeKeyAndOrderFront.
+            tokens = [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didBecomeKeyNotification].map {
+                NotificationCenter.default.addObserver(forName: $0, object: window, queue: nil) { [weak self] _ in self?.center() }
+            }
+            center()
+        }
+
+        private func center() {
+            guard let window, window.isVisible, !moving else { return }
+            // ponytail: finds the status item through AppKit's private NSStatusBarWindow class (one per menu bar copy; the
+            // copies not on a screen have no screen). If AppKit renames it the menu keeps the default left alignment; the
+            // upgrade path is an own NSStatusItem + NSPanel.
+            let items = NSApp.windows.filter { $0.className == "NSStatusBarWindow" && $0.screen != nil }
+            let mouse = NSEvent.mouseLocation
+            guard let item = items.first(where: { $0.screen!.frame.contains(mouse) }) ?? items.first, let screen = item.screen else {
+                if !Self.reportedMissing {
+                    Self.reportedMissing = true
+                    os_log(.error, "menu centering: status item window not found, menu keeps the default alignment")
+                }
+                return
+            }
+            let f = window.frame, i = item.frame, visible = screen.visibleFrame, scale = window.backingScaleFactor
+            let raw = centeredMenuX(width: f.width, under: i.minX...i.maxX, in: visible.minX...visible.maxX, margin: menuScreenMargin)
+            let x = (raw * scale).rounded() / scale
+            guard abs(x - f.minX) > 1 else { return }
+            moving = true
+            window.setFrameOrigin(NSPoint(x: x, y: f.minY))
+            moving = false
+        }
     }
 }
 
