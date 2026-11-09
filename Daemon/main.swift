@@ -20,6 +20,7 @@ func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
 final class Daemon {
     var s: Saved
     let hw = Backend()
+    let power: PowerMetrics
     var reading = Reading()
     var sleepDisabled = false
     var lastScheduleCheck = Date()
@@ -32,6 +33,7 @@ final class Daemon {
 
     init() {
         s = Daemon.load()
+        power = PowerMetrics(interval: s.config.powerInterval)
         DiagnosticLog.configure(s.config)
         // A crash may have left sleep disabled: start from the system default.
         _ = setSleepDisabled(false)
@@ -172,12 +174,14 @@ final class Daemon {
             c.idleRange = clamp(c.idleRange, 1, 30)
             c.maxTemp = min(max(c.maxTemp, 25), 50)
             c.logDays = clamp(c.logDays, logDaysRange.lowerBound, logDaysRange.upperBound)
+            // powerInterval needs no clamp: a value outside `PowerInterval` fails the request's decode.
             // Clients may hold a stale lastRun; never move it backwards or a task re-runs.
             let old = Dictionary(s.config.tasks.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
             for i in c.tasks.indices { if let l = old[c.tasks[i].id] ?? nil, l > (c.tasks[i].lastRun ?? .distantPast) { c.tasks[i].lastRun = l } }
             let logChanged = c.logEnabled != s.config.logEnabled || c.logDays != s.config.logDays
             s.config = c
             if logChanged { DiagnosticLog.configure(c) }
+            power.configure(c.powerInterval)
         case .setLimit(let n): s.config.limit = clamp(n, 20, 100)
         case .discharge(let on): s.runtime.discharge = on
         case .dischargeTo(let n): s.config.limit = clamp(n, 20, 100); s.runtime.discharge = true
@@ -207,6 +211,7 @@ final class Daemon {
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
+        if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryWindow) }
         return out
     }
 
@@ -222,6 +227,7 @@ final class Daemon {
     /// An app update replaced our binary: exit without touching the limit, launchd (KeepAlive) starts the new one.
     func restartForUpdate() {
         hw.setDischarge(false)
+        power.terminate()
         if sleepDisabled { _ = setSleepDisabled(false) }
         save()
         unlink(socketPath)
@@ -230,6 +236,7 @@ final class Daemon {
     }
 
     func stop() {
+        power.terminate()
         hw.shutdown(keepLimit: s.config.keepLimitWhenStopped, limit: s.config.limit)
         if sleepDisabled { _ = setSleepDisabled(false) }
         s.runtime.state = .exit
@@ -308,6 +315,7 @@ func runDaemon() -> Never {
     serve()
     watchSleep()
     daemon.tick()
+    daemon.power.keepRunning()
     let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let built = { (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate]) as? Date }
     let startedFrom = built()
@@ -315,6 +323,7 @@ func runDaemon() -> Never {
     keep.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
         if built() != startedFrom { daemon.restartForUpdate() }
         daemon.tick()
+        daemon.power.keepRunning()
     })
     RunLoop.main.run()
     exit(0)
@@ -344,7 +353,7 @@ func cli(_ a: [String]) -> Int32 {
     let n = a.count > 1 ? Int(a[1]) : nil
     let cmd: Command
     switch (a.first ?? "status", n) {
-    case ("status", _): cmd = .status
+    case ("status", _): cmd = .status()
     case ("limit", let n?): cmd = .setLimit(n)
     case ("discharge", let n?): cmd = .dischargeTo(n)
     case ("discharge", nil) where a.count > 1: cmd = .discharge(on)

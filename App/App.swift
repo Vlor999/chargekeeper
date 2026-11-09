@@ -3,6 +3,7 @@ import Sparkle
 import SwiftUI
 import UserNotifications
 import notify
+import os
 
 @main
 struct ChargeKeeperApp: App {
@@ -12,7 +13,7 @@ struct ChargeKeeperApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView().environmentObject(model).localized(language)
+            MenuView().environmentObject(model).localized(language).background(MenuCentering())
         } label: {
             MenuIconLabel(battery: model.battery)
         }
@@ -24,7 +25,7 @@ struct ChargeKeeperApp: App {
 }
 
 final class AppModel: ObservableObject {
-    @Published var status: Status?
+    @Published var status: Status? { didSet { scheduleRefresh() } }
     @Published var error: String?
     @Published var serviceStatus: SMAppService.Status = .notRegistered
     let battery = BatteryLevel()
@@ -35,9 +36,15 @@ final class AppModel: ObservableObject {
     private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
     private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
     private var timer: Timer?
+    private var refreshEvery: TimeInterval = 0
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    /// The service's CPU, GPU and Neural Engine power history (300 points at most, at 1 s). Kept when the windows close, so an
+    /// opening window draws the last curves at once; its first refresh replaces them.
+    @Published private(set) var socHistory: [SoCPowerPoint] = []
+    /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
+    @Published private(set) var socAsOf = Date()
 
     init() {
         let w = UpdateWatcher()
@@ -48,19 +55,33 @@ final class AppModel: ObservableObject {
         if service.status == .notRegistered { enableService() }
         UNUserNotificationCenter.current().delegate = banner
         // Posted by the service when a calibration finishes: event driven, nothing runs in between.
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status) }
+        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
         notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
         refresh()
-        // ponytail: 2s polling of a local socket; push notifications if it ever matters
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        scheduleRefresh()
+    }
+
+    /// One timer, rescheduled only when the period changes with the power interval setting.
+    /// ponytail: polling of a local socket every 1-2 s; push notifications if it ever matters
+    private func scheduleRefresh() {
+        let every = appRefreshInterval(status?.config.powerInterval ?? .s5)
+        guard every != refreshEvery else { return }
+        refreshEvery = every
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: every, repeats: true) { [weak self] _ in
             if let self, self.visible > 0 { self.refresh() }
         }
     }
 
+    /// With the power history: the menu and the dashboard both show it (Settings only adds a few KB per refresh).
     func refresh() {
-        run(.status)
+        run(.status(soc: true))
+        // No answer (or an older service): no history rather than the last one shown as current.
+        let h = error == nil ? status?.socHistory ?? [] : []
+        if h != socHistory { socHistory = h }
+        socAsOf = Date()
         serviceStatus = service.status
     }
 
@@ -111,7 +132,7 @@ final class AppModel: ObservableObject {
     /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
     private func notice(_ kind: NoticeKind) {
         guard kind.enabled else { return }
-        run(.status)
+        run(.status())
         guard let s = status, error == nil else { return }
         let n = UNMutableNotificationContent()
         switch kind {
@@ -163,6 +184,57 @@ final class AppModel: ObservableObject {
     func config<T>(_ kp: WritableKeyPath<Config, T>) -> Binding<T> {
         Binding(get: { self.status?.config[keyPath: kp] ?? Config()[keyPath: kp] },
                 set: { v in guard var c = self.status?.config else { return }; c[keyPath: kp] = v; self.run(.setConfig(c)) })
+    }
+}
+
+/// MenuBarExtra aligns the window's left edge on the status item; this re-centres it under the item. Driven by the window's
+/// own move/resize/key notifications, and only acts while the window is on screen. The observers stay attached while the
+/// menu is closed, but nothing polls and a notification then returns at once.
+struct MenuCentering: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    final class Probe: NSView {
+        private static var reportedMissing = false
+        private var tokens: [NSObjectProtocol] = []
+        private weak var observed: NSWindow?
+        private var moving = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, window !== observed else { return }
+            tokens.forEach(NotificationCenter.default.removeObserver)
+            observed = window
+            // didBecomeKey: if macOS places the window before ordering it in, didMove sees it hidden and skips; becoming key
+            // is the first notification once it is on screen, posted inside makeKeyAndOrderFront.
+            tokens = [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didBecomeKeyNotification].map {
+                NotificationCenter.default.addObserver(forName: $0, object: window, queue: nil) { [weak self] _ in self?.center() }
+            }
+            center()
+        }
+
+        private func center() {
+            guard let window, window.isVisible, !moving else { return }
+            // ponytail: finds the status item through AppKit's private NSStatusBarWindow class (one per menu bar copy; the
+            // copies not on a screen have no screen). If AppKit renames it the menu keeps the default left alignment; the
+            // upgrade path is an own NSStatusItem + NSPanel.
+            let items = NSApp.windows.filter { $0.className == "NSStatusBarWindow" && $0.screen != nil }
+            let mouse = NSEvent.mouseLocation
+            guard let item = items.first(where: { $0.screen!.frame.contains(mouse) }) ?? items.first, let screen = item.screen else {
+                if !Self.reportedMissing {
+                    Self.reportedMissing = true
+                    os_log(.error, "menu centering: status item window not found, menu keeps the default alignment")
+                }
+                return
+            }
+            let f = window.frame, i = item.frame, visible = screen.visibleFrame, scale = window.backingScaleFactor
+            let raw = centeredMenuX(width: f.width, under: i.minX...i.maxX, in: visible.minX...visible.maxX, margin: menuScreenMargin)
+            let x = (raw * scale).rounded() / scale
+            guard abs(x - f.minX) > 1 else { return }
+            moving = true
+            window.setFrameOrigin(NSPoint(x: x, y: f.minY))
+            moving = false
+        }
     }
 }
 
@@ -375,6 +447,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
+        if s.config.powerInterval != .off { PowerGraph(history: m.socHistory, now: m.socAsOf) }
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }

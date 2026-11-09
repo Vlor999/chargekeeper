@@ -324,6 +324,118 @@ assert(lastOccurrence(t, after: d("2026-10-01T00:00:00Z"), upTo: d("2026-10-24T0
 assert(macWatts(system: 27, ports: [1, 13]) == 13)
 assert(macWatts(system: 10, ports: [13]) == 10)
 
+// Component power history: points older than the window before the newest are dropped, the newest is kept.
+let pw = SoCPower(cpuWatts: 1, gpuWatts: 0, aneWatts: 0)
+var pwHistory = [0.0, 100, 200].map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0), power: pw) }
+pwHistory = appendPowerPoint(pwHistory, SoCPowerPoint(date: Date(timeIntervalSince1970: 300), power: pw), window: 250)
+assert(pwHistory.map(\.date.timeIntervalSince1970) == [100, 200, 300])
+// Current value: the newest point while it is recent enough, nothing once it is stale or without points.
+// A point without an interval (older service) counts as 5 s; one with an interval is current for two of its own intervals.
+assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 310)) == pw)
+assert(currentPower(pwHistory, now: Date(timeIntervalSince1970: 311)) == nil && currentPower([], now: Date()) == nil)
+let pw30 = [SoCPowerPoint(date: Date(timeIntervalSince1970: 300), power: pw, interval: 30)]
+assert(currentPower(pw30, now: Date(timeIntervalSince1970: 360)) == pw && currentPower(pw30, now: Date(timeIntervalSince1970: 361)) == nil)
+// Curve segments: a gap longer than two intervals starts a new one, a gap at the limit does not.
+let pwGaps = [0.0, 5, 10, 60, 65, 75].map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0), power: pw) }
+assert(powerSegments(pwGaps) == [0, 0, 0, 1, 1, 1] && powerSegments([]).isEmpty)
+// Interval change: the points before keep their spacing, the restart gap (old interval + two new ones + 5 s slack)
+// does not split, a longer one does, and a real gap at 1 s still splits.
+let pwPoints = { (pts: [(Double, Double)]) in pts.map { SoCPowerPoint(date: Date(timeIntervalSince1970: $0.0), power: pw, interval: $0.1) } }
+let pwSplit = { (old: Double, new: Double, gap: Double) in powerSegments(pwPoints([(0, old), (old, old), (old + gap, new), (old + gap + new, new)])) }
+assert(pwSplit(1, 5, 11.55) == [0, 0, 0, 0] && pwSplit(1, 5, 16) == [0, 0, 0, 0] && pwSplit(1, 5, 16.01) == [0, 0, 1, 1])
+assert(pwSplit(5, 1, 12) == [0, 0, 0, 0] && pwSplit(5, 1, 12.01) == [0, 0, 1, 1])
+assert(pwSplit(1, 30, 66) == [0, 0, 0, 0] && pwSplit(1, 30, 66.01) == [0, 0, 1, 1])
+assert(pwSplit(30, 1, 60) == [0, 0, 0, 0] && pwSplit(30, 1, 60.01) == [0, 0, 1, 1])
+assert(powerSegments(pwPoints([(0, 30), (30, 30), (60, 30), (61.5, 1), (62.5, 1), (63.5, 1), (66, 1)])) == [0, 0, 0, 0, 0, 0, 1])
+
+// App refresh: the power interval when shorter than 2 s, else 2 s; off keeps 2 s.
+assert(PowerInterval.allCases.map(appRefreshInterval) == [2, 1, 2, 2, 2, 2])
+
+// powermetrics arguments: one fixed `-i` per interval in ms, none when off; the rest never changes.
+assert(powermetricsArguments(.off) == nil)
+assert(powermetricsArguments(.s1) == ["--samplers", "cpu_power,gpu_power", "-i", "1000", "-f", "plist"])
+for i in PowerInterval.allCases where i != .off {
+    var a = powermetricsArguments(i)!
+    assert(a[3] == String(i.rawValue * 1000), "\(i)")
+    a[3] = "5000"
+    assert(a == powermetricsArguments(.s5)!)
+}
+// Power interval setting: 5 s by default and when a config lacks it (older service or state); any value outside the
+// list fails the decode, so the socket cannot carry it.
+var pwConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
+assert(Config().powerInterval == .s5 && pwConfig["powerInterval"] as? Int == 5)
+pwConfig["powerInterval"] = nil
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .s5)
+pwConfig["powerInterval"] = 1
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .s1)
+pwConfig["powerInterval"] = 0
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: pwConfig)).powerInterval == .off)
+pwConfig["powerInterval"] = 3
+assert((try? JSONDecoder().decode(Command.self, from: JSONSerialization.data(withJSONObject: ["setConfig": ["_0": pwConfig]]))) == nil)
+pwConfig["powerInterval"] = 2
+if case .setConfig(let c)? = try? JSONDecoder().decode(Command.self, from: JSONSerialization.data(withJSONObject: ["setConfig": ["_0": pwConfig]])) {
+    assert(c.powerInterval == .s2)
+} else { assert(false) }
+// Reply: only the points of the window before now, so a stopped powermetrics leaves no stale history.
+assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 420), window: 250).map(\.date.timeIntervalSince1970) == [200, 300])
+assert(recentPowerPoints(pwHistory, now: Date(timeIntervalSince1970: 1000), window: 250).isEmpty)
+
+// powermetrics stream: NUL-terminated samples are taken off, the partial tail stays, an oversized tail is dropped.
+var pmBuffer = Data("a\0\0b\0par".utf8)
+let pmTaken = takePlistSamples(&pmBuffer, maxBytes: 10)
+assert(pmTaken.samples == [Data("a".utf8), Data("b".utf8)] && !pmTaken.dropped && pmBuffer == Data("par".utf8))
+pmBuffer.append(Data("tial sample".utf8))
+let pmOversized = takePlistSamples(&pmBuffer, maxBytes: 10)
+assert(pmOversized.samples.isEmpty && pmOversized.dropped && pmBuffer.isEmpty)
+
+// powermetrics sample, trimmed from a real one (M4 Pro): mJ over elapsed_ns to W, GPU energy from processor.
+func pmSample(_ root: [String: Any]) -> Data { try! PropertyListSerialization.data(fromPropertyList: root, format: .xml, options: 0) }
+let pmReal = Data(#"""
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>elapsed_ns</key><integer>1016464625</integer>
+	<key>gpu</key>
+	<dict>
+		<key>gpu_energy</key><integer>34</integer>
+		<key>idle_ratio</key><real>0.895009</real>
+	</dict>
+	<key>hw_model</key><string>Mac16,7</string>
+	<key>is_delta</key><true/>
+	<key>processor</key>
+	<dict>
+		<key>ane_energy</key><integer>0</integer>
+		<key>ane_power</key><real>0.0</real>
+		<key>combined_power</key><real>244.967</real>
+		<key>cpu_energy</key><integer>214</integer>
+		<key>cpu_power</key><real>210.534</real>
+		<key>gpu_energy</key><integer>35</integer>
+		<key>gpu_power</key><real>34.4331</real>
+	</dict>
+	<key>timestamp</key><date>2026-11-07T21:40:04Z</date>
+</dict>
+</plist>
+"""#.utf8)
+let pm = socPower(plist: pmReal)!
+assert(abs(pm.cpuWatts - 0.214 / 1.016464625) < 1e-12 && abs(pm.gpuWatts - 0.035 / 1.016464625) < 1e-12 && pm.aneWatts == 0)
+// No elapsed time: the -i interval.
+assert(socPower(plist: pmSample(["processor": ["cpu_energy": 15000, "gpu_energy": 5000]])) == SoCPower(cpuWatts: 3, gpuWatts: 1, aneWatts: 0))
+// Malformed: not a plist, energies missing, absurd values.
+assert(socPower(plist: Data("garbage".utf8)) == nil && socPower(plist: pmSample(["processor": ["cpu_energy": 1]])) == nil)
+assert(socPower(plist: pmSample(["elapsed_ns": 1, "processor": ["cpu_energy": 3000, "gpu_energy": 1000]])) == nil)
+
+// Old and new clients and services: the status request's SoC flag is optional both ways.
+assert(String(data: try! JSONEncoder().encode(Command.status()), encoding: .utf8) == #"{"status":{}}"#)
+if case .status(let soc) = try! JSONDecoder().decode(Command.self, from: Data(#"{"status":{"soc":true}}"#.utf8)) { assert(soc == true) } else { assert(false) }
+// Status with the history decodes, and a Status without it (older service) leaves it nil.
+var socStatus = Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0, adapterRatedWatts: nil, systemWatts: 0, batteryWatts: 0, nativeLimit: true, sleepDisabled: false, history: [])
+socStatus.socHistory = [SoCPowerPoint(date: Date(timeIntervalSince1970: 0), power: SoCPower(cpuWatts: 1, gpuWatts: 2, aneWatts: 0))]
+assert(try! JSONDecoder().decode(Status.self, from: JSONEncoder().encode(socStatus)).socHistory == socStatus.socHistory)
+var socOld = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(socStatus)) as! [String: Any]
+socOld["socHistory"] = nil
+assert(try! JSONDecoder().decode(Status.self, from: JSONSerialization.data(withJSONObject: socOld)).socHistory == nil)
+
 // Power flow labels: close centres are spread by gap and stay inside the height.
 assert(spreadLabels([50, 51, 52], gap: 14, height: 200) == [50, 64, 78])
 assert(spreadLabels([100, 108], gap: 14, height: 110) == [89, 103])
@@ -457,5 +569,17 @@ var oldConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Con
 oldConfig["logEnabled"] = nil; oldConfig["logDays"] = nil
 assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: oldConfig)) == Config())
 assert(try! JSONDecoder().decode(Config.self, from: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) == Config(logEnabled: false, logDays: 30))
+
+// Menu window: centred under the status item, clamped inside the screen, on any display origin.
+let mainScreen = 0.0...1512, leftScreen = -1920.0...0, rightScreen = 1512.0...4072
+assert(centeredMenuX(width: 320, under: 1000...1030, in: mainScreen, margin: 8) == 855)
+assert(centeredMenuX(width: 320, under: 1480...1510, in: mainScreen, margin: 8) == 1184)
+assert(centeredMenuX(width: 320, under: 20...50, in: mainScreen, margin: 8) == 8)
+assert(centeredMenuX(width: 320, under: -900...(-870), in: leftScreen, margin: 8) == -1045)
+assert(centeredMenuX(width: 320, under: -1915...(-1885), in: leftScreen, margin: 8) == -1912)
+assert(centeredMenuX(width: 320, under: -40...(-10), in: leftScreen, margin: 8) == -328)
+assert(centeredMenuX(width: 320, under: 1520...1550, in: rightScreen, margin: 8) == 1520)
+assert(centeredMenuX(width: 320, under: 3000...3030, in: rightScreen, margin: 8) == 2855)
+assert(centeredMenuX(width: 2000, under: 1000...1030, in: mainScreen, margin: 8) == 8)
 
 print("logic ok")

@@ -167,7 +167,7 @@ extension HealthRange {
     }
 }
 
-private extension Color {
+extension Color {
     /// Chart color stepped separately for light and dark mode.
     static func viz(light: UInt32, dark: UInt32) -> Color {
         func ns(_ v: UInt32) -> NSColor {
