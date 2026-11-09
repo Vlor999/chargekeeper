@@ -21,3 +21,5 @@ let logViewLimit = 500
 
 /// Menu bar icon side, in points.
 let menuIconSize: CGFloat = 18
+/// Gap kept between the menu window and the screen edges, in points.
+let menuScreenMargin = 8.0
