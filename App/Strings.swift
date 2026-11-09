@@ -188,6 +188,10 @@ let french: [String: String] = [
         "Vert : limite atteinte · Orange : charge ou décharge vers la limite.",
     // Diagnostic
     "Diagnostic": "Diagnostic",
+    "Sampling interval": "Intervalle de mesure",
+    "Off": "Désactivé",
+    "CPU, GPU and Neural Engine power, measured by the service with powermetrics even when no window is open. Shorter is finer but costs more: about 3 % CPU at 1 s, 0.7 % at 5 s. Off hides the graphs.":
+        "Consommation du CPU, du GPU et du Neural Engine, mesurée par le service avec powermetrics même sans fenêtre ouverte. Plus court est plus fin mais coûte plus : environ 3 % de CPU à 1 s, 0,7 % à 5 s. Désactivé masque les graphiques.",
     "Keep a diagnostic log": "Tenir un journal de diagnostic",
     "Keep: %d days": "Conserver : %d jours",
     "Keep: 1 day": "Conserver : 1 jour",

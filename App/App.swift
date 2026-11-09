@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
     var visible = 0 { didSet { if visible > 0 { refresh() } } }
-    /// The service's CPU, GPU and Neural Engine power history (60 points at most). Kept when the windows close, so an
+    /// The service's CPU, GPU and Neural Engine power history (300 points at most, at 1 s). Kept when the windows close, so an
     /// opening window draws the last curves at once; its first refresh replaces them.
     @Published private(set) var socHistory: [SoCPowerPoint] = []
     /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
@@ -437,7 +437,7 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
-        PowerGraph(history: m.socHistory, now: m.socAsOf)
+        if s.config.powerInterval != .off { PowerGraph(history: m.socHistory, now: m.socAsOf) }
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
     }
 }

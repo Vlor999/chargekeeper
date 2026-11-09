@@ -218,7 +218,7 @@ struct DashboardView: View {
                     }
                 }
                 PowerFlow(s: s).frame(height: 220)
-                PowerChart(history: m.socHistory, now: m.socAsOf)
+                if s.config.powerInterval != .off { PowerChart(history: m.socHistory, now: m.socAsOf) }
             } else {
                 Text(m.error ?? tr("Connecting…")).foregroundStyle(.secondary)
             }
