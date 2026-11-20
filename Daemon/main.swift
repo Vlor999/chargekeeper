@@ -41,6 +41,7 @@ final class Daemon {
         _ = setSleepDisabled(false)
         s.runtime.keepAwakeUntil = keepAwakeAtStart(s.runtime.keepAwakeUntil, updateRestart: s.updateRestart)
         s.updateRestart = false
+        save()  // consume the marker on disk now: a stop before the first tick must not leave it set
         readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
         // Only stop() saves the Exit state: anything else is a crash, a kill or a restart for an update.
@@ -237,6 +238,8 @@ final class Daemon {
     }
 
     /// An app update replaced our binary: exit without touching the limit, launchd (KeepAlive) starts the new one.
+    /// Sleep is re-enabled before exit (never left disabled if the new binary does not start), so a closed lid
+    /// can sleep in the short gap until the new process's first tick applies keep awake again.
     func restartForUpdate() {
         hw.setDischarge(false)
         power.terminate()
