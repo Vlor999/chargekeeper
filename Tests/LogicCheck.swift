@@ -617,6 +617,15 @@ var awakeRuntime = Runtime(); awakeRuntime.keepAwakeUntil = .distantFuture
 assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(awakeRuntime)) == awakeRuntime)
 assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(Runtime())).keepAwakeUntil == nil)
 
+// Stray sleep disabled: warned when the system has it on and the service is unreachable or has no reason for it.
+assert(unexplainedSleepDisabled(system: true, service: nil) && unexplainedSleepDisabled(system: true, service: false))
+assert(!unexplainedSleepDisabled(system: true, service: true) && !unexplainedSleepDisabled(system: false, service: nil))
+assert(!unexplainedSleepDisabled(system: nil, service: false) && !unexplainedSleepDisabled(system: false, service: false))
+if case .resetSleep? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.resetSleep)) {} else { assert(false) }
+for k in ["Sleep is disabled for no reason (another tool or left over from a stop)", "Turn Sleep Back On", "Run in Terminal:", "Copy"] {
+    assert(french[k] != nil, k)
+}
+
 // Keep awake settings: a config without them decodes with the defaults; a duration outside the list fails the request.
 var awakeConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
 awakeConfig["keepAwakeLidClosed"] = nil; awakeConfig["keepAwakeMinBattery"] = nil

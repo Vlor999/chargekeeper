@@ -363,6 +363,10 @@ func clampedKeepAwakeMinBattery(_ v: Int) -> Int {
 /// off, so crash recovery never leaves sleep disabled.
 func keepAwakeAtStart(_ until: Date?, updateRestart: Bool) -> Date? { updateRestart ? until : nil }
 
+/// System sleep disabled with no reason from the service: another tool, or left over from a stop. `system` nil: unknown;
+/// `service` nil: the service is unreachable, otherwise its own sleep disabled state.
+func unexplainedSleepDisabled(system: Bool?, service: Bool?) -> Bool { system == true && service != true }
+
 /// System sleep disabled (a closed lid stays awake): discharging on the adapter, charging to the limit with that option
 /// on, or keep awake with the lid closed option.
 func sleepDisabledWanted(_ c: Config, _ a: Action, state: ChargeState, adapter: Bool, keepAwake: Bool) -> Bool {

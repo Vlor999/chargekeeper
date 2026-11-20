@@ -316,4 +316,5 @@ enum Command: Codable {
     case highPower(Bool)
     case healthHistory  // a service older than this command closes the connection without a reply
     case keepAwake(KeepAwakeDuration?)  // nil turns it off
+    case resetSleep  // re-enable system sleep unless the service itself needs it disabled
 }

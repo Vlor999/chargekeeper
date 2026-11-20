@@ -179,6 +179,12 @@ final class Daemon {
         defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
         case .status, .healthHistory: break
+        case .resetSleep:
+            // Fixed behaviour, no argument: only when none of the service's own reasons needs sleep disabled.
+            let wanted = sleepDisabledWanted(s.config, lastAction ?? .hold(at: reading.percent), state: s.runtime.state, adapter: reading.adapter,
+                                             keepAwake: s.runtime.keepAwakeUntil != nil)
+            guard !wanted else { return log("sleep reset refused: the service needs sleep disabled", .warn) }
+            if setSleepDisabled(false) { sleepDisabled = false; log("sleep enabled (reset from the app)") }
         case .setConfig(var c):
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)

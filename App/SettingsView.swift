@@ -266,6 +266,7 @@ struct SettingsPaneView: View {
 
     var sleep: some View {
         Form {
+            if m.strayNoSleep { SleepWarning() }
             Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).settingsRow("sleepFreeze")
             Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).settingsRow("sleepPrevent")
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
