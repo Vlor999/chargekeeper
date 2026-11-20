@@ -348,10 +348,30 @@ extension Status {
     }
 }
 
+extension KeepAwakeDuration {
+    var label: String {
+        switch self {
+        case .untilOff: tr("Until turned off")
+        case .m30: number(30) + " min"
+        default: number(Double(rawValue / 60)) + " h"
+        }
+    }
+}
+
+extension Status {
+    /// "Awake until 15:30", "Awake until turned off"; nil when keep awake is off.
+    var keepAwakeLine: String? {
+        guard let until = runtime.keepAwakeUntil else { return nil }
+        return until == .distantFuture ? tr("Awake until turned off")
+            : tr("Awake until %@", until.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(appLocale)))
+    }
+}
+
 struct MenuView: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.openWindow) private var openWindow
     @AppStorage("flowInMenu") private var flowInMenu = true
+    @AppStorage("keepAwakeDuration") private var awakeFor = KeepAwakeDuration.h1
     @State private var limit: Double?
 
     var body: some View {
@@ -444,6 +464,20 @@ struct MenuView: View {
         HStack {
             Button(r.calibration == nil ? tr("Start Calibration") : tr("Stop Calibration")) { m.run(.calibrate(r.calibration == nil)) }
             Button(tr("Pause")) { m.run(.pause) }
+        }
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run(.keepAwake($0 ? awakeFor : nil)) }))
+                    .fixedSize()
+                Spacer(minLength: 8)
+                // A new duration while on restarts it from now.
+                Picker("", selection: Binding(get: { awakeFor }, set: { awakeFor = $0; if r.keepAwakeUntil != nil { m.run(.keepAwake($0)) } })) {
+                    ForEach(KeepAwakeDuration.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+            }
+            Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed))
+            if let line = s.keepAwakeLine { Text(line).font(.caption).foregroundStyle(.secondary) }
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
