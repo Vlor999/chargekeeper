@@ -345,6 +345,7 @@ extension HistoryEntry {
         case .heatProtect: return ("thermometer.high", .red)
         case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
         case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
+        case .keepAwakeEnded: return ("cup.and.saucer", .secondary)
         }
     }
 }

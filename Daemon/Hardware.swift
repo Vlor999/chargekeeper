@@ -209,6 +209,29 @@ func setSleepDisabled(_ on: Bool) -> Bool {
     IOPMSetSystemPowerSetting("SleepDisabled" as CFString, (on ? kCFBooleanTrue : kCFBooleanFalse)) == kIOReturnSuccess
 }
 
+/// Keep awake: holds a PreventUserIdleSystemSleep assertion (`caffeinate -i`) while on. Released on exit by the kernel too.
+final class KeepAwakeAssertion {
+    private var id: IOPMAssertionID = 0
+    private(set) var on = false
+
+    /// false when the assertion could not be created.
+    @discardableResult
+    func set(_ on: Bool) -> Bool {
+        guard on != self.on else { return true }
+        if on {
+            let r = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                                "ChargeKeeper keep awake" as CFString, &id)
+            guard r == kIOReturnSuccess else { log("keep awake assertion failed: \(r)", .error); return false }
+        } else {
+            IOPMAssertionRelease(id)
+            id = 0
+        }
+        self.on = on
+        log("keep awake \(on ? "on" : "off")")
+        return true
+    }
+}
+
 func pmset(_ args: [String]) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")

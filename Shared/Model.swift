@@ -49,6 +49,9 @@ let socMaxSampleBytes = 256 * 1024
 let socKillGrace: TimeInterval = 5
 /// Unreadable samples are logged at most once per this period.
 let socWarnInterval: TimeInterval = 10 * 60
+/// Keep awake turns itself off on battery below this level, in %: the user picks within this range.
+let keepAwakeMinBatteryRange = 5...50
+let keepAwakeMinBatteryDefault = 20
 
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
@@ -68,6 +71,10 @@ enum LogLevel: String, CaseIterable, Comparable {
 /// powermetrics sampling interval chosen in Settings, in seconds; `off` stops powermetrics. A closed list: a socket
 /// request with any other value fails to decode, so no free number reaches powermetrics' arguments.
 enum PowerInterval: Int, Codable, CaseIterable { case off = 0, s1 = 1, s2 = 2, s5 = 5, s10 = 10, s30 = 30 }
+
+/// Keep awake duration picked in the menu, in minutes; `untilOff` lasts until turned off. A closed list: a socket
+/// request with any other value fails to decode.
+enum KeepAwakeDuration: Int, Codable, CaseIterable { case m30 = 30, h1 = 60, h2 = 120, h4 = 240, untilOff = 0 }
 
 enum LEDColor: String, Codable, CaseIterable { case system, off, green, orange, orangeBlink }
 
@@ -93,6 +100,7 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
     case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
+    case keepAwakeEnded  // turned itself off: time up, or `value` = battery level under the threshold
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
@@ -159,10 +167,12 @@ struct Config: Codable, Equatable {
     var logEnabled = true
     var logDays = logDaysDefault
     var powerInterval = PowerInterval.s5
+    var keepAwakeLidClosed = false  // keep awake also disables sleep, so a closed lid does not sleep
+    var keepAwakeMinBattery = keepAwakeMinBatteryDefault
 }
 
 extension Config {
-    /// Lenient for the log and power interval fields only: a service older than them sends a config without them.
+    /// Lenient for the log, power interval and keep awake fields only: a service older than them sends a config without them.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         limit = try c.decode(Int.self, forKey: .limit)
@@ -181,6 +191,8 @@ extension Config {
         logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? true
         logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? logDaysDefault
         powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? .s5
+        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? false
+        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? keepAwakeMinBatteryDefault
     }
 }
 
@@ -198,6 +210,7 @@ struct Runtime: Codable, Equatable {
     var state: ChargeState = .charging
     var calibrationBefore: BatterySnapshot?  // taken when the running calibration started
     var pastLimitSince: Date?  // macOS charging past the limit against the service (gauge recalibration or other override)
+    var keepAwakeUntil: Date?  // keep awake on until this date; `.distantFuture` until turned off, nil when off
 }
 
 /// Battery wear at one point in time. Capacities in mAh.
@@ -301,4 +314,5 @@ enum Command: Codable {
     case lowPower(Bool)
     case highPower(Bool)
     case healthHistory  // a service older than this command closes the connection without a reply
+    case keepAwake(KeepAwakeDuration?)  // nil turns it off
 }
