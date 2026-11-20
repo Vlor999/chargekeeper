@@ -25,10 +25,12 @@ description: "ChargeKeeper project rules: branches, commits, PRs, validation, re
 - Stay inside the requested scope: no refactor, no speculative feature. Simplicity first.
 - Menu bar app: nothing may run while no window is open (no animation, no polling). Measure CPU and memory with the menu closed after a UI change.
   - Single exception, in the root service: it runs `powermetrics` continuously for the CPU, GPU and Neural Engine power history, at the interval the user sets in Settings > Diagnostic (1, 2, 5, 10 or 30 s, default 5 s), or not at all when turned off. Measured with the menu closed on M4 Pro / macOS 27.2: 0.68 % CPU, 5 MB RSS at 5 s; about 3.2 % CPU at 1 s (6 MB). The app still runs nothing while no window is open.
+  - While keep awake is on (menu), the service also holds an IOPM PreventUserIdleSystemSleep assertion (and, with the lid closed option, SleepDisabled). Its end and the battery threshold are checked in the service's existing 5 s loop: no new timer.
 
 ## Security
 
 - The service runs as root: every socket input is validated or clamped (`Daemon/main.swift` `mutate`), the socket stays `root:admin 0660`, external commands use absolute paths and fixed arguments.
 - Battery safety: on exit or crash recovery the service never leaves discharge on or sleep disabled.
+- Keep awake: the `keepAwake` socket command only takes a duration from the closed `KeepAwakeDuration` list (other values fail to decode), and the battery threshold is clamped to 5–50 %. It is cleared on stop and on crash recovery, and kept only across a restart for an update (`updateRestart` marker). The lid closed option is allowed on battery (user decision), guarded by the battery threshold.
 - Never print or commit signing material or the Sparkle private key.
 - GitHub workflows: actions pinned by SHA, minimal `permissions`, third-party code (XcodeGen, Sparkle) fetched and pinned before signing secrets are loaded, third-party-controlled values passed through `env`, never interpolated in `run`.
