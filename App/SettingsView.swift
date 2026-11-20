@@ -355,6 +355,7 @@ extension HistoryEntry {
         case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
         case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
         case .keepAwakeEnded: return ("cup.and.saucer", .secondary)
+        case .keepAwakeFailed: return ("exclamationmark.triangle", .red)
         }
     }
 }

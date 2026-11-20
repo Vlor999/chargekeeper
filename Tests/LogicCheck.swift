@@ -181,7 +181,7 @@ let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold)
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),
                HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, value: 80),
-               HistoryEntry(event: .keepAwakeEnded), HistoryEntry(event: .keepAwakeEnded, value: 19)]
+               HistoryEntry(event: .keepAwakeEnded), HistoryEntry(event: .keepAwakeEnded, value: 19), HistoryEntry(event: .keepAwakeFailed)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
     + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
 var templates: Set<String> = []
@@ -598,9 +598,10 @@ assert(!sleepDisabledWanted(sc, .discharge, state: .discharging, adapter: false,
 sc.disableSleepUntilLimit = true
 assert(sleepDisabledWanted(sc, .charge(to: 80), state: .charging, adapter: true, keepAwake: false))
 
-// Keep awake history: time up, or the battery level that turned it off.
+// Keep awake history: time up, the battery level that turned it off, or macOS refusing the sleep assertion.
 assert(historyText(HistoryEntry(event: .keepAwakeEnded)) == "Keep awake ended: time up")
 assert(historyText(HistoryEntry(event: .keepAwakeEnded, value: 19)) == "Keep awake turned off: battery at 19 %")
+assert(historyText(HistoryEntry(event: .keepAwakeFailed)) == "Keep awake could not start: macOS refused to block sleep")
 
 // Keep awake battery threshold from the socket: clamped to 5–50 %.
 assert(clampedKeepAwakeMinBattery(0) == 5 && clampedKeepAwakeMinBattery(5) == 5 && clampedKeepAwakeMinBattery(20) == 20)

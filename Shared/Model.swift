@@ -101,6 +101,7 @@ enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
     case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
     case keepAwakeEnded  // turned itself off: time up, or `value` = battery level under the threshold
+    case keepAwakeFailed  // macOS refused the sleep assertion: keep awake turned off
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English

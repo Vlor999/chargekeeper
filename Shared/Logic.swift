@@ -438,6 +438,7 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
     case .keepAwakeEnded:
         guard let v = e.value else { return t("Keep awake ended: time up", []) }
         return t("Keep awake turned off: battery at %@ %%", [int(v)])
+    case .keepAwakeFailed: return t("Keep awake could not start: macOS refused to block sleep", [])
     }
 }
 

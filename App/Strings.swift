@@ -175,6 +175,7 @@ let french: [String: String] = [
     "Freeze the charge level during sleep": "Figer le niveau de charge pendant la veille",
     "Prevent sleep until the limit is reached": "Empêcher la veille tant que la limite n'est pas atteinte",
     "Keep awake": "Garder éveillé",
+    "Keep awake could not start: macOS refused to block sleep": "« Garder éveillé » n'a pas pu démarrer : macOS a refusé de bloquer la veille",
     "Keep awake ended: time up": "Fin de « Garder éveillé » : durée écoulée",
     "Keep awake turned off: battery at %@ %%": "« Garder éveillé » désactivé : batterie à %@ %%",
     "Until turned off": "Jusqu'à désactivation",
