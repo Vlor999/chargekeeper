@@ -180,7 +180,8 @@ for k in ["macOS battery settings", "Open Battery Settings",
 let samples = [done, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone), HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
                HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
                HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),
-               HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, value: 80)]
+               HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, value: 80),
+               HistoryEntry(event: .keepAwakeEnded), HistoryEntry(event: .keepAwakeEnded, value: 19), HistoryEntry(event: .keepAwakeFailed)]
     + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
     + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
 var templates: Set<String> = []
@@ -569,6 +570,69 @@ var oldConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Con
 oldConfig["logEnabled"] = nil; oldConfig["logDays"] = nil
 assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: oldConfig)) == Config())
 assert(try! JSONDecoder().decode(Config.self, from: JSONEncoder().encode(Config(logEnabled: false, logDays: 30))) == Config(logEnabled: false, logDays: 30))
+
+// Keep awake: the end is an absolute date, or never for "until turned off".
+let awakeNow = d("2026-11-20T14:30:00Z")
+assert(keepAwakeEnd(.m30, now: awakeNow) == d("2026-11-20T15:00:00Z") && keepAwakeEnd(.h4, now: awakeNow) == d("2026-11-20T18:30:00Z"))
+assert(keepAwakeEnd(.untilOff, now: awakeNow) == .distantFuture)
+
+// Keep awake expiry: on until its end, off from it (a restart after the end finds it expired).
+let awakeEnd = keepAwakeEnd(.h1, now: awakeNow)
+assert(keepAwakeUntil(awakeEnd, now: awakeNow.addingTimeInterval(3599), adapter: true, percent: 50, minBattery: 20) == awakeEnd)
+assert(keepAwakeUntil(awakeEnd, now: awakeEnd, adapter: true, percent: 50, minBattery: 20) == nil)
+assert(keepAwakeUntil(nil, now: awakeNow, adapter: true, percent: 50, minBattery: 20) == nil)
+
+// Keep awake battery guard: off on battery below the threshold, kept at it and on the adapter.
+assert(keepAwakeUntil(.distantFuture, now: awakeNow, adapter: false, percent: 20, minBattery: 20) == .distantFuture)
+assert(keepAwakeUntil(.distantFuture, now: awakeNow, adapter: false, percent: 19, minBattery: 20) == nil)
+assert(keepAwakeUntil(.distantFuture, now: awakeNow, adapter: true, percent: 5, minBattery: 20) == .distantFuture)
+
+// Sleep disabled: keep awake with the lid option adds to the charge policy's reasons, never removes them.
+var sc = Config()
+assert(!sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: true, keepAwake: true))
+sc.keepAwakeLidClosed = true
+assert(sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: false, keepAwake: true))
+assert(!sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: true, keepAwake: false))
+assert(sleepDisabledWanted(sc, .discharge, state: .discharging, adapter: true, keepAwake: false))
+assert(!sleepDisabledWanted(sc, .discharge, state: .discharging, adapter: false, keepAwake: false))
+sc.disableSleepUntilLimit = true
+assert(sleepDisabledWanted(sc, .charge(to: 80), state: .charging, adapter: true, keepAwake: false))
+
+// Keep awake history: time up, the battery level that turned it off, or macOS refusing the sleep assertion.
+assert(historyText(HistoryEntry(event: .keepAwakeEnded)) == "Keep awake ended: time up")
+assert(historyText(HistoryEntry(event: .keepAwakeEnded, value: 19)) == "Keep awake turned off: battery at 19 %")
+assert(historyText(HistoryEntry(event: .keepAwakeFailed)) == "Keep awake could not start: macOS refused to block sleep")
+
+// Keep awake battery threshold from the socket: clamped to 5–50 %.
+assert(clampedKeepAwakeMinBattery(0) == 5 && clampedKeepAwakeMinBattery(5) == 5 && clampedKeepAwakeMinBattery(20) == 20)
+assert(clampedKeepAwakeMinBattery(50) == 50 && clampedKeepAwakeMinBattery(51) == 50 && clampedKeepAwakeMinBattery(-3) == 5)
+
+// Keep awake at service start: kept across an update restart only, off after a crash, a kill or a power loss.
+assert(keepAwakeAtStart(.distantFuture, updateRestart: true) == .distantFuture)
+assert(keepAwakeAtStart(.distantFuture, updateRestart: false) == nil && keepAwakeAtStart(nil, updateRestart: true) == nil)
+
+// Keep awake socket and state: "off" and "until turned off" survive encoding.
+if case .keepAwake(nil)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.keepAwake(nil))) {} else { assert(false) }
+var awakeRuntime = Runtime(); awakeRuntime.keepAwakeUntil = .distantFuture
+assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(awakeRuntime)) == awakeRuntime)
+assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(Runtime())).keepAwakeUntil == nil)
+
+// Stray sleep disabled: warned when the system has it on and the service is unreachable or has no reason for it.
+assert(unexplainedSleepDisabled(system: true, service: nil) && unexplainedSleepDisabled(system: true, service: false))
+assert(!unexplainedSleepDisabled(system: true, service: true) && !unexplainedSleepDisabled(system: false, service: nil))
+assert(!unexplainedSleepDisabled(system: nil, service: false) && !unexplainedSleepDisabled(system: false, service: false))
+if case .resetSleep? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.resetSleep)) {} else { assert(false) }
+for k in ["Sleep is disabled for no reason (another tool or left over from a stop)", "Turn Sleep Back On", "Run in Terminal:", "Copy"] {
+    assert(french[k] != nil, k)
+}
+
+// Keep awake settings: a config without them decodes with the defaults; a duration outside the list fails the request.
+var awakeConfig = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
+awakeConfig["keepAwakeLidClosed"] = nil; awakeConfig["keepAwakeMinBattery"] = nil
+assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: awakeConfig)) == Config())
+assert(Config().keepAwakeMinBattery == 20 && !Config().keepAwakeLidClosed)
+assert((try? JSONDecoder().decode(Command.self, from: JSONSerialization.data(withJSONObject: ["keepAwake": ["_0": 45]]))) == nil)
+if case .keepAwake(.h2)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.keepAwake(.h2))) {} else { assert(false) }
 
 // Menu window: centred under the status item, clamped inside the screen, on any display origin.
 let mainScreen = 0.0...1512, leftScreen = -1920.0...0, rightScreen = 1512.0...4072

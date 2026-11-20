@@ -341,6 +341,38 @@ func serviceNotices(from prev: ChargeState, to now: ChargeState, adapter: Bool, 
     return out
 }
 
+// MARK: - Keep awake
+
+/// End date of a keep awake started at `now`.
+func keepAwakeEnd(_ d: KeepAwakeDuration, now: Date) -> Date {
+    d == .untilOff ? .distantFuture : now.addingTimeInterval(TimeInterval(d.rawValue * 60))
+}
+
+/// Keep awake end still in force at `now`: nil once the end has passed, or on battery below `minBattery`.
+func keepAwakeUntil(_ until: Date?, now: Date, adapter: Bool, percent: Int, minBattery: Int) -> Date? {
+    guard let until, until > now, adapter || percent >= minBattery else { return nil }
+    return until
+}
+
+/// Battery threshold from a socket request, kept inside `keepAwakeMinBatteryRange`.
+func clampedKeepAwakeMinBattery(_ v: Int) -> Int {
+    min(max(v, keepAwakeMinBatteryRange.lowerBound), keepAwakeMinBatteryRange.upperBound)
+}
+
+/// Keep awake at service start: kept only across a restart for an update. After a crash, a kill or a power loss it is
+/// off, so crash recovery never leaves sleep disabled.
+func keepAwakeAtStart(_ until: Date?, updateRestart: Bool) -> Date? { updateRestart ? until : nil }
+
+/// System sleep disabled with no reason from the service: another tool, or left over from a stop. `system` nil: unknown;
+/// `service` nil: the service is unreachable, otherwise its own sleep disabled state.
+func unexplainedSleepDisabled(system: Bool?, service: Bool?) -> Bool { system == true && service != true }
+
+/// System sleep disabled (a closed lid stays awake): discharging on the adapter, charging to the limit with that option
+/// on, or keep awake with the lid closed option.
+func sleepDisabledWanted(_ c: Config, _ a: Action, state: ChargeState, adapter: Bool, keepAwake: Bool) -> Bool {
+    (adapter && (a == .discharge || (c.disableSleepUntilLimit && state == .charging))) || (keepAwake && c.keepAwakeLidClosed)
+}
+
 // MARK: - History
 
 /// Fills an English template (String(format:) placeholders, arguments already formatted). The app passes tr().
@@ -407,6 +439,10 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])
+    case .keepAwakeEnded:
+        guard let v = e.value else { return t("Keep awake ended: time up", []) }
+        return t("Keep awake turned off: battery at %@ %%", [int(v)])
+    case .keepAwakeFailed: return t("Keep awake could not start: macOS refused to block sleep", [])
     }
 }
 

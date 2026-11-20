@@ -68,6 +68,11 @@ let settingsIndex: [SettingsEntry] = [
     SettingsEntry(id: "sleepPrevent", pane: .sleep, label: "Prevent sleep until the limit is reached",
                   description: "Sleep is also prevented while discharging on the adapter (clamshell mode).",
                   keywords: "veille awake éveillé"),
+    SettingsEntry(id: "keepAwakeLid", pane: .sleep, label: "Even with the lid closed",
+                  description: "Keep awake is turned on from the menu. It prevents idle sleep; the display can still turn off.",
+                  keywords: "keep awake caffeinate clamshell lid capot fermé éveillé veille"),
+    SettingsEntry(id: "keepAwakeBattery", pane: .sleep, label: "Turn off on battery below",
+                  keywords: "keep awake caffeinate battery batterie threshold seuil éveillé"),
     SettingsEntry(id: "energyMode", pane: .sleep, label: "macOS energy mode",
                   keywords: "low power mode performance high basse consommation énergie économie"),
 

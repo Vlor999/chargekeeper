@@ -13,6 +13,7 @@ struct Saved: Codable {
     var history: [HistoryEntry] = []
     var lastCalibration: CalibrationResult?
     var healthHistory: [HealthSample] = []
+    var updateRestart = false  // set by restartForUpdate only: keep awake survives that restart, not a crash
 }
 
 func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
@@ -23,6 +24,7 @@ final class Daemon {
     let power: PowerMetrics
     var reading = Reading()
     var sleepDisabled = false
+    let awake = KeepAwakeAssertion()
     var lastScheduleCheck = Date()
     var lastAppleLimitRead = Date.distantPast
     var lastSaved: Data?
@@ -35,13 +37,16 @@ final class Daemon {
         s = Daemon.load()
         power = PowerMetrics(interval: s.config.powerInterval)
         DiagnosticLog.configure(s.config)
-        // A crash may have left sleep disabled: start from the system default.
+        // A crash may have left sleep disabled: start from the system default, keep awake off unless this is an update restart.
         _ = setSleepDisabled(false)
+        s.runtime.keepAwakeUntil = keepAwakeAtStart(s.runtime.keepAwakeUntil, updateRestart: s.updateRestart)
+        s.updateRestart = false
+        save()  // consume the marker on disk now: a stop before the first tick must not leave it set
         readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
         // Only stop() saves the Exit state: anything else is a crash, a kill or a restart for an update.
         if FileManager.default.fileExists(atPath: statePath) && s.runtime.state != .exit {
-            log("previous run ended without a stop (state \(s.runtime.state.rawValue)): sleep setting reset", .warn)
+            log("previous run ended without a stop (state \(s.runtime.state.rawValue)): sleep setting reset, keep awake \(s.runtime.keepAwakeUntil == nil ? "off" : "kept (update restart)")", .warn)
         }
     }
 
@@ -111,7 +116,12 @@ final class Daemon {
             }
         }
 
-        let noSleep = rd.adapter && (a == .discharge || (s.config.disableSleepUntilLimit && s.runtime.state == .charging))
+        var until = keepAwakeUntil(s.runtime.keepAwakeUntil, now: now, adapter: rd.adapter, percent: rd.percent, minBattery: s.config.keepAwakeMinBattery)
+        if let was = s.runtime.keepAwakeUntil, until == nil { record(HistoryEntry(event: .keepAwakeEnded, value: was > now ? rd.percent : nil)) }
+        // The assertion failed (logged once by set): off, so the menu does not show a keep awake that is not held.
+        if !awake.set(until != nil) { until = nil; record(HistoryEntry(event: .keepAwakeFailed)) }
+        s.runtime.keepAwakeUntil = until
+        let noSleep = sleepDisabledWanted(s.config, a, state: s.runtime.state, adapter: rd.adapter, keepAwake: until != nil)
         if noSleep != sleepDisabled, setSleepDisabled(noSleep) { sleepDisabled = noSleep; log("sleep \(noSleep ? "disabled" : "enabled")") }
         save()
     }
@@ -169,11 +179,18 @@ final class Daemon {
         defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
         switch cmd {
         case .status, .healthHistory: break
+        case .resetSleep:
+            // Fixed behaviour, no argument: only when none of the service's own reasons needs sleep disabled.
+            let wanted = sleepDisabledWanted(s.config, lastAction ?? .hold(at: reading.percent), state: s.runtime.state, adapter: reading.adapter,
+                                             keepAwake: s.runtime.keepAwakeUntil != nil)
+            guard !wanted else { return log("sleep reset refused: the service needs sleep disabled", .warn) }
+            if setSleepDisabled(false) { sleepDisabled = false; log("sleep enabled (reset from the app)") }
         case .setConfig(var c):
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)
             c.maxTemp = min(max(c.maxTemp, 25), 50)
             c.logDays = clamp(c.logDays, logDaysRange.lowerBound, logDaysRange.upperBound)
+            c.keepAwakeMinBattery = clampedKeepAwakeMinBattery(c.keepAwakeMinBattery)
             // powerInterval needs no clamp: a value outside `PowerInterval` fails the request's decode.
             // Clients may hold a stale lastRun; never move it backwards or a task re-runs.
             let old = Dictionary(s.config.tasks.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
@@ -197,6 +214,8 @@ final class Daemon {
         case .led(let c): s.runtime.ledOverride = c
         case .lowPower(let on): pmset(["-a", "lowpowermode", on ? "1" : "0"])
         case .highPower(let on): pmset(["-a", "powermode", on ? "2" : "0"])
+        // The duration needs no clamp: a value outside `KeepAwakeDuration` fails the request's decode.
+        case .keepAwake(let d): s.runtime.keepAwakeUntil = d.map { keepAwakeEnd($0, now: Date()) }
         }
     }
 
@@ -225,10 +244,14 @@ final class Daemon {
     }
 
     /// An app update replaced our binary: exit without touching the limit, launchd (KeepAlive) starts the new one.
+    /// Sleep is re-enabled before exit (never left disabled if the new binary does not start), so a closed lid
+    /// can sleep in the short gap until the new process's first tick applies keep awake again.
     func restartForUpdate() {
         hw.setDischarge(false)
         power.terminate()
+        awake.set(false)
         if sleepDisabled { _ = setSleepDisabled(false) }
+        s.updateRestart = true
         save()
         unlink(socketPath)
         log("binary updated, restarting")
@@ -238,6 +261,9 @@ final class Daemon {
     func stop() {
         power.terminate()
         hw.shutdown(keepLimit: s.config.keepLimitWhenStopped, limit: s.config.limit)
+        // A stop (service turned off, shutdown, restart) ends keep awake; only an update restart keeps it (`updateRestart`).
+        awake.set(false)
+        s.runtime.keepAwakeUntil = nil
         if sleepDisabled { _ = setSleepDisabled(false) }
         s.runtime.state = .exit
         save()

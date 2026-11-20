@@ -266,10 +266,20 @@ struct SettingsPaneView: View {
 
     var sleep: some View {
         Form {
+            if m.strayNoSleep { SleepWarning() }
             Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).settingsRow("sleepFreeze")
             Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).settingsRow("sleepPrevent")
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
+            Section(tr("Keep awake")) {
+                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed)).settingsRow("keepAwakeLid")
+                Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryRange, step: 5) {
+                    LabeledContent(tr("Turn off on battery below"), value: "\(m.config(\.keepAwakeMinBattery).wrappedValue) %")
+                }
+                    .settingsRow("keepAwakeBattery")
+                Text(tr("Keep awake is turned on from the menu. It prevents idle sleep; the display can still turn off."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(tr("macOS energy mode")) {
                 HStack {
                     Button(tr("Low Power Mode: on")) { m.run(.lowPower(true)) }
@@ -345,6 +355,8 @@ extension HistoryEntry {
         case .heatProtect: return ("thermometer.high", .red)
         case .calibrationNeedsAdapter: return ("powerplug.fill", .red)
         case .chargedPastLimit: return ("battery.100percent.bolt", .secondary)
+        case .keepAwakeEnded: return ("cup.and.saucer", .secondary)
+        case .keepAwakeFailed: return ("exclamationmark.triangle", .red)
         }
     }
 }

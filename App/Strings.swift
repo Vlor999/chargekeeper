@@ -174,6 +174,21 @@ let french: [String: String] = [
         "Le service système applique la limite pour tous les comptes. Cette option la garde active s'il s'arrête.",
     "Freeze the charge level during sleep": "Figer le niveau de charge pendant la veille",
     "Prevent sleep until the limit is reached": "Empêcher la veille tant que la limite n'est pas atteinte",
+    "Keep awake": "Garder éveillé",
+    "Sleep is disabled for no reason (another tool or left over from a stop)":
+        "La veille est désactivée sans raison (autre outil ou reste d'un arrêt)",
+    "Turn Sleep Back On": "Réactiver la veille",
+    "Run in Terminal:": "À lancer dans le Terminal :",
+    "Keep awake could not start: macOS refused to block sleep": "« Garder éveillé » n'a pas pu démarrer : macOS a refusé de bloquer la veille",
+    "Keep awake ended: time up": "Fin de « Garder éveillé » : durée écoulée",
+    "Keep awake turned off: battery at %@ %%": "« Garder éveillé » désactivé : batterie à %@ %%",
+    "Until turned off": "Jusqu'à désactivation",
+    "Awake until turned off": "Éveillé jusqu'à désactivation",
+    "Awake until %@": "Éveillé jusqu'à %@",
+    "Even with the lid closed": "Même capot fermé",
+    "Turn off on battery below": "Désactiver sur batterie sous",
+    "Keep awake is turned on from the menu. It prevents idle sleep; the display can still turn off.":
+        "« Garder éveillé » s'active depuis le menu. Il empêche la mise en veille ; l'écran peut quand même s'éteindre.",
     "Sleep is also prevented while discharging on the adapter (clamshell mode).":
         "La suspension est aussi désactivée pendant la décharge sur secteur (mode clamshell).",
     "macOS energy mode": "Mode d'énergie macOS",
