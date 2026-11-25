@@ -45,6 +45,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var socHistory: [SoCPowerPoint] = []
     /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
     @Published private(set) var socAsOf = Date()
+    /// System sleep disabled with no reason from the service; checked at each refresh, so only while a window is open.
+    @Published private(set) var strayNoSleep = false
 
     init() {
         let w = UpdateWatcher()
@@ -83,6 +85,8 @@ final class AppModel: ObservableObject {
         if h != socHistory { socHistory = h }
         socAsOf = Date()
         serviceStatus = service.status
+        let stray = unexplainedSleepDisabled(system: systemSleepDisabled(), service: error == nil ? status?.sleepDisabled : nil)
+        if stray != strayNoSleep { strayNoSleep = stray }
     }
 
     func enableService() {
@@ -348,15 +352,36 @@ extension Status {
     }
 }
 
+extension KeepAwakeDuration {
+    var label: String {
+        switch self {
+        case .untilOff: tr("Until turned off")
+        case .m30: number(30) + " min"
+        default: number(Double(rawValue / 60)) + " h"
+        }
+    }
+}
+
+extension Status {
+    /// "Awake until 15:30", "Awake until turned off"; nil when keep awake is off.
+    var keepAwakeLine: String? {
+        guard let until = runtime.keepAwakeUntil else { return nil }
+        return until == .distantFuture ? tr("Awake until turned off")
+            : tr("Awake until %@", until.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(appLocale)))
+    }
+}
+
 struct MenuView: View {
     @EnvironmentObject var m: AppModel
     @Environment(\.openWindow) private var openWindow
     @AppStorage("flowInMenu") private var flowInMenu = true
+    @AppStorage("keepAwakeDuration") private var awakeFor = KeepAwakeDuration.h1
     @State private var limit: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let u = m.readyUpdate { UpdateBanner(version: u.version, install: u.install); Divider() }
+            if m.strayNoSleep { SleepWarning(); Divider() }
             if let s = m.status, m.error == nil { content(s) } else { serviceSetup }
             Divider()
             HStack {
@@ -445,10 +470,62 @@ struct MenuView: View {
             Button(r.calibration == nil ? tr("Start Calibration") : tr("Stop Calibration")) { m.run(.calibrate(r.calibration == nil)) }
             Button(tr("Pause")) { m.run(.pause) }
         }
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run(.keepAwake($0 ? awakeFor : nil)) }))
+                    .fixedSize()
+                Spacer(minLength: 8)
+                // A new duration while on restarts it from now.
+                Picker("", selection: Binding(get: { awakeFor }, set: { awakeFor = $0; if r.keepAwakeUntil != nil { m.run(.keepAwake($0)) } })) {
+                    ForEach(KeepAwakeDuration.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+            }
+            Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed))
+            if let line = s.keepAwakeLine { Text(line).font(.caption).foregroundStyle(.secondary) }
+        }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
         if s.config.powerInterval != .off { PowerGraph(history: m.socHistory, now: m.socAsOf) }
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
+    }
+}
+
+/// The system SleepDisabled setting (`pmset -g`), readable without privileges. nil when unknown.
+/// ponytail: IOPMCopySystemPowerSettings is exported by IOKit but not in the public headers (pmset uses it), so it is
+/// looked up at run time; if Apple removes it the warning never shows. Upgrade path: a public API if one appears.
+func systemSleepDisabled() -> Bool? {
+    typealias Copy = @convention(c) () -> Unmanaged<CFDictionary>?
+    guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "IOPMCopySystemPowerSettings") else { return nil }  // RTLD_DEFAULT
+    let settings = unsafeBitCast(sym, to: Copy.self)()?.takeRetainedValue() as? [String: Any]
+    return settings?["SleepDisabled"] as? Bool
+}
+
+/// Sleep disabled while the service has no reason for it: offers to turn sleep back on, through the service when it
+/// answers, otherwise with the pmset command.
+struct SleepWarning: View {
+    @EnvironmentObject var m: AppModel
+    static let command = "sudo pmset -a disablesleep 0"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(tr("Sleep is disabled for no reason (another tool or left over from a stop)"), systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            if m.error == nil && m.status != nil {
+                Button(tr("Turn Sleep Back On")) { m.run(.resetSleep); m.refresh() }
+            } else {
+                Text(tr("Run in Terminal:")).font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(Self.command).font(.caption.monospaced()).textSelection(.enabled)
+                    Spacer()
+                    Button(tr("Copy")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(Self.command, forType: .string)
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
     }
 }
 

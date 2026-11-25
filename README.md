@@ -18,6 +18,7 @@
 - Schedule: limit, calibration, full charge, pause, discharge, Low Power Mode; missed tasks on wake; history
 - MagSafe LED colors
 - Keep awake until the limit, freeze the level during sleep
+- Keep awake from the menu (like `caffeinate -i`) for 30 min to 4 h or until turned off, optionally with the lid closed; turns itself off on battery below a threshold
 - Shortcuts actions and a CLI (`chargekeeperctl`)
 - English and French UI (Settings > General > Language)
 
