@@ -49,7 +49,7 @@ int smc_has(const char *key) { SMCKeyInfo i; return smc_info(key, &i) == 0; }
 
 int smc_read(const char *key, uint8_t buf[kSMCBytesSize], uint32_t *len) {
     SMCKeyInfo info;
-    if (smc_info(key, &info)) return -1;
+    if (smc_info(key, &info) || info.dataSize > kSMCBytesSize) return -1;
     SMCParam in = {0}, out = {0};
     in.key = k4(key);
     in.keyInfo.dataSize = info.dataSize;
@@ -62,7 +62,7 @@ int smc_read(const char *key, uint8_t buf[kSMCBytesSize], uint32_t *len) {
 
 int smc_write(const char *key, const uint8_t *buf, uint32_t len) {
     SMCKeyInfo info;
-    if (smc_info(key, &info) || info.dataSize != len) return -1;
+    if (len > kSMCBytesSize || smc_info(key, &info) || info.dataSize != len) return -1;
     SMCParam in = {0}, out = {0};
     in.key = k4(key);
     in.keyInfo.dataSize = len;
