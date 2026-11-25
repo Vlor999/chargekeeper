@@ -226,9 +226,29 @@ struct DashboardView: View {
         }
         .padding(20)
         .frame(width: 560)
-        .onAppear { m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .countedWhileOnScreen(in: m)
     }
+}
+
+struct CountedWhileOnScreen: ViewModifier {
+    let model: AppModel
+    @State private var counted = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowVisibility(onChange: count))
+            .onDisappear { count(onScreen: false) }
+    }
+
+    private func count(onScreen: Bool) {
+        guard onScreen != counted else { return }
+        counted = onScreen
+        model.visible += onScreen ? 1 : -1
+    }
+}
+
+extension View {
+    func countedWhileOnScreen(in model: AppModel) -> some View { modifier(CountedWhileOnScreen(model: model)) }
 }
 
 /// Reports whether the hosting window is actually on screen. onAppear/onDisappear aren't enough:

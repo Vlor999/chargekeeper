@@ -392,8 +392,7 @@ struct MenuView: View {
         }
         .padding()
         .frame(width: 320)
-        .onAppear { m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .countedWhileOnScreen(in: m)
     }
 
     /// The root service controls charging; without it the app is only a remote control.
