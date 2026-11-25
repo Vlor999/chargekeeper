@@ -39,7 +39,13 @@ final class AppModel: ObservableObject {
     private var refreshEvery: TimeInterval = 0
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
     /// Open windows showing live data; polling and animation only run while > 0.
-    var visible = 0 { didSet { if visible > 0 { refresh() } } }
+    var visible = 0 {
+        didSet {
+            guard visible > 0 else { return stopRefresh() }
+            scheduleRefresh()
+            refresh()
+        }
+    }
     /// The service's CPU, GPU and Neural Engine power history (300 points at most, at 1 s). Kept when the windows close, so an
     /// opening window draws the last curves at once; its first refresh replaces them.
     @Published private(set) var socHistory: [SoCPowerPoint] = []
@@ -62,19 +68,21 @@ final class AppModel: ObservableObject {
         notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
         notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
         refresh()
-        scheduleRefresh()
     }
 
-    /// One timer, rescheduled only when the period changes with the power interval setting.
     /// ponytail: polling of a local socket every 1-2 s; push notifications if it ever matters
     private func scheduleRefresh() {
+        guard visible > 0 else { return }
         let every = appRefreshInterval(status?.config.powerInterval ?? .s5)
-        guard every != refreshEvery else { return }
+        guard timer == nil || every != refreshEvery else { return }
         refreshEvery = every
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: every, repeats: true) { [weak self] _ in
-            if let self, self.visible > 0 { self.refresh() }
-        }
+        timer = Timer.scheduledTimer(withTimeInterval: every, repeats: true) { [weak self] _ in self?.refresh() }
+    }
+
+    private func stopRefresh() {
+        timer?.invalidate()
+        timer = nil
     }
 
     /// With the power history: the menu and the dashboard both show it (Settings only adds a few KB per refresh).
