@@ -3,8 +3,10 @@
   var BREW = 'brew install --cask vlor999/tap/chargekeeper';
   var DOWNLOAD = '<path d="M11 3h2v9.6l3.3-3.3 1.4 1.4-5.7 5.7-5.7-5.7 1.4-1.4 3.3 3.3zM4 18h16v2H4z"/>';
   var LAPTOP = '<path fill-rule="evenodd" d="M5 4h14a1 1 0 0 1 1 1v10H4V5a1 1 0 0 1 1-1zm1 2v7h12V6zM1 16h22v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z"/>';
-  // FR strings; English stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
-  var FR = {
+  var LATEST_RELEASE_PAGE = 'https://github.com/' + REPO + '/releases/latest';
+  // exception: the unauthenticated GitHub API allows 60 requests per hour per IP (https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#primary-rate-limit-for-unauthenticated-users)
+  var RELEASE_CACHE_MS = 3600e3;
+  var FRENCH_BY_KEY = {
     skip: 'Aller au téléchargement', features: 'Fonctions', dl: 'Télécharger', nav: 'Principal', lang: 'Langue',
     tagline: 'La batterie de votre MacBook, <span class="accent">au bon niveau.</span>',
     lead: 'Limite de charge, décharge, calibration et planification, depuis la barre des menus. Gratuit, open source, sans compte.',
@@ -50,26 +52,27 @@
     lg3: 'ChargeKeeper est fourni tel quel, sans garantie (licence MIT). Il utilise des interfaces de macOS non documentées, susceptibles de changer : utilisation à vos risques. Non affilié à Apple ni approuvé par Apple.',
     lg4: 'Apple, Mac, MacBook, MagSafe et macOS sont des marques d\'Apple Inc., déposées aux États-Unis et dans d\'autres pays et régions.'
   };
-  var lang, EN = {};
+  var lang, englishByKey = {};
   try { lang = localStorage.getItem('lang'); } catch (e) {}
   if (lang !== 'fr' && lang !== 'en') lang = /^fr/i.test(navigator.language || '') ? 'fr' : 'en';
   function t(fr, en) { return lang === 'en' ? en : fr; }
-  // First call per key stores the English original; then pick EN or FR.
-  function str(k, cur) { if (!(k in EN)) EN[k] = cur; return lang === 'fr' && FR[k] != null ? FR[k] : EN[k]; }
+  function rememberEnglish(k, cur) { if (!(k in englishByKey)) englishByKey[k] = cur; }
+  function translated(k) { return lang === 'fr' && FRENCH_BY_KEY[k] != null ? FRENCH_BY_KEY[k] : englishByKey[k]; }
+  function rememberEnglishThenTranslate(k, cur) { rememberEnglish(k, cur); return translated(k); }
   function translate() {
     document.documentElement.lang = lang;
-    document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = str(el.dataset.i18n, el.textContent); });
-    document.querySelectorAll('[data-i18n-html]').forEach(function (el) { el.innerHTML = str(el.dataset.i18nHtml, el.innerHTML); });
+    document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = rememberEnglishThenTranslate(el.dataset.i18n, el.textContent); });
+    document.querySelectorAll('[data-i18n-html]').forEach(function (el) { el.innerHTML = rememberEnglishThenTranslate(el.dataset.i18nHtml, el.innerHTML); });
     document.querySelectorAll('[data-i18n-attr]').forEach(function (el) {
       var p = el.dataset.i18nAttr.split(':');
-      el.setAttribute(p[0], str(p[1], el.getAttribute(p[0])));
+      el.setAttribute(p[0], rememberEnglishThenTranslate(p[1], el.getAttribute(p[0])));
     });
     document.querySelectorAll('.lang button').forEach(function (b) { b.setAttribute('aria-pressed', b.lang === lang); });
   }
   var meta = document.getElementById('release-meta');
   var box = document.getElementById('downloads');
   var heroDl = document.getElementById('hero-dl'), heroVer = document.getElementById('hero-ver');
-  var rel; // undefined while loading, null on error; kept so a language switch re-renders without refetching
+  var release = { status: 'loading' };
 
   function brew() {
     var d = document.createElement('div');
@@ -95,10 +98,10 @@
     heroDl.href = '#download';
     heroDl.textContent = t('Télécharger', 'Download');
     heroVer.textContent = '';
-    if (rel === undefined) { meta.textContent = t('Recherche de la dernière version…', 'Looking up the latest release…'); return; }
-    // API down or rate-limited (60 requests/hour per IP): still offer the download through the latest release page.
-    var dmg = rel && (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
-    var url = dmg ? dmg.browser_download_url : 'https://github.com/' + REPO + '/releases/latest';
+    if (release.status === 'loading') { meta.textContent = t('Recherche de la dernière version…', 'Looking up the latest release…'); return; }
+    var rel = release.data;
+    var dmg = release.status === 'ok' && (rel.assets || []).filter(function (a) { return /\.dmg$/.test(a.name); })[0];
+    var url = dmg ? dmg.browser_download_url : LATEST_RELEASE_PAGE;
     if (dmg) {
       var ver = rel.tag_name || rel.name;
       var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(t('fr-FR', 'en-US'), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -138,16 +141,15 @@
       setLang(b.lang);
     });
   });
-  // Cache the release for an hour: the unauthenticated API allows 60 requests/hour per IP.
   var cached;
   try { cached = JSON.parse(localStorage.getItem('release')); } catch (e) {}
-  if (cached && Date.now() - cached.at < 3600e3) { rel = cached.rel; render(); return; }
+  if (cached && Date.now() - cached.at < RELEASE_CACHE_MS) { release = { status: 'ok', data: cached.rel }; render(); return; }
   fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (r) {
-      rel = r;
+      release = { status: 'ok', data: r };
       try { localStorage.setItem('release', JSON.stringify({ at: Date.now(), rel: r })); } catch (e) {}
       render();
     })
-    .catch(function () { rel = null; render(); });
+    .catch(function () { release = { status: 'error' }; render(); });
 })();
