@@ -226,9 +226,38 @@ struct DashboardView: View {
         }
         .padding(20)
         .frame(width: 560)
-        .onAppear { m.visible += 1 }
-        .onDisappear { m.visible -= 1 }
+        .countedWhileOnScreen(in: m)
     }
+}
+
+struct CountedWhileOnScreen: ViewModifier {
+    final class Tally {
+        var counted = false
+        var disappeared = false
+    }
+
+    let model: AppModel
+    @State private var tally = Tally()
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowVisibility(onChange: count))
+            .onAppear { tally.disappeared = false }
+            .onDisappear {
+                count(onScreen: false)
+                tally.disappeared = true
+            }
+    }
+
+    private func count(onScreen: Bool) {
+        guard !tally.disappeared, onScreen != tally.counted else { return }
+        tally.counted = onScreen
+        model.visible += onScreen ? 1 : -1
+    }
+}
+
+extension View {
+    func countedWhileOnScreen(in model: AppModel) -> some View { modifier(CountedWhileOnScreen(model: model)) }
 }
 
 /// Reports whether the hosting window is actually on screen. onAppear/onDisappear aren't enough:
@@ -246,6 +275,7 @@ struct WindowVisibility: NSViewRepresentable {
         private var last: Bool?
         init(_ onChange: @escaping (Bool) -> Void) { self.onChange = onChange; super.init(frame: .zero) }
         required init?(coder: NSCoder) { nil }
+        deinit { if let token { NotificationCenter.default.removeObserver(token) } }
 
         // SwiftUI re-attaches this view often; only react when the window itself changes.
         override func viewDidMoveToWindow() {

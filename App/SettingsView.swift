@@ -65,8 +65,8 @@ struct SettingsView: View {
                 .navigationTitle(pane.title)
         }
         .frame(width: 720, height: 480)
-        .onAppear { NSApp.activate(ignoringOtherApps: true); model.visible += 1 }
-        .onDisappear { model.visible -= 1 }
+        .onAppear { NSApp.activate(ignoringOtherApps: true) }
+        .countedWhileOnScreen(in: model)
     }
 
     @ViewBuilder var sidebar: some View {
