@@ -204,6 +204,7 @@ func olderAppsReadHistoryText() {
 
 func historyRendersInFrench() {
     useLanguage("fr")
+    defer { useLanguage("system") }
     assert(localizedHistory(calibrationDoneEntry) == "Calibration terminée : 7100 → 7180\u{00A0}mAh, santé 82,8 → 83,7\u{00A0}%, 278 cycles")
     assert(localizedHistory(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration : décharge jusqu'à 10\u{00A0}%")
 }
@@ -218,6 +219,7 @@ func localeFollowsTextLanguageKeepsRegion() {
 
 func numbersDatesAndDurationsFollowFrench() {
     useLanguage("fr")
+    defer { useLanguage("system") }
     assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--" && watts(13.4) == "13,4 W")
     var paris = Calendar(identifier: .gregorian); paris.timeZone = TimeZone(identifier: "Europe/Paris")!
     let oct30 = paris.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 21, minute: 5))!
@@ -228,6 +230,7 @@ func numbersDatesAndDurationsFollowFrench() {
 
 func menuAndNotificationStringsAreTranslated() {
     useLanguage("fr")
+    defer { useLanguage("system") }
     assert(tr("Plug in the adapter to continue calibration") != "Plug in the adapter to continue calibration")
     assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
     assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
@@ -775,11 +778,11 @@ func healthSpanPicksDaysMonthsOrYears() {
 
 func healthChartStringsAreTranslated() {
     useLanguage("fr")
+    defer { useLanguage("system") }
     for k in ["3 months", "1 year", "All", "Health over time", "Not enough data yet: one point is recorded per day.", "Period",
               "%d days", "1 day", "%d months", "%d years", "%@ points in %@", "no new cycle", "+1 cycle", "+%d cycles",
               "Health history unavailable: the ChargeKeeper service did not answer (restart it after an update)."] { assert(tr(k) != k, k) }
     assert(tr("%@ points in %@", "−1,2", tr("%d months", 3)) == "−1,2 pt en 3 mois" && tr("+%d cycles", 14) == "14 cycles de plus")
-    useLanguage("system")
 }
 
 func settingsSearchIgnoresAccentsCaseAndRequiresAllWords() {
