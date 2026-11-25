@@ -275,6 +275,7 @@ struct WindowVisibility: NSViewRepresentable {
         private var last: Bool?
         init(_ onChange: @escaping (Bool) -> Void) { self.onChange = onChange; super.init(frame: .zero) }
         required init?(coder: NSCoder) { nil }
+        deinit { if let token { NotificationCenter.default.removeObserver(token) } }
 
         // SwiftUI re-attaches this view often; only react when the window itself changes.
         override func viewDidMoveToWindow() {
