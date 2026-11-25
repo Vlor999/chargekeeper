@@ -231,18 +231,27 @@ struct DashboardView: View {
 }
 
 struct CountedWhileOnScreen: ViewModifier {
+    final class Tally {
+        var counted = false
+        var disappeared = false
+    }
+
     let model: AppModel
-    @State private var counted = false
+    @State private var tally = Tally()
 
     func body(content: Content) -> some View {
         content
             .background(WindowVisibility(onChange: count))
-            .onDisappear { count(onScreen: false) }
+            .onAppear { tally.disappeared = false }
+            .onDisappear {
+                count(onScreen: false)
+                tally.disappeared = true
+            }
     }
 
     private func count(onScreen: Bool) {
-        guard onScreen != counted else { return }
-        counted = onScreen
+        guard !tally.disappeared, onScreen != tally.counted else { return }
+        tally.counted = onScreen
         model.visible += onScreen ? 1 : -1
     }
 }
