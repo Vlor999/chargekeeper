@@ -100,7 +100,7 @@ private func usbPortNames() -> [Int: String] {
 }
 
 private func smcRead(_ key: String) -> [UInt8]? {
-    var buf = [UInt8](repeating: 0, count: 32)
+    var buf = [UInt8](repeating: 0, count: kSMCBytesSize)
     var len: UInt32 = 0
     return smc_read(key, &buf, &len) == 0 ? Array(buf.prefix(Int(len))) : nil
 }
