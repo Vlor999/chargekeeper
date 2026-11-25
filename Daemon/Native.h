@@ -2,9 +2,11 @@
 #include <stdint.h>
 #include <IOKit/pwr_mgt/IOPMLib.h>
 
+enum { kSMCBytesSize = 32 };
+
 int smc_open(void);
 int smc_has(const char *key);
-int smc_read(const char *key, uint8_t *buf, uint32_t *len);  // buf: 32 bytes
+int smc_read(const char *key, uint8_t buf[kSMCBytesSize], uint32_t *len);
 int smc_write(const char *key, const uint8_t *buf, uint32_t len);
 
 int mcl_available(void);
