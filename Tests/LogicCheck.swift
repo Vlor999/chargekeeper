@@ -319,6 +319,16 @@ func adapterNoticeRateLimitedAcrossShortUnplugs() {
     assert(adapterNotice(phase: .chargeFull, adapter: false, now: at(adapterNoticeGap + 1), &an) == .first)
 }
 
+func rateLimitedWaitStartsItsOwnReminderTimer() {
+    var an = AdapterNoticeState()
+    _ = adapterNotice(phase: .rechargeFull, adapter: false, now: at(0), &an)
+    _ = adapterNotice(phase: .rechargeFull, adapter: true, now: at(60), &an)
+    let secondUnplug: TimeInterval = 120
+    assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(secondUnplug), &an) == .none)
+    assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(secondUnplug + adapterReminderAfter - 1), &an) == .none)
+    assert(adapterNotice(phase: .rechargeFull, adapter: false, now: at(secondUnplug + adapterReminderAfter), &an) == .reminder)
+}
+
 func adapterNoticeRemindsOnceAfterReminderDelay() {
     var an = AdapterNoticeState()
     _ = adapterNotice(phase: .rechargeFull, adapter: false, now: at(0), &an)
@@ -959,6 +969,7 @@ let checks: [() -> Void] = [
     adapterNoticeOnFirstTickAfterRestart,
     adapterNoticeOncePerWaitAcrossRestAndRecharge,
     adapterNoticeRateLimitedAcrossShortUnplugs,
+    rateLimitedWaitStartsItsOwnReminderTimer,
     adapterNoticeRemindsOnceAfterReminderDelay,
     adapterNoticeOnlyInPhasesNeedingAdapter,
     calibrationRestCountsOnlyOnAdapter,
