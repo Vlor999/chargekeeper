@@ -35,6 +35,7 @@ final class Daemon {
 
     init() {
         s = Daemon.load()
+        let hadState = FileManager.default.fileExists(atPath: statePath)  // before the save below creates it
         power = PowerMetrics(interval: s.config.powerInterval)
         DiagnosticLog.configure(s.config)
         // A crash may have left sleep disabled: start from the system default, keep awake off unless this is an update restart.
@@ -45,7 +46,7 @@ final class Daemon {
         readAppleChargeLimit()
         log("start: inhibit=\(hw.inhibitKey ?? "-") discharge=\(hw.dischargeKey ?? "-") nativeMCL=\(hw.native)")
         // Only stop() saves the Exit state: anything else is a crash, a kill or a restart for an update.
-        if FileManager.default.fileExists(atPath: statePath) && s.runtime.state != .exit {
+        if hadState && s.runtime.state != .exit {
             log("previous run ended without a stop (state \(s.runtime.state.rawValue)): sleep setting reset, keep awake \(s.runtime.keepAwakeUntil == nil ? "off" : "kept (update restart)")", .warn)
         }
     }
