@@ -263,10 +263,10 @@ func everyHistoryTemplateAndBannerHasFrench() {
 }
 
 func timeToTargetFromCurrentAndCapacity() {
-    let chargeCurrentA = 2.0
+    let watts2000mAAt11_4V = 22.8
     assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 2000, watts: 0) == 1800)
     assert(timeToTarget(percent: 90, target: 80, capacity: 5000, amperage: -1000, watts: 0) == 1800)
-    assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: nil, watts: chargeCurrentA * nominalPackVolts) == 1800)
+    assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: nil, watts: watts2000mAAt11_4V) == 1800)
 }
 
 func timeToTargetIsAtLeastOneMinute() {
@@ -875,9 +875,8 @@ func keepAwakeHistoryTexts() {
 }
 
 func keepAwakeBatteryThresholdIsClamped() {
-    let lowest = keepAwakeMinBatteryRange.lowerBound, highest = keepAwakeMinBatteryRange.upperBound
-    assert(clampedKeepAwakeMinBattery(0) == lowest && clampedKeepAwakeMinBattery(lowest) == lowest && clampedKeepAwakeMinBattery(20) == 20)
-    assert(clampedKeepAwakeMinBattery(highest) == highest && clampedKeepAwakeMinBattery(highest + 1) == highest && clampedKeepAwakeMinBattery(-3) == lowest)
+    assert(clampedKeepAwakeMinBattery(0) == 5 && clampedKeepAwakeMinBattery(5) == 5 && clampedKeepAwakeMinBattery(20) == 20)
+    assert(clampedKeepAwakeMinBattery(50) == 50 && clampedKeepAwakeMinBattery(51) == 50 && clampedKeepAwakeMinBattery(-3) == 5)
 }
 
 func keepAwakeSurvivesUpdateRestartOnly() {
@@ -912,7 +911,7 @@ func configWithoutKeepAwakeSettingsDecodesDefaults() {
     var olderService = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
     olderService["keepAwakeLidClosed"] = nil; olderService["keepAwakeMinBattery"] = nil
     assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: olderService)) == Config())
-    assert(Config().keepAwakeMinBattery == keepAwakeMinBatteryDefault && !Config().keepAwakeLidClosed)
+    assert(Config().keepAwakeMinBattery == 20 && !Config().keepAwakeLidClosed)
 }
 
 func keepAwakeDurationOutsideListFailsDecode() {
