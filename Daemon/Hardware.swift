@@ -66,7 +66,7 @@ func readBattery() -> Reading? {
     if active != portNames.ports || active.contains(where: { portNames.names[$0] == nil }) {
         portNames = (active, active.isEmpty ? [:] : usbPortNames())
     }
-    r.ports = out.map { PortPower(name: portNames.names[$0.port], watts: $0.watts, maxWatts: $0.max) }
+    r.ports = out.map { PortPower(deviceName: portNames.names[$0.port], watts: $0.watts, negotiatedWatts: $0.max) }
     r.temperature = smcTemperature()
     return r
 }

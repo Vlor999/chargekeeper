@@ -28,7 +28,7 @@ private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some
     return ForEach(PowerComponent.all, id: \.name) { c in
         ForEach(history.indices, id: \.self) { i in
             let p = history[i]
-            LineMark(x: .value(tr("Time"), p.date), y: .value(tr("Power"), c.value(p.power)), series: .value("", "\(c.name) \(segments[i])"))
+            LineMark(x: .value(tr("Time"), p.date), y: .value(tr("Power"), c.value(p.averagePower)), series: .value("", "\(c.name) \(segments[i])"))
                 .interpolationMethod(.monotone)
                 .foregroundStyle(c.color)
                 .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: c.dashedBesidesColor ? chartCurveDash : []))
@@ -37,8 +37,8 @@ private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some
 }
 
 private func powerScale(_ history: [SoCPowerPoint], endingAtArrival arrival: Date) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
-    let peak = history.map { max($0.power.cpuWatts, $0.power.gpuWatts, $0.power.aneWatts) }.max() ?? 0
-    return (arrival.addingTimeInterval(-socHistoryWindow)...arrival, 0...max(peak, minimumPowerScalePeakWatts))
+    let peak = history.map { max($0.averagePower.cpuWatts, $0.averagePower.gpuWatts, $0.averagePower.aneWatts) }.max() ?? 0
+    return (arrival.addingTimeInterval(-socHistoryRetention)...arrival, 0...max(peak, minimumPowerScalePeakWatts))
 }
 
 struct PowerGraph: View {

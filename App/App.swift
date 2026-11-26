@@ -63,10 +63,10 @@ final class AppModel: ObservableObject {
     }
 
     private func observeServiceSignals() {
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
-        notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.showLiveBanner(for: .heat) }
-        notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.showLiveBanner(for: .limit) }
-        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.showLiveBanner(for: .adapter) }
+        notify_register_dispatch(DarwinNotification.calibrationDone.name, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
+        notify_register_dispatch(DarwinNotification.heatProtect.name, &heatToken, .main) { [weak self] _ in self?.showLiveBanner(for: .heat) }
+        notify_register_dispatch(DarwinNotification.limitReached.name, &limitToken, .main) { [weak self] _ in self?.showLiveBanner(for: .limit) }
+        notify_register_dispatch(DarwinNotification.calibrationNeedsAdapter.name, &adapterToken, .main) { [weak self] _ in self?.showLiveBanner(for: .adapter) }
     }
 
     // ponytail: polls the service socket every 1-2 s while a window is open; a push from the service would remove the polling (https://github.com/Vlor999/chargekeeper/issues/53)
@@ -85,7 +85,7 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        run(.status(soc: true))
+        run(.status(includePowerHistory: true))
         let h = powerHistoryIfServiceAnswered
         if h != lastKnownPowerHistory { lastKnownPowerHistory = h }
         powerHistoryReceivedAt = Date()
@@ -182,8 +182,8 @@ final class AppModel: ObservableObject {
     private func content(_ c: CalibrationResult) -> UNNotificationContent {
         let n = UNMutableNotificationContent()
         n.title = tr("Calibration complete")
-        let lines = [c.before.maxCapacity.flatMap { b in c.after.maxCapacity.map { tr("Capacity: %@ → %@ mAh", number(Double(b)), number(Double($0))) } },
-                     c.before.health.flatMap { b in c.after.health.map { tr("Health: %@ → %@ %%", number(b, decimals: 1), number($0, decimals: 1)) } }]
+        let lines = [c.before.fullChargeCapacityMAh.flatMap { b in c.after.fullChargeCapacityMAh.map { tr("Capacity: %@ → %@ mAh", number(Double(b)), number(Double($0))) } },
+                     c.before.healthPercent.flatMap { b in c.after.healthPercent.map { tr("Health: %@ → %@ %%", number(b, decimals: 1), number($0, decimals: 1)) } }]
             .compactMap { $0 }
         n.body = lines.isEmpty ? tr("Finished %@", dateTime(c.end)) : lines.joined(separator: "\n")
         return n
@@ -314,7 +314,7 @@ extension Status {
     var calibrationWaitsForAdapter: Bool { calibrationNeedsAdapter(runtime.calibration) && !adapter }
 
     func eta(toPercent target: Int) -> String? {
-        timeToTarget(percent: percent, target: target, capacity: battery?.maxCapacity, amperage: batteryAmperage, watts: batteryWatts)
+        timeToTarget(percent: percent, target: target, capacity: battery?.fullChargeCapacityMAh, amperage: batteryChargeMilliamps, watts: batteryChargeWatts)
             .map(approxDuration)
     }
 
@@ -346,8 +346,8 @@ extension Status {
     }
 
     var calibrationBaseline: String? {
-        guard runtime.calibration != nil, let b = runtime.calibrationBefore else { return nil }
-        let parts = [b.maxCapacity.map { tr("%@ mAh", number(Double($0))) }, b.health.map { tr("health %@ %%", number($0, decimals: 1)) }]
+        guard runtime.calibration != nil, let b = runtime.calibrationStartSnapshot else { return nil }
+        let parts = [b.fullChargeCapacityMAh.map { tr("%@ mAh", number(Double($0))) }, b.healthPercent.map { tr("health %@ %%", number($0, decimals: 1)) }]
             .compactMap { $0 }
         return parts.isEmpty ? nil : tr("Before: %@", parts.joined(separator: " · "))
     }
@@ -433,7 +433,7 @@ struct MenuView: View {
             }
             .font(.caption)
         }
-        if r.pastLimitSince != nil && s.adapter {
+        if r.macOSPastLimitSince != nil && s.adapter {
             Label(r.state == .discharging ? tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper discharges it back to the limit.") : tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit."), systemImage: "info.circle")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -457,7 +457,7 @@ struct MenuView: View {
         }
 
         HStack {
-            if !s.config.autoDischarge {
+            if !s.config.drainAboveLimitOnAdapter {
                 Toggle(tr("Discharge"), isOn: Binding(get: { r.discharge }, set: { m.run(.discharge($0)) }))
                     .disabled(s.percent <= s.config.limit && !r.discharge)
             }
@@ -470,7 +470,7 @@ struct MenuView: View {
         }
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run(.keepAwake($0 ? awakeFor : nil)) }))
+                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run($0 ? .keepAwake(awakeFor) : .stopKeepAwake) }))
                     .fixedSize()
                 Spacer(minLength: 8)
                 Picker("", selection: Binding(get: { awakeFor }, set: { chooseKeepAwakeDuration($0, restartingFromNowIfOn: r.keepAwakeUntil != nil) })) {
@@ -478,7 +478,7 @@ struct MenuView: View {
                 }
                 .labelsHidden()
             }
-            Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed))
+            Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeWithLidClosed))
             if let line = s.keepAwakeLine { Text(line).font(.caption).foregroundStyle(.secondary) }
         }
 
@@ -510,7 +510,7 @@ struct UnexplainedSleepDisabledWarning: View {
             Label(tr("Sleep is disabled for no reason (another tool or left over from a stop)"), systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             if m.error == nil && m.status != nil {
-                Button(tr("Turn Sleep Back On")) { m.run(.resetSleep); m.refresh() }
+                Button(tr("Turn Sleep Back On")) { m.run(.reenableSleepIfNotWanted); m.refresh() }
             } else {
                 Text(tr("Run in Terminal:")).font(.caption).foregroundStyle(.secondary)
                 HStack {

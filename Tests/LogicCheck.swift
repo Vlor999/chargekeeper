@@ -1,7 +1,6 @@
 import Foundation
 
 let c = Config()
-let secondsPerDay: TimeInterval = 86400
 let cal: Calendar = { var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!; return utc }()
 
 func tick(_ c: Config, _ r: inout Runtime, _ pct: Int, ac: Bool = true, temp: Double? = nil, at t: TimeInterval = 0) -> Action {
@@ -14,10 +13,10 @@ func d(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
 
 func useLanguage(_ code: String) { UserDefaults.standard.register(defaults: [languageKey: code]) }
 
-let calibrationDoneEntry = HistoryEntry(event: .calibrationDone, capacityBefore: 7100, capacityAfter: 7180, healthBefore: 82.76, healthAfter: 83.69, cycles: 278)
+let calibrationDoneEntry = HistoryEntry(event: .calibrationDone, capacityBeforeMAh: 7100, capacityAfterMAh: 7180, healthBeforePercent: 82.76, healthAfterPercent: 83.69, cycles: 278)
 
 let pw = SoCPower(cpuWatts: 1, gpuWatts: 0, aneWatts: 0)
-let pwHistory = [100.0, 200, 300].map { SoCPowerPoint(date: at($0), power: pw) }
+let pwHistory = [100.0, 200, 300].map { SoCPowerPoint(date: at($0), averagePower: pw) }
 
 func pastLimitEpisodeStarts(_ a: Action, _ pct: Int, _ st: ChargeState = .pause, settled: Bool = true, serviceInControl: Bool = true, ac: Bool = true,
                             mA: Int? = 900, at s: Double = 0, since: inout Date?) -> Bool {
@@ -26,7 +25,7 @@ func pastLimitEpisodeStarts(_ a: Action, _ pct: Int, _ st: ChargeState = .pause,
 }
 
 func hp(_ s: String, _ m: Int = 4200, cycles: Int? = 100, calibration: Bool? = nil) -> HealthSample {
-    HealthSample(date: d(s), maxCapacity: m, nominalCapacity: m + 100, designCapacity: 4800, cycleCount: cycles, calibration: calibration)
+    HealthSample(date: d(s), fullChargeCapacityMAh: m, nominalCapacityMAh: m + 100, designCapacityMAh: 4800, cycleCount: cycles, fromCalibration: calibration)
 }
 
 func aboveLimitHoldsBelowLimitCharges() {
@@ -44,8 +43,8 @@ func manualDischargeStopsAtLimit() {
     assert(tick(c, &r, 80) == .hold(at: 80) && !r.discharge)
 }
 
-func autoDischargeDrainsThenHolds() {
-    var c = Config(); c.autoDischarge = true
+func drainAboveLimitOnAdapterDrainsThenHolds() {
+    var c = Config(); c.drainAboveLimitOnAdapter = true
     var r = Runtime()
     assert(tick(c, &r, 90) == .discharge)
     assert(tick(c, &r, 80) == .hold(at: 80))
@@ -116,13 +115,13 @@ func calibrationNoticeSeedsThenNotifiesOncePerResult() {
 }
 
 func calibrationSummaryShowsBeforeAfterHealth() {
-    let before = BatterySnapshot(date: Date(), maxCapacity: 7100, nominalCapacity: 7344, designCapacity: 8579, cycleCount: 277, percent: 60)
-    var after = before; after.maxCapacity = 7180; after.cycleCount = 278
-    assert(String(format: "%.1f", before.health!) == "82.8" && String(format: "%.1f", before.nominalHealth!) == "85.6")
+    let before = BatterySnapshot(date: Date(), fullChargeCapacityMAh: 7100, nominalCapacityMAh: 7344, designCapacityMAh: 8579, cycleCount: 277, percent: 60)
+    var after = before; after.fullChargeCapacityMAh = 7180; after.cycleCount = 278
+    assert(String(format: "%.1f", before.healthPercent!) == "82.8" && String(format: "%.1f", before.nominalHealthPercent!) == "85.6")
     assert(calibrationSummary(before: before, after: after) == "7100→7180 mAh, health 82.8→83.7 %, 278 cycles")
     assert(calibrationSummary(before: nil, after: after) == "7180 mAh, health 83.7 %, 278 cycles")
-    after.designCapacity = nil
-    assert(after.health == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
+    after.designCapacityMAh = nil
+    assert(after.healthPercent == nil && calibrationSummary(before: before, after: after) == "7100→7180 mAh, 278 cycles")
 }
 
 func heatNoticeOncePerEpisode() {
@@ -171,11 +170,11 @@ func historyEventsRenderInEnglish() {
     assert(historyText(calibrationDoneEntry) == "Calibration complete: 7100 → 7180 mAh, health 82.8 → 83.7 %, 278 cycles")
     assert(historyText(HistoryEntry(event: .calibrationDone)) == "Calibration complete")
     assert(historyText(HistoryEntry(event: .calibrationPhase, phase: .dischargeTo10)) == "Calibration: discharging to 10 %")
-    assert(historyText(HistoryEntry(event: .taskRun, action: .setLimit, late: true, value: 60)) == "Missed task run on wake: Set charge limit (60 %)")
-    assert(historyText(HistoryEntry(event: .taskRun, action: .topUp, late: false)) == "Scheduled task: Charge to 100%")
+    assert(historyText(HistoryEntry(event: .taskRun, action: .setLimit, caughtUpOnWake: true, percent: 60)) == "Missed task run on wake: Set charge limit (60 %)")
+    assert(historyText(HistoryEntry(event: .taskRun, action: .topUp, caughtUpOnWake: false)) == "Scheduled task: Charge to 100%")
     assert(historyText(HistoryEntry(event: .heatProtect, temperature: 36.24)) == "Heat protection: charging paused at 36.2 °C")
-    assert(historyText(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS charged the battery above 85 %")
-    assert(historyText(HistoryEntry(event: .limitChanged, value: 75)) == "Charge limit set to 75 %")
+    assert(historyText(HistoryEntry(event: .chargedPastLimit, percent: 85)) == "macOS charged the battery above 85 %")
+    assert(historyText(HistoryEntry(event: .limitChanged, percent: 75)) == "Charge limit set to 75 %")
 }
 
 func legacyHistoryTextMapsToEvents() {
@@ -185,7 +184,7 @@ func legacyHistoryTextMapsToEvents() {
     assert(parsedHistory(HistoryEntry(text: "calibration: back to limit")).event == .calibrationEnded)
     assert(parsedHistory(HistoryEntry(text: "calibration started")).event == .calibrationStarted)
     let caught = parsedHistory(HistoryEntry(text: "task calibrate (caught up)"))
-    assert(caught.event == .taskRun && caught.action == .calibrate && caught.late == true)
+    assert(caught.event == .taskRun && caught.action == .calibrate && caught.caughtUpOnWake == true)
     assert(parsedHistory(HistoryEntry(text: "task skipped (missed): topUp")).event == .taskSkipped)
     assert(historyText(HistoryEntry(text: "Limit 80 %")) == "Limit 80 %", "unknown text stays as is")
 }
@@ -235,7 +234,7 @@ func menuAndNotificationStringsAreTranslated() {
     assert(tr("Calibration paused") == "Calibration en pause" && tr("Calibration needs the adapter") == "Calibration en attente de l'adaptateur")
     assert(tr("%@ min left", "35") == "encore 35 min" && tr("Step %d/%d", 2, 5) == "Étape 2/5")
     assert(tr("Before: %@", "4210 mAh") == "Avant : 4210 mAh" && tr("%@ %% reached", "80") == "80 % atteint")
-    assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, value: 85)) == "macOS a chargé la batterie au-delà de 85\u{00A0}%")
+    assert(localizedHistory(HistoryEntry(event: .chargedPastLimit, percent: 85)) == "macOS a chargé la batterie au-delà de 85\u{00A0}%")
     assert(localizedHistory(HistoryEntry(event: .chargedPastLimit)) == "macOS a chargé la batterie au-delà de la limite")
     assert(tr("Battery is above the limit while plugged in (macOS charged it). ChargeKeeper holds this level and does not discharge. Turn on Automatic discharge to return to the limit.")
            == "La batterie dépasse la limite sur secteur (chargée par macOS). ChargeKeeper maintient ce niveau sans décharger. Activez la décharge automatique pour revenir à la limite.")
@@ -249,12 +248,12 @@ func menuAndNotificationStringsAreTranslated() {
 func everyHistoryTemplateAndBannerHasFrench() {
     let samples = [calibrationDoneEntry, HistoryEntry(event: .calibrationNeedsAdapter, phase: .hold), HistoryEntry(event: .calibrationDone),
                    HistoryEntry(event: .calibrationStarted), HistoryEntry(event: .calibrationStopped),
-                   HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, value: 80), HistoryEntry(event: .heatProtect),
+                   HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, percent: 80), HistoryEntry(event: .heatProtect),
                    HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),
-                   HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, value: 80),
-                   HistoryEntry(event: .keepAwakeEnded), HistoryEntry(event: .keepAwakeEnded, value: 19), HistoryEntry(event: .keepAwakeFailed)]
+                   HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, percent: 80),
+                   HistoryEntry(event: .keepAwakeTimeUp), HistoryEntry(event: .keepAwakeLowBattery, percent: 19), HistoryEntry(event: .keepAwakeFailed)]
         + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
-        + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, late: $0, value: 60) } }
+        + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, caughtUpOnWake: $0, percent: 60) } }
     var templates: Set<String> = []
     for e in samples { _ = historyText(e, { templates.insert($0); return englishTemplate($0, $1) }) }
     let bannerAndNotificationSettingsStrings = ["Heat protection", "Charge limit reached", "Calibration complete", "Heat protection paused charging", "Notifications",
@@ -428,7 +427,7 @@ func failedOwnActionIsNotBlamedOnMacOS() {
 
 func noPastLimitEpisodeOnTheTickThatChangesMode() {
     var since: Date? = nil
-    var pc = Config(); pc.limit = 80; pc.autoDischarge = true
+    var pc = Config(); pc.limit = 80; pc.drainAboveLimitOnAdapter = true
     var pr = Runtime()
     assert(tick(pc, &pr, 78) == .charge(to: 80) && pr.state == .charging)
     pc.limit = 70
@@ -453,7 +452,7 @@ func noPastLimitEpisodeOnModeChangeViaDischargeTo() {
                                    since: &since, now: Date()))
 }
 
-func appleChargeLimitCountsOnlyWhenEnabledIn50to99() {
+func systemSettingsChargeLimitCountsOnlyWhenEnabledIn50to99() {
     let failedRead = -1
     assert(userChargeLimit(enabled: 1, limit: 80) == 80 && userChargeLimit(enabled: 0, limit: 80) == nil)
     assert(userChargeLimit(enabled: 1, limit: 100) == nil && userChargeLimit(enabled: failedRead, limit: 80) == nil)
@@ -492,30 +491,30 @@ func macWattsIsLoadMinusPortsUnlessPortsExceedLoad() {
 }
 
 func powerHistoryDropsPointsOutsideWindow() {
-    let older = [0.0, 100, 200].map { SoCPowerPoint(date: at($0), power: pw) }
-    assert(appendPowerPoint(older, SoCPowerPoint(date: at(300), power: pw), window: 250) == pwHistory)
+    let older = [0.0, 100, 200].map { SoCPowerPoint(date: at($0), averagePower: pw) }
+    assert(appendPowerPoint(older, SoCPowerPoint(date: at(300), averagePower: pw), window: 250) == pwHistory)
 }
 
 func currentPowerIsNewestWhileFresh() {
-    let maxGapWithoutInterval = socMaxGapIntervals * powermetricsInterval
+    let maxGapWithoutInterval = socStaleAfterIntervals * assumedPowerSampleInterval
     assert(currentPower(pwHistory, now: at(300 + maxGapWithoutInterval)) == pw)
     assert(currentPower(pwHistory, now: at(300 + maxGapWithoutInterval + 1)) == nil && currentPower([], now: Date()) == nil)
 }
 
 func currentPowerLastsTwoOwnIntervals() {
     let interval: TimeInterval = 30
-    let pw30 = [SoCPowerPoint(date: at(300), power: pw, interval: interval)]
-    assert(currentPower(pw30, now: at(300 + socMaxGapIntervals * interval)) == pw)
-    assert(currentPower(pw30, now: at(300 + socMaxGapIntervals * interval + 1)) == nil)
+    let pw30 = [SoCPowerPoint(date: at(300), averagePower: pw, samplingInterval: interval)]
+    assert(currentPower(pw30, now: at(300 + socStaleAfterIntervals * interval)) == pw)
+    assert(currentPower(pw30, now: at(300 + socStaleAfterIntervals * interval + 1)) == nil)
 }
 
 func powerGapOverTwoIntervalsSplitsCurve() {
-    let pwGaps = [0.0, 5, 10, 60, 65, 75].map { SoCPowerPoint(date: at($0), power: pw) }
+    let pwGaps = [0.0, 5, 10, 60, 65, 75].map { SoCPowerPoint(date: at($0), averagePower: pw) }
     assert(powerSegments(pwGaps) == [0, 0, 0, 1, 1, 1] && powerSegments([]).isEmpty)
 }
 
 func powerPoints(_ pts: [(TimeInterval, TimeInterval)]) -> [SoCPowerPoint] {
-    pts.map { SoCPowerPoint(date: at($0.0), power: pw, interval: $0.1) }
+    pts.map { SoCPowerPoint(date: at($0.0), averagePower: pw, samplingInterval: $0.1) }
 }
 
 func segmentsAcrossIntervalChange(old: TimeInterval, new: TimeInterval, gap: TimeInterval) -> [Int] {
@@ -523,7 +522,7 @@ func segmentsAcrossIntervalChange(old: TimeInterval, new: TimeInterval, gap: Tim
 }
 
 func intervalChangeRestartGapDoesNotSplit() {
-    let oneToFiveRestartGap = 1 + 2 * 5 + socRestartSlack
+    let oneToFiveRestartGap = 1 + 2 * 5 + socIntervalChangeSlack
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: 11.55) == [0, 0, 0, 0])
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: oneToFiveRestartGap) == [0, 0, 0, 0])
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: oneToFiveRestartGap + 0.01) == [0, 0, 1, 1])
@@ -537,7 +536,7 @@ func realGapAfterIntervalChangeStillSplits() {
 }
 
 func appRefreshFollowsShortPowerIntervalElsePollInterval() {
-    assert(PowerInterval.allCases.map(appRefreshInterval) == [appPollInterval, 1, 2, 2, 2, 2])
+    assert(PowerInterval.allCases.map(appRefreshInterval) == [appMaxRefreshInterval, 1, 2, 2, 2, 2])
 }
 
 func powermetricsArgumentsFixedExceptIntervalMs() {
@@ -645,8 +644,8 @@ func statusSocFlagIsOptionalBothWays() {
 }
 
 func statusWithoutSocHistoryDecodesNil() {
-    var socStatus = Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0, adapterRatedWatts: nil, systemWatts: 0, batteryWatts: 0, nativeLimit: true, sleepDisabled: false, history: [])
-    socStatus.socHistory = [SoCPowerPoint(date: at(0), power: SoCPower(cpuWatts: 1, gpuWatts: 2, aneWatts: 0))]
+    var socStatus = Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0, adapterRatedWatts: nil, systemWatts: 0, batteryChargeWatts: 0, nativeLimit: true, sleepDisabled: false, history: [])
+    socStatus.socHistory = [SoCPowerPoint(date: at(0), averagePower: SoCPower(cpuWatts: 1, gpuWatts: 2, aneWatts: 0))]
     assert(try! JSONDecoder().decode(Status.self, from: JSONEncoder().encode(socStatus)).socHistory == socStatus.socHistory)
     var olderService = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(socStatus)) as! [String: Any]
     olderService["socHistory"] = nil
@@ -663,9 +662,9 @@ func deviceIconMatchesAppleNamesElseGeneric() {
 }
 
 func healthSampleNeedsBothCapacities() {
-    let snap = BatterySnapshot(date: d("2026-10-01T12:00:00Z"), maxCapacity: 4200, nominalCapacity: 4300, designCapacity: 4800, cycleCount: 100, temperature: nil, percent: 80)
-    assert(healthSample(snap)?.health == 87.5 && healthSample(snap)?.calibration == nil && healthSample(snap, calibration: true)?.calibration == true)
-    var noDesign = snap; noDesign.designCapacity = 0
+    let snap = BatterySnapshot(date: d("2026-10-01T12:00:00Z"), fullChargeCapacityMAh: 4200, nominalCapacityMAh: 4300, designCapacityMAh: 4800, cycleCount: 100, temperature: nil, percent: 80)
+    assert(healthSample(snap)?.healthPercent == 87.5 && healthSample(snap)?.fromCalibration == nil && healthSample(snap, calibration: true)?.fromCalibration == true)
+    var noDesign = snap; noDesign.designCapacityMAh = 0
     assert(healthSample(noDesign) == nil)
 }
 
@@ -681,27 +680,27 @@ func healthSeriesThinsToWeeklyAfterDailyKeepDays() {
     var series: [HealthSample] = []
     var day = d("2025-01-01T12:00:00Z")
     while day <= now {
-        series = addHealthSample(series, HealthSample(date: day, maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil), now: day, calendar: cal)
+        series = addHealthSample(series, HealthSample(date: day, fullChargeCapacityMAh: 4200, nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil), now: day, calendar: cal)
         day = day.addingTimeInterval(secondsPerDay)
     }
     series = addHealthSample(series, hp("2025-03-05T18:00:00Z", calibration: true), now: now, calendar: cal)
     assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
-    let cutoff = now.addingTimeInterval(-Double(healthDailyDays) * secondsPerDay)
-    assert(series.filter { $0.date >= cutoff }.count == healthDailyDays + 1)
-    let old = series.filter { $0.date < cutoff && $0.calibration != true }
+    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
+    assert(series.filter { $0.date >= cutoff }.count == healthDailyRetentionDays + 1)
+    let old = series.filter { $0.date < cutoff && $0.fromCalibration != true }
     assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
-    assert(series.contains { $0.calibration == true })
+    assert(series.contains { $0.fromCalibration == true })
 }
 
 func minutePoint(_ i: Int, calibration: Bool?) -> HealthSample {
-    HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), maxCapacity: 4200, nominalCapacity: nil, designCapacity: 4800,
-                 cycleCount: nil, calibration: calibration)
+    HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), fullChargeCapacityMAh: 4200, nominalCapacityMAh: nil, designCapacityMAh: 4800,
+                 cycleCount: nil, fromCalibration: calibration)
 }
 
 func healthSeriesCapDropsDailyBeforeCalibration() {
     let capNow = d("2026-01-02T00:00:00Z"), pointCount = 600
     var series = (0..<pointCount).reduce([]) { s, i in addHealthSample(s, minutePoint(i, calibration: i % 2 == 0 ? true : nil), now: capNow, calendar: cal) }
-    assert(series.count == healthMaxSamples && series.filter { $0.calibration == true }.count == pointCount / 2)
+    assert(series.count == healthMaxSamples && series.filter { $0.fromCalibration == true }.count == pointCount / 2)
     assert(series.last?.date == minutePoint(pointCount - 1, calibration: nil).date && series.first?.date == minutePoint(0, calibration: true).date)
     series = (0..<pointCount).reduce([]) { s, i in addHealthSample(s, minutePoint(i, calibration: true), now: capNow, calendar: cal) }
     assert(series.count == healthMaxSamples && series.first?.date == minutePoint(pointCount - healthMaxSamples, calibration: true).date, "oldest first")
@@ -716,11 +715,11 @@ func healthSeriesRefusesFutureDatedPoints() {
 
 func thinningCutoffUsesNowNotInsertedPoint() {
     let now = d("2026-10-01T12:00:00Z")
-    let daily = (0..<200).map { i in HealthSample(date: now.addingTimeInterval(-Double(i) * secondsPerDay), maxCapacity: 4200,
-                                                  nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil) }.reversed()
+    let daily = (0..<200).map { i in HealthSample(date: now.addingTimeInterval(-Double(i) * secondsPerDay), fullChargeCapacityMAh: 4200,
+                                                  nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil) }.reversed()
     let thinned = addHealthSample(Array(daily), hp("2026-03-01T12:00:00Z", calibration: true), now: now, calendar: cal)
-    let cutoff = now.addingTimeInterval(-Double(healthDailyDays) * secondsPerDay)
-    assert(thinned.filter { $0.calibration != true && $0.date < cutoff }.count <= 3)
+    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
+    assert(thinned.filter { $0.fromCalibration != true && $0.date < cutoff }.count <= 3)
 }
 
 func calibrationPointReplacesDailyPointOfSameTick() {
@@ -736,8 +735,8 @@ func healthHistoryRequestRoundTrips() {
 
 func healthStatus() -> Status {
     Status(config: Config(), runtime: Runtime(), percent: 80, hardwarePercent: nil, adapter: true, temperature: nil, adapterWatts: 0,
-           adapterRatedWatts: nil, systemWatts: 0, batteryWatts: 0, batteryAmperage: nil, ports: nil, nativeLimit: true, sleepDisabled: false,
-           history: [], battery: nil, lastCalibration: nil, appleChargeLimit: nil)
+           adapterRatedWatts: nil, systemWatts: 0, batteryChargeWatts: 0, batteryChargeMilliamps: nil, usbCOutputPorts: nil, nativeLimit: true, sleepDisabled: false,
+           history: [], battery: nil, lastCalibration: nil, systemSettingsChargeLimit: nil)
 }
 
 func healthHistoryRidesOnlyInItsReply() {
@@ -755,8 +754,8 @@ func olderHealthPayloadsDecode() {
     olderService["healthHistory"] = nil
     assert(try! JSONDecoder().decode(Status.self, from: JSONSerialization.data(withJSONObject: olderService)).healthHistory == nil)
     let noFlag = #"{"date":0,"maxCapacity":4200,"designCapacity":4800}"#.data(using: .utf8)!
-    assert(try! JSONDecoder().decode(HealthSample.self, from: noFlag) == HealthSample(date: Date(timeIntervalSinceReferenceDate: 0), maxCapacity: 4200,
-                                                                                     nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil))
+    assert(try! JSONDecoder().decode(HealthSample.self, from: noFlag) == HealthSample(date: Date(timeIntervalSinceReferenceDate: 0), fullChargeCapacityMAh: 4200,
+                                                                                     nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil))
 }
 
 func healthRangeStartsThreeMonthsOrOneYearBack() {
@@ -862,7 +861,7 @@ func keepAwakeStopsOnBatteryBelowThreshold() {
 func lidClosedKeepAwakeAddsSleepDisabledReason() {
     var sc = Config()
     assert(!sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: true, keepAwake: true))
-    sc.keepAwakeLidClosed = true
+    sc.keepAwakeWithLidClosed = true
     assert(sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: false, keepAwake: true))
     assert(!sleepDisabledWanted(sc, .hold(at: 80), state: .pause, adapter: true, keepAwake: false))
     assert(sleepDisabledWanted(sc, .discharge, state: .discharging, adapter: true, keepAwake: false))
@@ -872,8 +871,8 @@ func lidClosedKeepAwakeAddsSleepDisabledReason() {
 }
 
 func keepAwakeHistoryTexts() {
-    assert(historyText(HistoryEntry(event: .keepAwakeEnded)) == "Keep awake ended: time up")
-    assert(historyText(HistoryEntry(event: .keepAwakeEnded, value: 19)) == "Keep awake turned off: battery at 19 %")
+    assert(historyText(HistoryEntry(event: .keepAwakeTimeUp)) == "Keep awake ended: time up")
+    assert(historyText(HistoryEntry(event: .keepAwakeLowBattery, percent: 19)) == "Keep awake turned off: battery at 19 %")
     assert(historyText(HistoryEntry(event: .keepAwakeFailed)) == "Keep awake could not start: macOS refused to block sleep")
 }
 
@@ -888,7 +887,7 @@ func keepAwakeSurvivesUpdateRestartOnly() {
 }
 
 func keepAwakeOffAndForeverSurviveEncoding() {
-    if case .keepAwake(nil)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.keepAwake(nil))) {} else { assert(false) }
+    if case .keepAwake(nil)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.stopKeepAwake)) {} else { assert(false) }
     var awakeRuntime = Runtime(); awakeRuntime.keepAwakeUntil = .distantFuture
     assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(awakeRuntime)) == awakeRuntime)
     assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(Runtime())).keepAwakeUntil == nil)
@@ -900,8 +899,8 @@ func strayDisableSleepIsWarned() {
     assert(!unexplainedSleepDisabled(system: nil, service: false) && !unexplainedSleepDisabled(system: false, service: false))
 }
 
-func resetSleepCommandRoundTrips() {
-    if case .resetSleep? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.resetSleep)) {} else { assert(false) }
+func reenableSleepCommandRoundTrips() {
+    if case .reenableSleepIfNotWanted? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.reenableSleepIfNotWanted)) {} else { assert(false) }
 }
 
 func straySleepWarningIsTranslated() {
@@ -914,7 +913,7 @@ func configWithoutKeepAwakeSettingsDecodesDefaults() {
     var olderService = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(Config())) as! [String: Any]
     olderService["keepAwakeLidClosed"] = nil; olderService["keepAwakeMinBattery"] = nil
     assert(try! JSONDecoder().decode(Config.self, from: JSONSerialization.data(withJSONObject: olderService)) == Config())
-    assert(Config().keepAwakeMinBattery == 20 && !Config().keepAwakeLidClosed)
+    assert(Config().keepAwakeMinBattery == 20 && !Config().keepAwakeWithLidClosed)
 }
 
 func keepAwakeDurationOutsideListFailsDecode() {
@@ -935,10 +934,89 @@ func menuWindowIsCenteredAndClampedOnAnyDisplay() {
     assert(centeredMenuX(width: 2000, under: 1000...1030, in: mainScreen, margin: 8) == 8)
 }
 
+let olderServiceConfigJSON = #"""
+{"limit":75,"autoDischarge":true,"idle":false,"idleRange":5,"heatProtect":false,"maxTemp":35,"led":"system","ledBlinkDischarge":false,\#
+"stopChargingDuringSleep":false,"disableSleepUntilLimit":false,"keepLimitWhenStopped":true,"catchUpMissedTasks":false,"tasks":[]}
+"""#
+
+func wireKeys<T: Encodable>(_ v: T) -> Set<String> {
+    Set((try! JSONSerialization.jsonObject(with: JSONEncoder().encode(v)) as! [String: Any]).keys)
+}
+
+func wireText(_ c: Command) -> String { String(decoding: try! JSONEncoder().encode(c), as: UTF8.self) }
+
+func decodedCommand(_ json: String) -> Command? { try? JSONDecoder().decode(Command.self, from: Data(json.utf8)) }
+
+func configFromOlderServiceUsesDefaults() {
+    var expected = Config()
+    expected.limit = 75
+    expected.drainAboveLimitOnAdapter = true
+    assert(try! JSONDecoder().decode(Config.self, from: Data(olderServiceConfigJSON.utf8)) == expected)
+}
+
+func statusFromOlderServiceDecodes() {
+    let json = #"""
+    {"config":\#(olderServiceConfigJSON),"runtime":{"discharge":false,"topUp":false,"heatBlocked":false,"idleRecharge":true,"state":"Pause",\#
+    "calibrationBefore":{"date":0,"maxCapacity":4200,"designCapacity":4800,"percent":80},"pastLimitSince":0},"percent":80,"adapter":true,\#
+    "adapterWatts":0,"systemWatts":5,"batteryWatts":-5,"nativeLimit":true,"sleepDisabled":false,\#
+    "history":[{"date":0,"text":"task setLimit (caught up)","event":"taskRun","action":"setLimit","late":true,"value":80}]}
+    """#
+    let s = try! JSONDecoder().decode(Status.self, from: Data(json.utf8))
+    assert(s.config.drainAboveLimitOnAdapter && s.runtime.isRefillingToLimit && s.runtime.macOSPastLimitSince == Date(timeIntervalSinceReferenceDate: 0))
+    assert(s.runtime.calibrationStartSnapshot?.fullChargeCapacityMAh == 4200 && s.runtime.calibrationStartSnapshot?.healthPercent == 87.5)
+    assert(s.batteryChargeWatts == -5 && s.batteryChargeMilliamps == nil && s.usbCOutputPorts == nil && s.battery == nil)
+    assert(s.systemSettingsChargeLimit == nil && s.healthHistory == nil && s.socHistory == nil)
+    assert(s.history[0].caughtUpOnWake == true && s.history[0].percent == 80)
+}
+
+func renamedFieldsKeepTheirWireKeys() {
+    assert(wireKeys(Config()).isSuperset(of: ["autoDischarge", "keepAwakeLidClosed"]))
+    var runtime = Runtime()
+    runtime.calibrationStartSnapshot = BatterySnapshot(date: at(0), percent: 50)
+    runtime.macOSPastLimitSince = at(0)
+    assert(wireKeys(runtime).isSuperset(of: ["idleRecharge", "calibrationBefore", "pastLimitSince"]))
+    let snapshot = BatterySnapshot(date: at(0), fullChargeCapacityMAh: 1, nominalCapacityMAh: 1, designCapacityMAh: 1, percent: 50)
+    assert(wireKeys(snapshot).isSuperset(of: ["maxCapacity", "nominalCapacity", "designCapacity"]))
+    assert(wireKeys(hp("2026-10-01T12:00:00Z", calibration: true)).isSuperset(of: ["maxCapacity", "nominalCapacity", "designCapacity", "calibration"]))
+    let entry = HistoryEntry(caughtUpOnWake: true, percent: 1, capacityBeforeMAh: 1, capacityAfterMAh: 1, healthBeforePercent: 1, healthAfterPercent: 1)
+    assert(wireKeys(entry).isSuperset(of: ["late", "value", "capacityBefore", "capacityAfter", "healthBefore", "healthAfter"]))
+    assert(wireKeys(PortPower(deviceName: "iPhone", watts: 1, negotiatedWatts: 1)) == ["name", "watts", "maxWatts"])
+    assert(wireKeys(SoCPowerPoint(date: at(0), averagePower: pw, samplingInterval: 1)) == ["date", "power", "interval"])
+    var status = healthStatus()
+    status.batteryChargeMilliamps = 1
+    status.usbCOutputPorts = []
+    status.systemSettingsChargeLimit = 80
+    assert(wireKeys(status).isSuperset(of: ["batteryWatts", "batteryAmperage", "ports", "appleChargeLimit"]))
+}
+
+func commandsKeepTheirWireNames() {
+    assert(wireText(.reenableSleepIfNotWanted) == #"{"resetSleep":{}}"#)
+    assert(wireText(.status(includePowerHistory: true)) == #"{"status":{"soc":true}}"#)
+    if case .reenableSleepIfNotWanted? = decodedCommand(#"{"resetSleep":{}}"#) {} else { assert(false) }
+    if case .status(includePowerHistory: true)? = decodedCommand(#"{"status":{"soc":true}}"#) {} else { assert(false) }
+}
+
+func statusRequestFromOldAppDecodes() {
+    if case .status(includePowerHistory: nil)? = decodedCommand(#"{"status":{}}"#) {} else { assert(false) }
+}
+
+func keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel() {
+    func event(_ json: String) -> HistoryEvent? { try! JSONDecoder().decode(HistoryEntry.self, from: Data(json.utf8)).event }
+    assert(event(#"{"date":0,"text":"","event":"keepAwakeEnded"}"#) == .keepAwakeTimeUp)
+    assert(event(#"{"date":0,"text":"","event":"keepAwakeEnded","value":19}"#) == .keepAwakeLowBattery)
+    assert(String(decoding: try! JSONEncoder().encode(HistoryEntry(event: .keepAwakeTimeUp)), as: UTF8.self).contains(#""keepAwakeEnded""#))
+}
+
+func legacyInstallNamesUnchanged() {
+    assert(socketPath == "/var/run/jauge.sock" && logDir == "/Library/Application Support/Jauge/Logs")
+    assert(DarwinNotification.allCases.map(\.name) == ["com.vlor999.jauge.calibrationDone", "com.vlor999.jauge.heatProtect",
+                                                        "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
-    autoDischargeDrainsThenHolds,
+    drainAboveLimitOnAdapterDrainsThenHolds,
     idleRangeKeepsPauseUntilBelowRange,
     topUpChargesTo100AndClearsOnUnplug,
     heatProtectBlocksThenRechecksAfterHeatWindow,
@@ -987,7 +1065,7 @@ let checks: [() -> Void] = [
     failedOwnActionIsNotBlamedOnMacOS,
     noPastLimitEpisodeOnTheTickThatChangesMode,
     noPastLimitEpisodeOnModeChangeViaDischargeTo,
-    appleChargeLimitCountsOnlyWhenEnabledIn50to99,
+    systemSettingsChargeLimitCountsOnlyWhenEnabledIn50to99,
     ledShowsGreenAtLimitAndBlinksOrangeWhenDischarging,
     monthlyOn31stSkipsShortMonths,
     weekdaysSkipWeekends,
@@ -1047,11 +1125,18 @@ let checks: [() -> Void] = [
     keepAwakeSurvivesUpdateRestartOnly,
     keepAwakeOffAndForeverSurviveEncoding,
     strayDisableSleepIsWarned,
-    resetSleepCommandRoundTrips,
+    reenableSleepCommandRoundTrips,
     straySleepWarningIsTranslated,
     configWithoutKeepAwakeSettingsDecodesDefaults,
     keepAwakeDurationOutsideListFailsDecode,
     menuWindowIsCenteredAndClampedOnAnyDisplay,
+    configFromOlderServiceUsesDefaults,
+    statusFromOlderServiceDecodes,
+    renamedFieldsKeepTheirWireKeys,
+    commandsKeepTheirWireNames,
+    statusRequestFromOldAppDecodes,
+    keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
+    legacyInstallNamesUnchanged,
 ]
 for check in checks { check() }
 print("logic ok")

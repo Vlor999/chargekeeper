@@ -1,8 +1,8 @@
 import Foundation
 
 /// CPU, GPU and Neural Engine power from powermetrics (root only), started with the service and kept running at the
-/// interval set in Settings: the last `socHistoryWindow` of samples stays in memory, so a chart opened later shows the
-/// last minutes at once. If powermetrics ends on its own, the service starts it again after `socRetryDelay`.
+/// interval set in Settings: the last `socHistoryRetention` of samples stays in memory, so a chart opened later shows the
+/// last minutes at once. If powermetrics ends on its own, the service starts it again after `socRestartDelayAfterFailure`.
 final class PowerMetrics {
     /// The setting. Off: powermetrics is not running and the history is empty.
     private var interval: PowerInterval
@@ -41,10 +41,10 @@ final class PowerMetrics {
         // Backstop for an exit the watch missed (child gone before the watch was armed).
         if pid != 0 { exited() }
         if pid == 0 {
-            if !shutdown && interval != .off && Date().timeIntervalSince(failedAt) >= socRetryDelay { start() }
+            if !shutdown && interval != .off && Date().timeIntervalSince(failedAt) >= socRestartDelayAfterFailure { start() }
             return
         }
-        if let t = termAt, Date().timeIntervalSince(t) > socKillGrace { kill(pid, SIGKILL) }
+        if let t = termAt, Date().timeIntervalSince(t) > socSigkillDelayAfterSigterm { kill(pid, SIGKILL) }
     }
 
     /// Service exit or update: asks powermetrics to exit and not to start again. Reaped by launchd once the service is gone.
@@ -113,13 +113,13 @@ final class PowerMetrics {
             let n = Foundation.read(fd, &chunk, chunk.count)
             if n > 0 {
                 buffer.append(contentsOf: chunk[0..<n])
-                let taken = takePlistSamples(&buffer, maxBytes: socMaxSampleBytes)
+                let taken = takePlistSamples(&buffer, maxBytes: socMaxPartialSampleBytes)
                 samples += taken.samples.count
                 dropped = dropped || taken.dropped
                 // One sample per interval; a malformed one is skipped. Turned off: the last samples before the exit are dropped.
                 if interval != .off, let p = taken.samples.reversed().lazy.compactMap(socPower).first {
-                    let point = SoCPowerPoint(date: Date(), power: p, interval: TimeInterval(running.rawValue))
-                    history = appendPowerPoint(history, point, window: socHistoryWindow)
+                    let point = SoCPowerPoint(date: Date(), averagePower: p, samplingInterval: TimeInterval(running.rawValue))
+                    history = appendPowerPoint(history, point, window: socHistoryRetention)
                     parsed = true
                 }
                 continue
@@ -128,7 +128,7 @@ final class PowerMetrics {
             if n == 0 { reader?.cancel(); reader = nil; signalTerm() }
             break
         }
-        if dropped { warn("sample over \(socMaxSampleBytes) bytes dropped") }
+        if dropped { warn("sample over \(socMaxPartialSampleBytes) bytes dropped") }
         if samples > 0 && !parsed { warn("\(samples) unreadable sample(s)") }
     }
 
@@ -149,16 +149,16 @@ final class PowerMetrics {
         if restart { keepRunning() }
     }
 
-    /// Retried every `socRetryDelay`; logged on the first failure, then at most once per `socWarnInterval`.
+    /// Retried every `socRestartDelayAfterFailure`; logged on the first failure, then at most once per `socWarningLogInterval`.
     private func failed(_ why: String) {
         failedAt = Date()
-        rateLimited(&lastFailureLog, "\(why), retry every \(Int(socRetryDelay)) s")
+        rateLimited(&lastFailureLog, "\(why), retry every \(Int(socRestartDelayAfterFailure)) s")
     }
 
     private func warn(_ why: String) { rateLimited(&lastWarn, why) }
 
     private func rateLimited(_ last: inout Date, _ why: String) {
-        guard Date().timeIntervalSince(last) >= socWarnInterval else { return }
+        guard Date().timeIntervalSince(last) >= socWarningLogInterval else { return }
         last = Date()
         log("powermetrics: \(why)", .warn)
     }

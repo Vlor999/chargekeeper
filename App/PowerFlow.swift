@@ -12,7 +12,7 @@ struct PowerFlow: View {
     var sources: [Node] {
         var n: [Node] = []
         if s.adapter && s.adapterWatts > 0.1 { n.append(Node(name: tr("Adapter"), icon: "bolt.fill", watts: s.adapterWatts, color: .yellow)) }
-        if s.batteryWatts < -0.1 { n.append(Node(name: tr("Battery"), icon: "battery.50percent", watts: -s.batteryWatts, color: .orange)) }
+        if s.batteryChargeWatts < -0.1 { n.append(Node(name: tr("Battery"), icon: "battery.50percent", watts: -s.batteryChargeWatts, color: .orange)) }
         return n.isEmpty ? [sourceWhileGaugeReadsZero] : n
     }
 
@@ -22,23 +22,23 @@ struct PowerFlow: View {
     }
 
     var sinks: [Node] {
-        let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
+        let ports = (s.usbCOutputPorts ?? []).filter { $0.watts > 0.1 }
         var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWatts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
-        n += ports.map { Node(name: $0.name ?? "USB-C", icon: deviceIcon($0.name), watts: $0.watts, color: .purple, detail: $0.name, max: $0.maxWatts) }
-        if s.batteryWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryWatts, color: .green)) }
+        n += ports.map { Node(name: $0.deviceName ?? "USB-C", icon: deviceIcon($0.deviceName), watts: $0.watts, color: .purple, detail: $0.deviceName, max: $0.negotiatedWatts) }
+        if s.batteryChargeWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryChargeWatts, color: .green)) }
         return n
     }
 
     static func spoken(_ n: Node) -> String { "\(n.name) \(watts(n.watts))" }
 
     var devicesChargingFromMacSuffix: String {
-        let ports = (s.ports ?? []).filter { $0.watts > 0.5 }
-        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.name ?? "USB-C") \(watts($0.watts))" }.joined(separator: ", "))
+        let ports = (s.usbCOutputPorts ?? []).filter { $0.watts > 0.5 }
+        return ports.isEmpty ? "" : tr(" · charging from the Mac: %@", ports.map { "\($0.deviceName ?? "USB-C") \(watts($0.watts))" }.joined(separator: ", "))
     }
 
     var batteryCoversAdapterShortfall: Bool {
         let dischargeRequested = s.runtime.state == .discharging || s.runtime.calibration == .dischargeTo10 || s.runtime.calibration == .returnToLimit
-        return s.adapter && s.batteryWatts < -0.5 && !dischargeRequested
+        return s.adapter && s.batteryChargeWatts < -0.5 && !dischargeRequested
     }
 
     var body: some View {
@@ -59,7 +59,7 @@ struct PowerFlow: View {
             .accessibilityElement()
             .accessibilityLabel(sources.map(Self.spoken).joined(separator: ", ") + " → " + sinks.map(Self.spoken).joined(separator: ", "))
             if batteryCoversAdapterShortfall {
-                Label(tr("Adapter too weak: the battery supplies %@", watts(-s.batteryWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + devicesChargingFromMacSuffix,
+                Label(tr("Adapter too weak: the battery supplies %@", watts(-s.batteryChargeWatts)) + (s.adapterRatedWatts.map { tr(" (adapter %d W)", $0) } ?? "") + devicesChargingFromMacSuffix,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             }
@@ -230,8 +230,8 @@ private struct FlowCanvas {
 
 struct FlowHelp: View {
     static let landingPageSample = Status(config: Config(), runtime: Runtime(), percent: 50, hardwarePercent: nil, adapter: true, temperature: nil,
-                               adapterWatts: 78, adapterRatedWatts: nil, systemWatts: 23, batteryWatts: 55,
-                               ports: [PortPower(name: "iPhone", watts: 8, maxWatts: 15)], nativeLimit: true, sleepDisabled: false, history: [])
+                               adapterWatts: 78, adapterRatedWatts: nil, systemWatts: 23, batteryChargeWatts: 55,
+                               usbCOutputPorts: [PortPower(deviceName: "iPhone", watts: 8, negotiatedWatts: 15)], nativeLimit: true, sleepDisabled: false, history: [])
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

@@ -4,9 +4,9 @@ import Foundation
 /// Written on events only (start, stop, state changes, errors), so each line opens and closes its file.
 enum DiagnosticLog {
     static var enabled = true
-    static var keepDays = logDaysDefault
+    static var keepDays = logRetentionDaysDefault
     private static var purgedDay: Int?
-    /// Day whose file reached `logMaxFileBytes` and already got its notice line (in memory: a restart may add one more).
+    /// Day whose file reached `logMaxBytesPerDayFile` and already got its notice line (in memory: a restart may add one more).
     private static var fullDay: Int?
 
     static func configure(_ c: Config) {
@@ -28,11 +28,11 @@ enum DiagnosticLog {
         guard fstat(fd, &st) == 0, st.st_mode & S_IFMT == S_IFREG, st.st_uid == 0, st.st_nlink == 1 else { return }
         if st.st_mode & 0o7777 != 0o644 { fchmod(fd, 0o644) }
         var line = logLineText(LogLine(date: now, level: level, message: message))
-        if Int(st.st_size) + line.utf8.count > logMaxFileBytes {
+        if Int(st.st_size) + line.utf8.count > logMaxBytesPerDayFile {
             guard fullDay != day else { return }
             fullDay = day
             line = logLineText(LogLine(date: now, level: .warn, message: "log file full: entries dropped until midnight UTC"))
-            guard Int(st.st_size) + line.utf8.count <= logMaxFileBytes + logFullReserveBytes else { return }
+            guard Int(st.st_size) + line.utf8.count <= logMaxBytesPerDayFile + logFullNoticeReserveBytes else { return }
         }
         _ = line.utf8CString.withUnsafeBufferPointer { Foundation.write(fd, $0.baseAddress, $0.count - 1) }
     }

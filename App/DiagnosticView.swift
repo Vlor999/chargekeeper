@@ -25,7 +25,7 @@ struct DiagnosticView: View {
             Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
                     .searchResultAnchor("logEnabled")
-                Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
+                Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logRetentionDaysRange)
                     .searchResultAnchor("logDays")
                 LabeledContent(tr("Folder")) {
                     HStack {
@@ -122,7 +122,7 @@ func readLog(limit: Int, minLevel: LogLevel) throws -> [LogLine] {
     var out: [LogLine] = []
     for name in try logFileNamesNewestFirst() {
         guard let h = openRegularFileWithoutFollowingLinks(logDir + "/" + name),
-              let data = try? h.read(upToCount: logMaxFileBytes + logFullReserveBytes) else { continue }
+              let data = try? h.read(upToCount: logMaxBytesPerDayFile + logFullNoticeReserveBytes) else { continue }
         for l in String(decoding: data, as: UTF8.self).split(separator: "\n").reversed() {
             guard let e = parseLogLine(l), e.level >= minLevel else { continue }
             out.append(e)

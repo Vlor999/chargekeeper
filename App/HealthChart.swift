@@ -41,7 +41,7 @@ struct HealthChartSection: View {
             } else {
                 let text = healthChange(shown).map(summary)
                 VStack(alignment: .leading, spacing: 8) {
-                    legend(nominal: shown.contains { $0.nominalCapacity != nil }, calibrations: shown.contains { $0.calibration == true })
+                    legend(nominal: shown.contains { $0.nominalCapacityMAh != nil }, calibrations: shown.contains { $0.fromCalibration == true })
                     chart(shown)
                         .chartAsSingleAccessibilityElement(label: tr("Health over time") + ", " + range.label, value: text ?? "")
                     if let text { Text(text).font(.caption).foregroundStyle(.secondary) }
@@ -54,11 +54,11 @@ struct HealthChartSection: View {
         let focus = hovered.flatMap { h in shown.min { abs($0.date.timeIntervalSince(h)) < abs($1.date.timeIntervalSince(h)) } }
         return Chart {
             ForEach(Array(shown.enumerated()), id: \.offset) { _, s in
-                LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health), series: .value("", "raw"))
+                LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.healthPercent), series: .value("", "raw"))
                     .foregroundStyle(Self.raw)
                     .lineStyle(Self.line)
                     .accessibilityHidden(true)
-                if let n = s.nominalHealth {
+                if let n = s.nominalHealthPercent {
                     LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health (nominal)"), n), series: .value("", "nominal"))
                         .foregroundStyle(Self.nominal)
                         .lineStyle(Self.nominalDashedBesidesColor)
@@ -93,11 +93,11 @@ struct HealthChartSection: View {
     }
 
     func calibrationDotsRingedOnHealthLine(_ shown: [HealthSample]) -> some ChartContent {
-        ForEach(Array(shown.filter { $0.calibration == true }.enumerated()), id: \.offset) { _, s in
-            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
+        ForEach(Array(shown.filter { $0.fromCalibration == true }.enumerated()), id: \.offset) { _, s in
+            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.healthPercent))
                 .symbolSize(calibrationRingSymbolSize).foregroundStyle(Self.surface)
                 .accessibilityHidden(true)
-            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
+            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.healthPercent))
                 .symbolSize(calibrationDotSymbolSize).foregroundStyle(Self.raw)
                 .accessibilityHidden(true)
         }
@@ -106,10 +106,10 @@ struct HealthChartSection: View {
     func tooltip(_ s: HealthSample) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(day(s.date)).font(.caption.weight(.semibold))
-            key(Self.raw, tr("Health") + " " + percent(s.health))
-            if let n = s.nominalHealth { key(Self.nominal, tr("Health (nominal)") + " " + percent(n), dashed: true) }
+            key(Self.raw, tr("Health") + " " + percent(s.healthPercent))
+            if let n = s.nominalHealthPercent { key(Self.nominal, tr("Health (nominal)") + " " + percent(n), dashed: true) }
             if let c = s.cycleCount { Text(tr("Cycle count") + " " + String(c)).font(.caption).foregroundStyle(.secondary) }
-            if s.calibration == true { Text(tr("Calibration")).font(.caption).foregroundStyle(.secondary) }
+            if s.fromCalibration == true { Text(tr("Calibration")).font(.caption).foregroundStyle(.secondary) }
         }
         .padding(6)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
