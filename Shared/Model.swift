@@ -91,22 +91,22 @@ struct HistoryEntry: Codable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         date = try c.decode(Date.self, forKey: .date)
         text = try c.decode(String.self, forKey: .text)
-        event = c.lenient(HistoryEvent.self, forKey: .event)
-        phase = c.lenient(CalibrationPhase.self, forKey: .phase)
-        action = c.lenient(TaskAction.self, forKey: .action)
-        late = c.lenient(Bool.self, forKey: .late)
-        value = c.lenient(Int.self, forKey: .value)
-        temperature = c.lenient(Double.self, forKey: .temperature)
-        capacityBefore = c.lenient(Int.self, forKey: .capacityBefore)
-        capacityAfter = c.lenient(Int.self, forKey: .capacityAfter)
-        healthBefore = c.lenient(Double.self, forKey: .healthBefore)
-        healthAfter = c.lenient(Double.self, forKey: .healthAfter)
-        cycles = c.lenient(Int.self, forKey: .cycles)
+        event = c.decodeIfKnownToThisBuild(HistoryEvent.self, forKey: .event)
+        phase = c.decodeIfKnownToThisBuild(CalibrationPhase.self, forKey: .phase)
+        action = c.decodeIfKnownToThisBuild(TaskAction.self, forKey: .action)
+        late = c.decodeIfKnownToThisBuild(Bool.self, forKey: .late)
+        value = c.decodeIfKnownToThisBuild(Int.self, forKey: .value)
+        temperature = c.decodeIfKnownToThisBuild(Double.self, forKey: .temperature)
+        capacityBefore = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityBefore)
+        capacityAfter = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityAfter)
+        healthBefore = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthBefore)
+        healthAfter = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthAfter)
+        cycles = c.decodeIfKnownToThisBuild(Int.self, forKey: .cycles)
     }
 }
 
 private extension KeyedDecodingContainer {
-    func lenient<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
+    func decodeIfKnownToThisBuild<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
         try? decodeIfPresent(type, forKey: key)
     }
 }
@@ -135,7 +135,7 @@ struct Config: Codable, Equatable {
 extension Config {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let defaults = Config()
+        let fallbackForOlderService = Config()
         limit = try c.decode(Int.self, forKey: .limit)
         autoDischarge = try c.decode(Bool.self, forKey: .autoDischarge)
         idle = try c.decode(Bool.self, forKey: .idle)
@@ -149,11 +149,11 @@ extension Config {
         keepLimitWhenStopped = try c.decode(Bool.self, forKey: .keepLimitWhenStopped)
         catchUpMissedTasks = try c.decode(Bool.self, forKey: .catchUpMissedTasks)
         tasks = try c.decode([ScheduledTask].self, forKey: .tasks)
-        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? defaults.logEnabled
-        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? defaults.logDays
-        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? defaults.powerInterval
-        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? defaults.keepAwakeLidClosed
-        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? defaults.keepAwakeMinBattery
+        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? fallbackForOlderService.logEnabled
+        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? fallbackForOlderService.logDays
+        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? fallbackForOlderService.powerInterval
+        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? fallbackForOlderService.keepAwakeLidClosed
+        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? fallbackForOlderService.keepAwakeMinBattery
     }
 }
 
