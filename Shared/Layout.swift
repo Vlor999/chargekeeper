@@ -1,6 +1,6 @@
 import Foundation
 
-// ponytail: only the last centre is clamped, to height - gap / 2; a crowded column pushes the first centres below 0 (ticket to open)
+// ponytail: only the last centre is clamped, to height - gap / 2; a crowded column pushes the first centres below 0 (https://github.com/Vlor999/chargekeeper/issues/69)
 func spreadLabels(_ y: [Double], gap: Double, height: Double) -> [Double] {
     var y = y
     for i in y.indices.dropFirst() { y[i] = max(y[i], y[i - 1] + gap) }

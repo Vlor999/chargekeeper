@@ -171,7 +171,7 @@ private func milliamps(amperage: Int?, watts: Double) -> Double {
     amperage.map(Double.init) ?? watts * 1000 / nominalThreeCellPackVolts
 }
 
-// ponytail: linear at the present current; charging tapers above ~80 %, so the time to 100 % reads short until the next appRefreshInterval (ticket to open)
+// ponytail: linear at the present current; charging tapers above ~80 %, so the time to 100 % reads short until the next appRefreshInterval (https://github.com/Vlor999/chargekeeper/issues/67)
 func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
     guard let capacity, capacity > 0, target != percent else { return nil }
     let mA = milliamps(amperage: amperage, watts: watts)
@@ -182,7 +182,7 @@ func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, wat
 }
 
 // exception: macOS 26.4+ now and then charges to 100 % to recalibrate the gauge, a cause readable only with a private entitlement, so the episode is detected from its effect (https://github.com/Vlor999/chargekeeper/commit/baf88803900433fb05626892d550d114dee14677)
-// ponytail: 11 parameters, with the `settled` and `inControl` flags; a reading type would name them but changes the Daemon call (ticket to open)
+// ponytail: 11 parameters, with the `settled` and `inControl` flags; a reading type would name them but changes the Daemon call (https://github.com/Vlor999/chargekeeper/issues/68)
 func pastLimitEpisode(_ a: Action, state: ChargeState, settled currentReflectsThisMode: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
                       watts: Double, since: inout Date?, now: Date) -> Int? {
     guard adapter, let held = serviceHeldLevel(a, state: state, limit: limit), percent > held else { since = nil; return nil }
