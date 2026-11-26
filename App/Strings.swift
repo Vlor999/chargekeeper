@@ -166,7 +166,6 @@ let french: [String: String] = [
     "Range: %d %%": "Plage : %d %%",
     "Stop charging when the battery is too hot": "Arrêter la charge si la batterie est trop chaude",
     "Max temp: %.0f °C": "Temp. max : %.0f °C",
-    "Startup": "Démarrage",
     "Open at login": "Ouvrir à la connexion",
     "Shutdown": "Arrêt",
     "Keep the limit when the service stops": "Garder la limite quand le service s'arrête",
