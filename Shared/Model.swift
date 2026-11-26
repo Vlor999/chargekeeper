@@ -56,7 +56,7 @@ enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
     case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
     case keepAwakeEnded  // turned itself off: time up, or `value` = battery level under the threshold
-    case keepAwakeFailed  // macOS refused the sleep assertion: keep awake turned off
+    case keepAwakeFailed
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
@@ -224,7 +224,6 @@ struct PortPower: Codable {
     var maxWatts: Double?  // what the port agreed to supply (USB-PD contract, or 5 V current limit)
 }
 
-/// Apple silicon power from powermetrics, in W.
 struct SoCPower: Codable, Equatable {
     var cpuWatts: Double
     var gpuWatts: Double

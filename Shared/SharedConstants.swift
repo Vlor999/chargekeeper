@@ -2,13 +2,9 @@ import Foundation
 
 // Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
 let socketPath = "/var/run/jauge.sock"
-/// Darwin notification posted by the service when a calibration finishes.
 let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
-/// Posted when heat protection pauses charging, once per heat episode.
 let heatProtectNotification = "com.vlor999.jauge.heatProtect"
-/// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
 let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
-/// Posted when the battery level reaches the charge limit, once per charging session.
 let limitReachedNotification = "com.vlor999.jauge.limitReached"
 /// Battery health series: one point per day for this many days, one per week before.
 let healthDailyDays = 180
