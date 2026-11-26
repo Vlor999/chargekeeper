@@ -100,8 +100,8 @@ final class Daemon {
         // The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the result is final here.
         if calibrationFinished(from: prevPhase, to: s.runtime.calibration) { finishCalibration(snapshot(rd, now)) }
         switch adapterNotice(phase: s.runtime.calibration, adapter: rd.adapter, now: now, &adapterNotices) {
-        case .first: record(HistoryEntry(event: .calibrationNeedsAdapter, phase: s.runtime.calibration)); notify_post(calibrationNeedsAdapterNotification)
-        case .reminder: notify_post(calibrationNeedsAdapterNotification)
+        case .first: record(HistoryEntry(event: .calibrationNeedsAdapter, phase: s.runtime.calibration)); notify_post(DarwinNotification.calibrationNeedsAdapter.name)
+        case .reminder: notify_post(DarwinNotification.calibrationNeedsAdapter.name)
         case .none: break
         }
         let settled = prev == s.runtime.state && lastAction == a
@@ -112,8 +112,8 @@ final class Daemon {
         }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, latch: &notices) {
             switch n {
-            case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(heatProtectNotification)
-            case .limitReached: notify_post(limitReachedNotification)
+            case .heatProtect: record(HistoryEntry(event: .heatProtect, temperature: rd.temperature)); notify_post(DarwinNotification.heatProtect.name)
+            case .limitReached: notify_post(DarwinNotification.limitReached.name)
             }
         }
 
@@ -149,7 +149,7 @@ final class Daemon {
         // Started by an older service: no starting point to compare with.
         guard let before else { return }
         s.lastCalibration = CalibrationResult(start: before.date, end: after.date, before: before, after: after)
-        notify_post(calibrationDoneNotification)
+        notify_post(DarwinNotification.calibrationDone.name)
     }
 
     func runSchedule(_ now: Date) {

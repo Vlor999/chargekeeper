@@ -935,6 +935,12 @@ func menuWindowIsCenteredAndClampedOnAnyDisplay() {
     assert(centeredMenuX(width: 2000, under: 1000...1030, in: mainScreen, margin: 8) == 8)
 }
 
+func legacyInstallNamesUnchanged() {
+    assert(socketPath == "/var/run/jauge.sock" && logDir == "/Library/Application Support/Jauge/Logs")
+    assert(DarwinNotification.allCases.map(\.name) == ["com.vlor999.jauge.calibrationDone", "com.vlor999.jauge.heatProtect",
+                                                        "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
@@ -1052,6 +1058,7 @@ let checks: [() -> Void] = [
     configWithoutKeepAwakeSettingsDecodesDefaults,
     keepAwakeDurationOutsideListFailsDecode,
     menuWindowIsCenteredAndClampedOnAnyDisplay,
+    legacyInstallNamesUnchanged,
 ]
 for check in checks { check() }
 print("logic ok")

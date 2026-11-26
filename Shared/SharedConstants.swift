@@ -1,17 +1,20 @@
 import Foundation
 
-// Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
-let socketPath = "/var/run/jauge.sock"
-let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
-let heatProtectNotification = "com.vlor999.jauge.heatProtect"
-let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
-let limitReachedNotification = "com.vlor999.jauge.limitReached"
+let legacyInstallName = "jauge"
+let socketPath = "/var/run/\(legacyInstallName).sock"
+
+enum DarwinNotification: String, CaseIterable {
+    case calibrationDone, heatProtect, calibrationNeedsAdapter, limitReached
+
+    var name: String { "com.vlor999.\(legacyInstallName).\(rawValue)" }
+}
+
 /// Battery health series: one point per day for this many days, one per week before.
 let healthDailyDays = 180
 /// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
 let healthMaxSamples = 520
 /// Diagnostic log: one file per UTC day, written by the service (root, 0644 in a root-owned 0755 folder), read by the app.
-let logDir = "/Library/Application Support/Jauge/Logs"
+let logDir = "/Library/Application Support/\(legacyInstallName.capitalized)/Logs"
 let logFilePrefix = "chargekeeper-"
 let logFileExtension = ".log"
 /// Days kept, counted in whole UTC days; the user picks within this range.

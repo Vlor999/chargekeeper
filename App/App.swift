@@ -63,10 +63,10 @@ final class AppModel: ObservableObject {
     }
 
     private func observeServiceSignals() {
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
-        notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.showLiveBanner(for: .heat) }
-        notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.showLiveBanner(for: .limit) }
-        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.showLiveBanner(for: .adapter) }
+        notify_register_dispatch(DarwinNotification.calibrationDone.name, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
+        notify_register_dispatch(DarwinNotification.heatProtect.name, &heatToken, .main) { [weak self] _ in self?.showLiveBanner(for: .heat) }
+        notify_register_dispatch(DarwinNotification.limitReached.name, &limitToken, .main) { [weak self] _ in self?.showLiveBanner(for: .limit) }
+        notify_register_dispatch(DarwinNotification.calibrationNeedsAdapter.name, &adapterToken, .main) { [weak self] _ in self?.showLiveBanner(for: .adapter) }
     }
 
     // ponytail: polls the service socket every 1-2 s while a window is open; a push from the service would remove the polling (https://github.com/Vlor999/chargekeeper/issues/53)
