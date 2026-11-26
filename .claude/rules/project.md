@@ -29,7 +29,7 @@ description: "ChargeKeeper project rules: branches, commits, PRs, validation, re
 
 ## Security
 
-- The service runs as root: every socket input is validated or clamped (`Daemon/main.swift` `mutate`), the socket stays `root:admin 0660`, external commands use absolute paths and fixed arguments.
+- The service runs as root: every socket input is validated or clamped (`Daemon/Daemon.swift` `mutate`), the socket stays `root:admin 0660`, external commands use absolute paths and fixed arguments.
 - Battery safety: on exit or crash recovery the service never leaves discharge on or sleep disabled.
 - Keep awake: the `keepAwake` socket command only takes a duration from the closed `KeepAwakeDuration` list (other values fail to decode), and the battery threshold is clamped to 5–50 %. It is cleared on stop and on crash recovery, and kept only across a restart for an update (`updateRestart` marker). The lid closed option is allowed on battery (user decision), guarded by the battery threshold.
 - `reenableSleepIfNotWanted` (socket name `resetSleep`) takes no argument and re-enables sleep only when the service's own `sleepDisabledWanted` is false.
