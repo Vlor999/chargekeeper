@@ -333,12 +333,12 @@ struct NoticeToggle: View {
 }
 
 extension TaskAction {
-    var label: String { tr(title) }
+    var label: String { tr(englishTitle) }
 }
 
 extension HistoryEntry {
     var symbol: (name: String, color: Color) {
-        let e = parsedHistory(self)
+        let e = parsedLegacyHistory(self)
         switch e.event {
         case nil: return ("clock", .secondary)
         case .calibrationStarted: return ("play.circle.fill", .orange)

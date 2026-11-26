@@ -1,10 +1,9 @@
 import Foundation
 
-/// What the hardware layer should do this tick.
 enum Action: Equatable {
-    case charge(to: Int)  // allow charging up to target
-    case hold(at: Int)    // keep battery at this level, run from adapter
-    case discharge        // run from battery even if plugged
+    case charge(to: Int)
+    case hold(at: Int)
+    case discharge
 }
 
 struct Inputs {
@@ -14,10 +13,6 @@ struct Inputs {
     var now: Date
 }
 
-let heatWindow: TimeInterval = 5 * 60
-let calibrationHold: TimeInterval = 60 * 60
-
-/// Pure charge policy. Mutates runtime (one-shot modes, latches) and returns the action.
 func decide(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
     let action = policy(c, &r, i)
     if case .hold = action {} else { r.holdLevel = nil }
@@ -34,31 +29,7 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
     if !i.adapter { r.topUp = false }
     if r.discharge && pct <= c.limit { r.discharge = false }
 
-    if let phase = r.calibration {
-        r.state = .calibration
-        switch phase {
-        case .chargeFull, .rechargeFull:
-            if pct >= 100 { advance(&r, to: phase == .chargeFull ? .dischargeTo10 : .hold, i.now); return hold(100, &r) }
-            return .charge(to: 100)
-        case .dischargeTo10:
-            if pct <= 10 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
-            return .discharge
-        case .hold:
-            // The rest only counts on the adapter: unplugged, it starts over on replug, or recharges first if the level fell.
-            if !i.adapter {
-                if pct < 100 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
-                r.phaseStart = nil  // not now: the saved state would change every tick
-            } else {
-                if r.phaseStart == nil { r.phaseStart = i.now }
-                if i.now.timeIntervalSince(r.phaseStart!) >= calibrationHold { advance(&r, to: .returnToLimit, i.now) }
-            }
-            return hold(100, &r)
-        case .returnToLimit:
-            if pct > c.limit { return .discharge }
-            r.calibration = nil
-            r.phaseStart = nil
-        }
-    }
+    if let phase = r.calibration, let action = calibrationAction(phase, c, &r, i) { return action }
 
     guard i.adapter else {
         r.state = .discharging
@@ -80,15 +51,8 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
         return hold(pct, &r)
     }
 
-    // Below limit: heat protection with 5 min hysteresis windows.
-    if c.heatProtect, let t = i.temperature {
-        let windowOver = r.heatSince.map { i.now.timeIntervalSince($0) >= heatWindow } ?? true
-        if !r.heatBlocked && t > c.maxTemp && windowOver { r.heatBlocked = true; r.heatSince = i.now }
-        else if r.heatBlocked && t <= c.maxTemp && windowOver { r.heatBlocked = false; r.heatSince = i.now }
-        if r.heatBlocked { r.state = .heatProtect; return hold(pct, &r) }
-    } else {
-        r.heatBlocked = false
-    }
+    updateHeatBlock(c, &r, i)
+    if r.heatBlocked { r.state = .heatProtect; return hold(pct, &r) }
 
     if pct < c.limit - c.idleRange { r.isRefillingToLimit = true }
     if c.idle && !r.isRefillingToLimit {
@@ -99,60 +63,98 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
     return .charge(to: c.limit)
 }
 
+private func calibrationAction(_ phase: CalibrationPhase, _ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action? {
+    let pct = i.percent
+    r.state = .calibration
+    switch phase {
+    case .chargeFull, .rechargeFull:
+        if pct >= 100 { advance(&r, to: phase == .chargeFull ? .dischargeTo10 : .hold, i.now); return hold(100, &r) }
+        return .charge(to: 100)
+    case .dischargeTo10:
+        if pct <= 10 { advance(&r, to: .rechargeFull, i.now); return .charge(to: 100) }
+        return .discharge
+    case .hold:
+        return calibrationRestAction(&r, i)
+    case .returnToLimit:
+        if pct > c.limit { return .discharge }
+        r.calibration = nil
+        r.phaseStart = nil
+        return nil
+    }
+}
+
+private func calibrationRestAction(_ r: inout Runtime, _ i: Inputs) -> Action {
+    if i.adapter {
+        if r.phaseStart == nil { r.phaseStart = i.now }
+        if i.now.timeIntervalSince(r.phaseStart!) >= calibrationRestDuration { advance(&r, to: .returnToLimit, i.now) }
+    } else if i.percent < 100 {
+        advance(&r, to: .rechargeFull, i.now)
+        return .charge(to: 100)
+    } else {
+        restartRestOnReplug(&r)
+    }
+    return hold(100, &r)
+}
+
+private func restartRestOnReplug(_ r: inout Runtime) { r.phaseStart = nil }
+
+private func updateHeatBlock(_ c: Config, _ r: inout Runtime, _ i: Inputs) {
+    guard c.heatProtect, let t = i.temperature else { r.heatBlocked = false; return }
+    let hysteresisOver = r.heatSince.map { i.now.timeIntervalSince($0) >= heatProtectHysteresis } ?? true
+    if !r.heatBlocked && t > c.maxTemp && hysteresisOver { r.heatBlocked = true; r.heatSince = i.now }
+    else if r.heatBlocked && t <= c.maxTemp && hysteresisOver { r.heatBlocked = false; r.heatSince = i.now }
+}
+
 private func advance(_ r: inout Runtime, to p: CalibrationPhase, _ now: Date) {
     r.calibration = p
     r.phaseStart = now
     r.holdLevel = nil
 }
 
-/// The gauge has just relearned its capacity (full cycle, then 1 h rest at 100 %): the calibration result is final.
 func calibrationFinished(from: CalibrationPhase?, to: CalibrationPhase?) -> Bool {
     from == .hold && to == .returnToLimit
 }
 
-/// Calibration phases that only progress on the adapter: unplugged, charging stalls and the rest is not a rest.
 func calibrationNeedsAdapter(_ p: CalibrationPhase?) -> Bool {
     p == .chargeFull || p == .rechargeFull || p == .hold
 }
 
-let adapterNoticeGap: TimeInterval = 10 * 60
-let adapterReminderAfter: TimeInterval = 60 * 60
-
-/// Service memory of the "calibration needs the adapter" notices. In memory only: after a restart the first tick that finds
-/// the adapter missing starts a new episode, since the adapter state before the restart is unknown.
 struct AdapterNoticeState: Equatable {
-    var waitingSince: Date?  // start of the current wait for the adapter
+    var waitingSince: Date?
     var lastNotice: Date?
     var reminded = false
 }
 
 enum AdapterNotice: Equatable { case none, first, reminder }
 
-/// One notice when a wait for the adapter starts (unplugged in a phase that needs it, or such a phase reached unplugged),
-/// at most one per 10 min across short unplugs, and one reminder when the wait reaches 1 h.
-/// Moving between two such phases while unplugged (rest back to recharge) is the same wait.
 func adapterNotice(phase: CalibrationPhase?, adapter: Bool, now: Date, _ s: inout AdapterNoticeState) -> AdapterNotice {
     guard calibrationNeedsAdapter(phase) && !adapter else { s.waitingSince = nil; s.reminded = false; return .none }
     guard let since = s.waitingSince else {
         s.waitingSince = now
-        if let last = s.lastNotice, now.timeIntervalSince(last) < adapterNoticeGap { return .none }
+        if noticeGapRunning(since: s.lastNotice, now: now) { return .none }
         s.lastNotice = now
         return .first
     }
-    guard !s.reminded, now.timeIntervalSince(since) >= adapterReminderAfter else { return .none }
+    guard reminderDue(waitingSince: since, reminded: s.reminded, now: now) else { return .none }
     s.reminded = true
     s.lastNotice = now
     return .reminder
 }
 
-/// Step of the phase in the calibration, from 1, and the step count.
+private func noticeGapRunning(since lastNotice: Date?, now: Date) -> Bool {
+    lastNotice.map { now.timeIntervalSince($0) < adapterNoticeGap } ?? false
+}
+
+private func reminderDue(waitingSince: Date, reminded: Bool, now: Date) -> Bool {
+    !reminded && now.timeIntervalSince(waitingSince) >= adapterReminderAfter
+}
+
 func calibrationStep(_ p: CalibrationPhase) -> (step: Int, of: Int) {
     let all = CalibrationPhase.allCases
     return (all.firstIndex(of: p)! + 1, all.count)
 }
 
-/// Charge level the phase is heading to; nil for the timed rest.
-func calibrationTarget(_ p: CalibrationPhase, limit: Int) -> Int? {
+func calibrationTargetPercent(_ p: CalibrationPhase, limit: Int) -> Int? {
     switch p {
     case .chargeFull, .rechargeFull: 100
     case .dischargeTo10: 10
@@ -161,75 +163,59 @@ func calibrationTarget(_ p: CalibrationPhase, limit: Int) -> Int? {
     }
 }
 
-/// Time left in the 1 h rest at 100 %.
-func holdRemaining(phaseStart: Date?, now: Date) -> TimeInterval {
-    max(0, calibrationHold - now.timeIntervalSince(phaseStart ?? now))
+func calibrationRestRemaining(phaseStart: Date?, now: Date) -> TimeInterval {
+    max(0, calibrationRestDuration - now.timeIntervalSince(phaseStart ?? now))
 }
 
-/// Pack voltage assumed when the service does not report the battery current (3-cell Li-ion, nominal).
-let nominalPackVolts = 11.4
+private func milliamps(amperage: Int?, watts: Double) -> Double {
+    amperage.map(Double.init) ?? watts * 1000 / nominalThreeCellPackVolts
+}
 
-/// Time to go from `percent` to `target` at the present battery current, or nil when the estimate is not worth showing:
-/// target reached, no capacity, current near zero or going the wrong way, or more than 24 h.
-/// `amperage` in mA (>0 charging); without it the current comes from `watts` at the nominal pack voltage.
-// ponytail: linear at the present current. Charging tapers above ~80 %, so the time to 100 % comes out short;
-// the menu refreshes every 2 s while open, so the figure corrects itself as the current falls.
+// ponytail: linear at the present current; charging tapers above ~80 %, so the time to 100 % reads short until the next appRefreshInterval (https://github.com/Vlor999/chargekeeper/issues/67)
 func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
     guard let capacity, capacity > 0, target != percent else { return nil }
-    let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
-    let toGo = Double(target - percent) / 100 * Double(capacity)  // mAh, signed like the current
-    guard abs(mA) >= 50, (toGo > 0) == (mA > 0) else { return nil }
-    let t = toGo / mA * 3600
-    return t <= 24 * 3600 ? max(t, 60) : nil
+    let mA = milliamps(amperage: amperage, watts: watts)
+    let toGoMAh = Double(target - percent) / 100 * Double(capacity)
+    guard abs(mA) >= minEstimableCurrentMilliamps, (toGoMAh > 0) == (mA > 0) else { return nil }
+    let t = toGoMAh / mA * secondsPerHour
+    return t <= maxTimeEstimate ? max(t, minTimeEstimate) : nil
 }
 
-/// Points above the level the service holds before charging counts as macOS overriding the limit. Covers the native
-/// Charge Limit rounding a held level up to its next step of 5 (81 → 85).
-let pastLimitMargin = 5
-
-/// Tracks macOS charging past the limit while the service holds or drains the battery: the gauge recalibration of
-/// macOS 26.4+ ("Your Mac will occasionally charge to 100 %"), or any other system override. Detected from the effect,
-/// since the cause is not readable without a private entitlement. Returns the held level when a new episode starts.
-/// The episode lasts until the level is back to the held level, the adapter is unplugged or the service changes mode.
-/// `inControl`: the service's own hold or discharge is in effect (keys present, writes succeeded); otherwise the charge
-/// may come from the service's own limitation, not from macOS.
-/// `settled`: same state and action as the previous tick. The reading is taken before the action is applied, so on the
-/// tick that changes mode the current still reflects the previous mode (charging before a new discharge).
-func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
+// exception: macOS 26.4+ now and then charges to 100 % to recalibrate the gauge, a cause readable only with a private entitlement, so the episode is detected from its effect (https://github.com/Vlor999/chargekeeper/commit/baf88803900433fb05626892d550d114dee14677)
+// ponytail: 11 parameters, with the `settled` and `inControl` flags; a reading type would name them but changes the Daemon call (https://github.com/Vlor999/chargekeeper/issues/68)
+func pastLimitEpisode(_ a: Action, state: ChargeState, settled currentReflectsThisMode: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
                       watts: Double, since: inout Date?, now: Date) -> Int? {
-    let held: Int? = switch a {
-    case .hold(let level) where state == .pause: level
-    case .discharge where state == .discharging: limit
-    default: nil
-    }
-    guard adapter, let held, percent > held else { since = nil; return nil }
-    let mA = amperage.map(Double.init) ?? watts * 1000 / nominalPackVolts
-    guard since == nil, settled, inControl, percent >= held + pastLimitMargin, mA >= 50 else { return nil }
+    guard adapter, let held = serviceHeldLevel(a, state: state, limit: limit), percent > held else { since = nil; return nil }
+    let charging = milliamps(amperage: amperage, watts: watts) >= minEstimableCurrentMilliamps
+    guard since == nil, currentReflectsThisMode, inControl, percent >= held + nativeChargeLimitStepPercent, charging else { return nil }
     since = now
     return held
 }
 
-/// Charge Limit of System Settings when it caps charging. Read only on Macs where the service never sets it (it charges
-/// through the SMC): there, an active limit below 100 % can only come from the user.
-/// `enabled` is 1 or 0 and -1 when the read failed; a limit outside 50...99 is a failed read or no cap.
-func userChargeLimit(enabled: Int, limit: Int) -> Int? {
-    enabled == 1 && (50...99).contains(limit) ? limit : nil
+private func serviceHeldLevel(_ a: Action, state: ChargeState, limit: Int) -> Int? {
+    switch a {
+    case .hold(let level) where state == .pause: level
+    case .discharge where state == .discharging: limit
+    default: nil
+    }
 }
 
-/// What the app does with the service's last calibration, given the last result it handled.
+func userChargeLimit(enabled: Int, limit: Int) -> Int? {
+    enabled == 1 && systemSettingsChargeLimitPercentRange.contains(limit) ? limit : nil
+}
+
 enum CalibrationNotice: Equatable {
-    case seed(Date)  // first run: remember the current result without a banner
+    case rememberWithoutBanner(Date)
     case notify
     case none
 }
 
 func calibrationNotice(end: Date?, handled: Date?) -> CalibrationNotice {
-    guard let handled else { return .seed(end ?? .distantPast) }
+    guard let handled else { return .rememberWithoutBanner(end ?? .distantPast) }
     guard let end, end > handled else { return .none }
     return .notify
 }
 
-/// History line for a finished calibration: "7100→7180 mAh, health 82.8→83.7 %, 278 cycles".
 func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) -> String {
     func span(_ x: String?, _ y: String?) -> String? { y.map { y in x.map { "\($0)→\(y)" } ?? y } }
     func pct(_ h: Double?) -> String? { h.map { String(format: "%.1f", $0) } }
@@ -238,241 +224,33 @@ func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) ->
             a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
 }
 
-// MARK: - Health series
-
-/// Series point from a reading; nil while the gauge reports no capacity.
-func healthSample(_ b: BatterySnapshot, calibration: Bool = false) -> HealthSample? {
-    guard let m = b.fullChargeCapacityMAh, m > 0, let d = b.designCapacityMAh, d > 0 else { return nil }
-    return HealthSample(date: b.date, fullChargeCapacityMAh: m, nominalCapacityMAh: b.nominalCapacityMAh, designCapacityMAh: d,
-                        cycleCount: b.cycleCount, fromCalibration: calibration ? true : nil)
-}
-
-/// The daily point is due when no point falls on the same calendar day.
-func healthSampleDue(_ series: [HealthSample], now: Date, calendar: Calendar = .current) -> Bool {
-    series.last { calendar.isDate($0.date, inSameDayAs: now) } == nil
-}
-
-/// Inserts the point in date order, then thins the series: daily for the `healthDailyRetentionDays` days before `now`, the first
-/// point of each week before that, calibration points kept. Over `healthMaxSamples` points, the oldest daily or weekly
-/// points go first, then the oldest calibration points.
-/// Points dated more than a day after `now` (a clock that was set ahead) are refused, and dropped from the series.
-/// One point per date: the calibration point wins over the daily point of the same tick.
-func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, calendar cal: Calendar = .current) -> [HealthSample] {
-    let latest = now.addingTimeInterval(secondsPerDay)
-    var all = series.filter { $0.date <= latest }
-    guard p.date <= latest else { return all }
-    if let i = all.firstIndex(where: { $0.date == p.date }) {
-        guard p.fromCalibration == true, all[i].fromCalibration != true else { return all }
-        all.remove(at: i)
-    }
-    all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
-    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
-    var weeks = Set<DateComponents>()
-    var kept = all.filter { s in
-        s.date >= cutoff || s.fromCalibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
-    }
-    var excess = kept.count - healthMaxSamples
-    if excess > 0 {
-        kept = kept.filter { s in
-            guard excess > 0, s.fromCalibration != true else { return true }
-            excess -= 1
-            return false
-        }
-    }
-    return Array(kept.suffix(healthMaxSamples))
-}
-
-enum HealthRange: String, CaseIterable { case threeMonths, year, all }
-
-/// First date shown by the range.
-func healthRangeStart(_ r: HealthRange, now: Date, calendar cal: Calendar = .current) -> Date {
-    switch r {
-    case .threeMonths: return cal.date(byAdding: .month, value: -3, to: now) ?? now
-    case .year: return cal.date(byAdding: .year, value: -1, to: now) ?? now
-    case .all: return .distantPast
-    }
-}
-
-/// Change between the first and last points of the period. Health in percentage points.
-struct HealthChange: Equatable {
-    var points: Double
-    var cycles: Int?
-    var days: Int
-}
-
-func healthChange(_ series: [HealthSample]) -> HealthChange? {
-    guard series.count >= 2, let a = series.first, let b = series.last else { return nil }
-    let cycles = b.cycleCount.flatMap { y in a.cycleCount.map { y - $0 } }
-    return HealthChange(points: b.healthPercent - a.healthPercent, cycles: cycles,
-                        days: Int((b.date.timeIntervalSince(a.date) / secondsPerDay).rounded()))
-}
-
-enum SpanUnit: Equatable { case days, months, years }
-
-/// Period length as shown: days under 60 days, months under 2 years (12 months reads 1 year), whole years beyond. At least 1.
-func healthSpan(days: Int) -> (value: Int, unit: SpanUnit) {
-    if days < 60 { return (max(days, 1), .days) }
-    let months = Int((Double(days) / 30.44).rounded())
-    if months == 12 { return (1, .years) }
-    if days < 730 { return (months, .months) }
-    return (Int((Double(days) / 365.25).rounded()), .years)
-}
-
-/// Notification the service posts on a state change.
 enum ServiceNotice: Equatable { case heatProtect, limitReached }
 
-/// The limit notice already sent this charging session (until the charger is unplugged or the limit changes).
 struct NoticeLatch: Equatable {
-    var limit = false
-    var seenLimit: Int?  // charge limit at the previous tick
+    var limitNoticeSent = false
+    var previousLimit: Int?
 }
 
-/// Notices for this tick: one heat notice each time heat protection pauses charging (an episode ends when the
-/// state leaves heat protection), one limit notice per charging session when the battery level reaches the limit.
-/// A pause caused by a limit change (Pause, a lower limit, a scheduled task) is not "limit reached".
 func serviceNotices(from prev: ChargeState, to now: ChargeState, adapter: Bool, limit: Int, latch l: inout NoticeLatch) -> [ServiceNotice] {
-    let changed = l.seenLimit != limit
-    l.seenLimit = limit
-    if changed || !adapter { l.limit = false }
+    let limitChanged = l.previousLimit != limit
+    l.previousLimit = limit
+    if limitChanged || !adapter { l.limitNoticeSent = false }
     guard adapter else { return [] }
     var out: [ServiceNotice] = []
-    if now == .heatProtect && prev != .heatProtect { out.append(.heatProtect) }
-    if now == .pause && prev == .charging && !changed && !l.limit { l.limit = true; out.append(.limitReached) }
+    if heatProtectStarted(from: prev, to: now) { out.append(.heatProtect) }
+    if limitReached(from: prev, to: now, limitChanged: limitChanged) && !l.limitNoticeSent {
+        l.limitNoticeSent = true
+        out.append(.limitReached)
+    }
     return out
 }
 
-// MARK: - Keep awake
-
-/// End date of a keep awake started at `now`.
-func keepAwakeEnd(_ d: KeepAwakeDuration, now: Date) -> Date {
-    d == .untilOff ? .distantFuture : now.addingTimeInterval(TimeInterval(d.rawValue * 60))
+private func heatProtectStarted(from prev: ChargeState, to now: ChargeState) -> Bool {
+    now == .heatProtect && prev != .heatProtect
 }
 
-/// Keep awake end still in force at `now`: nil once the end has passed, or on battery below `minBattery`.
-func keepAwakeUntil(_ until: Date?, now: Date, adapter: Bool, percent: Int, minBattery: Int) -> Date? {
-    guard let until, until > now, adapter || percent >= minBattery else { return nil }
-    return until
-}
-
-/// Battery threshold from a socket request, kept inside `keepAwakeMinBatteryPercentRange`.
-func clampedKeepAwakeMinBattery(_ v: Int) -> Int {
-    min(max(v, keepAwakeMinBatteryPercentRange.lowerBound), keepAwakeMinBatteryPercentRange.upperBound)
-}
-
-/// Keep awake at service start: kept only across a restart for an update. After a crash, a kill or a power loss it is
-/// off, so crash recovery never leaves sleep disabled.
-func keepAwakeAtStart(_ until: Date?, updateRestart: Bool) -> Date? { updateRestart ? until : nil }
-
-/// System sleep disabled with no reason from the service: another tool, or left over from a stop. `system` nil: unknown;
-/// `service` nil: the service is unreachable, otherwise its own sleep disabled state.
-func unexplainedSleepDisabled(system: Bool?, service: Bool?) -> Bool { system == true && service != true }
-
-/// System sleep disabled (a closed lid stays awake): discharging on the adapter, charging to the limit with that option
-/// on, or keep awake with the lid closed option.
-func sleepDisabledWanted(_ c: Config, _ a: Action, state: ChargeState, adapter: Bool, keepAwake: Bool) -> Bool {
-    (adapter && (a == .discharge || (c.disableSleepUntilLimit && state == .charging))) || (keepAwake && c.keepAwakeWithLidClosed)
-}
-
-// MARK: - History
-
-/// Fills an English template (String(format:) placeholders, arguments already formatted). The app passes tr().
-typealias Translate = (String, [CVarArg]) -> String
-/// Formats a number with the given count of decimals. The app passes the UI locale.
-typealias FormatNumber = (Double, Int) -> String
-
-let englishTemplate: Translate = { $1.isEmpty ? $0 : String(format: $0, arguments: $1) }
-let englishNumber: FormatNumber = { String(format: "%.\($1)f", $0) }
-
-extension TaskAction {
-    /// English label; the app translates it.
-    var title: String {
-        switch self {
-        case .setLimit: "Set charge limit"
-        case .calibrate: "Start Calibration"
-        case .topUp: "Charge to 100%"
-        case .pause: "Pause charging"
-        case .dischargeTo: "Discharge to"
-        case .lowPowerOn: "Turn on Low Power Mode"
-        case .lowPowerOff: "Turn off Low Power Mode"
-        }
-    }
-}
-
-/// Text of a history entry in the language of `t` and `n` (English by default). Free text from an older service
-/// is mapped to its event when known, shown as is otherwise.
-func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @escaping FormatNumber = englishNumber) -> String {
-    let e = parsedHistory(entry)
-    func int(_ v: Int) -> String { n(Double(v), 0) }
-    func span<T>(_ a: T?, _ b: T?, _ f: (T) -> String) -> String? { b.map { b in a.map { t("%@ → %@", [f($0), f(b)]) } ?? f(b) } }
-    switch e.event {
-    case nil: return e.text
-    case .calibrationStarted: return t("Calibration started", [])
-    case .calibrationStopped: return t("Calibration stopped", [])
-    case .calibrationEnded: return t("Calibration over: back at the limit", [])
-    case .calibrationPhase:
-        switch e.phase {
-        case nil: return e.text
-        case .chargeFull: return t("Calibration: charging to 100 %", [])
-        case .dischargeTo10: return t("Calibration: discharging to 10 %", [])
-        case .rechargeFull: return t("Calibration: recharging to 100 %", [])
-        case .hold: return t("Calibration: resting 1 h at 100 %", [])
-        case .returnToLimit: return t("Calibration: discharging back to the limit", [])
-        }
-    case .calibrationDone:
-        let parts = [span(e.capacityBeforeMAh, e.capacityAfterMAh, int).map { t("%@ mAh", [$0]) },
-                     span(e.healthBeforePercent, e.healthAfterPercent) { n($0, 1) }.map { t("health %@ %%", [$0]) },
-                     e.cycles.map { t("%@ cycles", [int($0)]) }].compactMap { $0 }
-        return parts.isEmpty ? t("Calibration complete", []) : t("Calibration complete: %@", [parts.joined(separator: ", ")])
-    case .taskRun, .taskSkipped:
-        guard let a = e.action else { return e.text }
-        var label = t(a.title, [])
-        if let v = e.percent, a == .setLimit || a == .dischargeTo { label = t("%@ (%@ %%)", [label, int(v)]) }
-        if e.event == .taskSkipped { return t("Missed task skipped: %@", [label]) }
-        return e.caughtUpOnWake == true ? t("Missed task run on wake: %@", [label]) : t("Scheduled task: %@", [label])
-    case .limitChanged:
-        guard let v = e.percent else { return e.text }
-        return t("Charge limit set to %@ %%", [int(v)])
-    case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
-    case .chargedPastLimit:
-        guard let v = e.percent else { return t("macOS charged the battery above the limit", []) }
-        return t("macOS charged the battery above %@ %%", [int(v)])
-    case .heatProtect:
-        guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
-        return t("Heat protection: charging paused at %@ °C", [n(c, 1)])
-    case .keepAwakeTimeUp: return t("Keep awake ended: time up", [])
-    case .keepAwakeLowBattery:
-        guard let v = e.percent else { return e.text }
-        return t("Keep awake turned off: battery at %@ %%", [int(v)])
-    case .keepAwakeFailed: return t("Keep awake could not start: macOS refused to block sleep", [])
-    }
-}
-
-/// Maps the free text written by an older service ("calibration: dischargeTo10", "task calibrate (caught up)",
-/// "calibration done: 7100→7180 mAh, health 82.8→83.7 %, 278 cycles") to its event. Unknown text is returned as is.
-func parsedHistory(_ e: HistoryEntry) -> HistoryEntry {
-    guard e.event == nil else { return e }
-    var r = e
-    let s = e.text
-    func match(_ pattern: String) -> [String?]? {
-        guard let re = try? NSRegularExpression(pattern: pattern),
-              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) else { return nil }
-        return (1..<m.numberOfRanges).map { Range(m.range(at: $0), in: s).map { String(s[$0]) } }
-    }
-    if s == "calibration started" { r.event = .calibrationStarted }
-    else if s == "calibration stopped" { r.event = .calibrationStopped }
-    else if s == "calibration: back to limit" { r.event = .calibrationEnded }
-    else if s.hasPrefix("calibration: "), let p = CalibrationPhase(rawValue: String(s.dropFirst(13))) { r.event = .calibrationPhase; r.phase = p }
-    else if s == "calibration done" || s.hasPrefix("calibration done: ") {
-        r.event = .calibrationDone
-        if let g = match(#"(\d+)(?:→(\d+))? mAh"#) { (r.capacityBeforeMAh, r.capacityAfterMAh) = g[1] == nil ? (nil, g[0].flatMap { Int($0) }) : (g[0].flatMap { Int($0) }, g[1].flatMap { Int($0) }) }
-        if let g = match(#"health ([\d.]+)(?:→([\d.]+))? %"#) { (r.healthBeforePercent, r.healthAfterPercent) = g[1] == nil ? (nil, g[0].flatMap { Double($0) }) : (g[0].flatMap { Double($0) }, g[1].flatMap { Double($0) }) }
-        r.cycles = match(#"(\d+) cycles"#)?[0].flatMap { Int($0) }
-    } else if let g = match(#"^task skipped \(missed\): (\w+)$"#), let a = g[0].flatMap(TaskAction.init(rawValue:)) {
-        r.event = .taskSkipped; r.action = a
-    } else if let g = match(#"^task (\w+)( \(caught up\))?$"#), let a = g[0].flatMap(TaskAction.init(rawValue:)) {
-        r.event = .taskRun; r.action = a; r.caughtUpOnWake = g[1] != nil
-    }
-    return r
+private func limitReached(from prev: ChargeState, to now: ChargeState, limitChanged: Bool) -> Bool {
+    now == .pause && prev == .charging && !limitChanged
 }
 
 func ledColor(_ c: Config, _ r: Runtime, adapter: Bool, percent: Int) -> LEDColor {
@@ -491,208 +269,4 @@ func ledColor(_ c: Config, _ r: Runtime, adapter: Bool, percent: Int) -> LEDColo
         case .charging, .heatProtect, .exit: return .orange
         }
     }
-}
-
-// MARK: - Schedule
-
-/// Most recent occurrence of the task in (after, upTo], or nil.
-func lastOccurrence(_ t: ScheduledTask, after: Date, upTo: Date, calendar cal: Calendar = .current) -> Date? {
-    let start = t.start
-    if start > upTo { return nil }
-    if t.repeatRule == .never { return start > after ? start : nil }
-
-    let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: start)
-    var found: Date?
-    // ponytail: linear walk from start; fine for years of daily tasks at a 60s check cadence
-    for n in 0... {
-        let d: Date?
-        switch t.repeatRule {
-        case .daily, .weekdays: d = cal.date(byAdding: .day, value: n, to: start)
-        case .weekly: d = cal.date(byAdding: .day, value: 7 * n, to: start)
-        case .biweekly: d = cal.date(byAdding: .day, value: 14 * n, to: start)
-        case .monthly, .yearly:
-            // Same day-of-month only; the 31st skips shorter months.
-            var c = comps
-            let m = (comps.month! - 1) + (t.repeatRule == .monthly ? n : 12 * n)
-            c.year = comps.year! + m / 12
-            c.month = m % 12 + 1
-            d = cal.date(from: c).flatMap { cal.component(.day, from: $0) == comps.day ? $0 : Date.distantPast }
-        case .never: d = nil
-        }
-        guard let date = d else { break }
-        if date > upTo { break }
-        if date == .distantPast { continue }
-        if t.repeatRule == .weekdays, cal.isDateInWeekend(date) { continue }
-        if date > after { found = date }
-    }
-    return found
-}
-
-/// MacBook share of the system load once the USB-C ports are served.
-// ponytail: SystemLoad includes port output on the one Mac checked; ports above the load mean it doesn't, so the load is kept whole.
-func macWatts(system: Double, ports: [Double]) -> Double {
-    let out = ports.reduce(0, +)
-    return out <= system ? system - out : system
-}
-
-/// Component power history: appends the point and keeps the last `window` seconds before it.
-func appendPowerPoint(_ history: [SoCPowerPoint], _ p: SoCPowerPoint, window: TimeInterval) -> [SoCPowerPoint] {
-    (history + [p]).filter { p.date.timeIntervalSince($0.date) <= window && $0.date <= p.date }
-}
-
-/// powermetrics arguments for an interval, each a fixed string; nil when off (powermetrics not running).
-func powermetricsArguments(_ i: PowerInterval) -> [String]? {
-    let ms: String
-    switch i {
-    case .off: return nil
-    case .s1: ms = "1000"
-    case .s2: ms = "2000"
-    case .s5: ms = "5000"
-    case .s10: ms = "10000"
-    case .s30: ms = "30000"
-    }
-    return ["--samplers", "cpu_power,gpu_power", "-i", ms, "-f", "plist"]
-}
-
-/// The app's refresh period while a window is open: `appMaxRefreshInterval`, or the power interval when shorter, so the graph
-/// gets each point as it comes. Off: `appMaxRefreshInterval`.
-func appRefreshInterval(_ i: PowerInterval) -> TimeInterval {
-    i == .off ? appMaxRefreshInterval : min(appMaxRefreshInterval, TimeInterval(i.rawValue))
-}
-
-/// Longest normal wait for a point: `socStaleAfterIntervals` of its own sampling interval, so a point taken at 30 s stays
-/// current as long as one taken at 1 s, relative to its interval.
-func powerMaxGap(_ p: SoCPowerPoint) -> TimeInterval { socStaleAfterIntervals * p.effectiveSamplingInterval }
-
-/// The newest power, unless it is older than its `powerMaxGap` at `now` (powermetrics stopped or the service is stuck).
-func currentPower(_ history: [SoCPowerPoint], now: Date) -> SoCPower? {
-    guard let p = history.last, now.timeIntervalSince(p.date) <= powerMaxGap(p) else { return nil }
-    return p.averagePower
-}
-
-/// Longest gap from point `a` to the next point `b` that is still one curve. Same interval: `powerMaxGap`. Interval
-/// change (powermetrics restarted): also the rest of the old interval, the new process's first sample and `socIntervalChangeSlack`.
-func powerMaxGap(from a: SoCPowerPoint, to b: SoCPowerPoint) -> TimeInterval {
-    let old = a.effectiveSamplingInterval, new = b.effectiveSamplingInterval
-    let gap = max(powerMaxGap(a), powerMaxGap(b))
-    return old == new ? gap : max(gap, old + 2 * new + socIntervalChangeSlack)
-}
-
-/// Curve segment of each point: a new segment starts after a gap longer than `powerMaxGap(from:to:)`, so missing data is
-/// not drawn. Each point carries its own interval: after an interval change, the points sampled before keep their spacing.
-func powerSegments(_ history: [SoCPowerPoint]) -> [Int] {
-    var segment = 0
-    return history.indices.map { i in
-        if i > 0 && history[i].date.timeIntervalSince(history[i - 1].date) > powerMaxGap(from: history[i - 1], to: history[i]) { segment += 1 }
-        return segment
-    }
-}
-
-/// The points of the last `window` seconds before `now`: once powermetrics stops, its history ages out of the reply.
-func recentPowerPoints(_ history: [SoCPowerPoint], now: Date, window: TimeInterval) -> [SoCPowerPoint] {
-    history.filter { now.timeIntervalSince($0.date) <= window }
-}
-
-/// Takes the complete samples off a powermetrics plist stream, where each sample ends with a NUL byte. The partial
-/// sample at the end stays in the buffer; one that grows past `maxBytes` is dropped (`dropped`).
-func takePlistSamples(_ buffer: inout Data, maxBytes: Int) -> (samples: [Data], dropped: Bool) {
-    var out: [Data] = []
-    while let nul = buffer.firstIndex(of: 0) {
-        let chunk = buffer[buffer.startIndex..<nul]
-        if !chunk.isEmpty { out.append(Data(chunk)) }
-        buffer = Data(buffer[buffer.index(after: nul)...])
-    }
-    guard buffer.count > maxBytes else { return (out, false) }
-    buffer = Data()
-    return (out, true)
-}
-
-/// One powermetrics plist sample (`cpu_power,gpu_power` samplers). Energies are in mJ over the sample's `elapsed_ns`.
-/// nil when the sample is malformed.
-func socPower(plist: Data) -> SoCPower? {
-    func num(_ v: Any?) -> Double? { (v as? NSNumber).map(\.doubleValue).flatMap { $0.isFinite ? $0 : nil } }
-    guard let root = (try? PropertyListSerialization.propertyList(from: plist, format: nil)) as? [String: Any],
-          let p = root["processor"] as? [String: Any],
-          let cpu = num(p["cpu_energy"]), let gpu = num(p["gpu_energy"]) else { return nil }
-    let seconds = num(root["elapsed_ns"]).map { $0 / 1e9 } ?? assumedPowerSampleInterval
-    guard seconds > 0 else { return nil }
-    // A few hundred W at most on any Mac: anything else is a parsing error.
-    func w(_ mJ: Double) -> Double? { let v = mJ / 1000 / seconds; return (0...1000).contains(v) ? v : nil }
-    guard let cpuW = w(cpu), let gpuW = w(gpu), let aneW = w(num(p["ane_energy"]) ?? 0) else { return nil }
-    return SoCPower(cpuWatts: cpuW, gpuWatts: gpuW, aneWatts: aneW)
-}
-
-/// Label centres pushed apart by at least gap, kept inside 0...height while they fit.
-func spreadLabels(_ y: [Double], gap: Double, height: Double) -> [Double] {
-    var y = y
-    for i in y.indices.dropFirst() { y[i] = max(y[i], y[i - 1] + gap) }
-    if let last = y.indices.last { y[last] = min(y[last], height - gap / 2) }
-    for i in y.indices.dropLast().reversed() { y[i] = min(y[i], y[i + 1] - gap) }
-    return y
-}
-
-/// Left edge of a menu window of `width` centred under `anchor` (the status item's x span), kept `margin` inside `screen`
-/// (the x span of the screen's visible frame, global coordinates). Wider than the screen: pinned to the left margin.
-func centeredMenuX(width: Double, under anchor: ClosedRange<Double>, in screen: ClosedRange<Double>, margin: Double) -> Double {
-    let x = (anchor.lowerBound + anchor.upperBound - width) / 2
-    return max(min(x, screen.upperBound - margin - width), screen.lowerBound + margin)
-}
-
-/// SF Symbol for a USB device name.
-// ponytail: substring match on Apple product names; anything else gets the generic connector.
-func deviceIcon(_ name: String?) -> String {
-    let d = name?.lowercased() ?? ""
-    return d.contains("iphone") ? "iphone" : d.contains("ipad") ? "ipad" : d.contains("airpods") ? "airpods" : "cable.connector"
-}
-
-// MARK: - Diagnostic log
-
-/// Days since 1970-01-01 in UTC: the log rolls to a new file at midnight UTC.
-func logDay(_ d: Date) -> Int { Int((d.timeIntervalSince1970 / secondsPerDay).rounded(.down)) }
-
-private let utcCalendar: Calendar = {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "UTC")!
-    return c
-}()
-
-/// "chargekeeper-2026-11-03.log".
-func logFileName(day: Int) -> String {
-    let c = utcCalendar.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: Double(day) * secondsPerDay))
-    return logFilePrefix + String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!) + logFileExtension
-}
-
-/// Day of a log file name, nil for any other file (including impossible dates such as 2026-02-31).
-func logFileDay(_ name: String) -> Int? {
-    guard name.hasPrefix(logFilePrefix), name.hasSuffix(logFileExtension) else { return nil }
-    let date = name.dropFirst(logFilePrefix.count).dropLast(logFileExtension.count)
-    let parts = date.split(separator: "-", omittingEmptySubsequences: false)
-    guard date.count == 10, parts.map(\.count) == [4, 2, 2], parts.allSatisfy({ $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
-          let d = utcCalendar.date(from: DateComponents(year: Int(parts[0]), month: Int(parts[1]), day: Int(parts[2]))) else { return nil }
-    let day = logDay(d)
-    return logFileName(day: day) == name ? day : nil
-}
-
-/// Whole days only: a file goes once its last second is more than `keepDays` days old.
-func logFileExpired(day: Int, now: Date, keepDays: Int) -> Bool {
-    Double(day + 1) * secondsPerDay <= now.timeIntervalSince1970 - Double(keepDays) * secondsPerDay
-}
-
-struct LogLine: Equatable {
-    var date: Date
-    var level: LogLevel
-    var message: String
-}
-
-/// "2026-11-03T08:33:47Z warn message\n": one line per entry, line breaks in the message replaced by spaces.
-func logLineText(_ l: LogLine) -> String {
-    let msg = l.message.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
-    return "\(ISO8601DateFormatter().string(from: l.date)) \(l.level.rawValue) \(msg)\n"
-}
-
-/// Inverse of `logLineText` (without the line break); nil for a line in any other format.
-func parseLogLine<S: StringProtocol>(_ s: S) -> LogLine? {
-    let f = s.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false)
-    guard f.count >= 2, let date = ISO8601DateFormatter().date(from: String(f[0])), let level = LogLevel(rawValue: String(f[1])) else { return nil }
-    return LogLine(date: date, level: level, message: f.count == 3 ? String(f[2]) : "")
 }

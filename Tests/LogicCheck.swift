@@ -73,10 +73,10 @@ func heatProtectBlocksThenRechecksAfterHeatWindow() {
     var c = Config(); c.heatProtect = true; c.maxTemp = 35
     var r = Runtime()
     assert(tick(c, &r, 45, temp: 36, at: 0) == .hold(at: 45) && r.state == .heatProtect)
-    assert(tick(c, &r, 45, temp: 30, at: heatWindow - 200) == .hold(at: 45))
-    assert(tick(c, &r, 45, temp: 30, at: heatWindow) == .charge(to: 80))
-    assert(tick(c, &r, 46, temp: 40, at: heatWindow + 100) == .charge(to: 80), "charges at least one heat window")
-    assert(tick(c, &r, 46, temp: 40, at: 2 * heatWindow) == .hold(at: 46))
+    assert(tick(c, &r, 45, temp: 30, at: heatProtectHysteresis - 200) == .hold(at: 45))
+    assert(tick(c, &r, 45, temp: 30, at: heatProtectHysteresis) == .charge(to: 80))
+    assert(tick(c, &r, 46, temp: 40, at: heatProtectHysteresis + 100) == .charge(to: 80), "charges at least one heat window")
+    assert(tick(c, &r, 46, temp: 40, at: 2 * heatProtectHysteresis) == .hold(at: 46))
 }
 
 func calibrationRunsFullCycle() {
@@ -87,8 +87,8 @@ func calibrationRunsFullCycle() {
     _ = tick(c, &r, 10, at: 20); assert(r.calibration == .rechargeFull)
     let holdStart: TimeInterval = 30
     _ = tick(c, &r, 100, at: holdStart); assert(r.calibration == .hold)
-    assert(tick(c, &r, 100, at: holdStart + calibrationHold - 1) == .hold(at: 100))
-    _ = tick(c, &r, 100, at: holdStart + calibrationHold); assert(r.calibration == .returnToLimit)
+    assert(tick(c, &r, 100, at: holdStart + calibrationRestDuration - 1) == .hold(at: 100))
+    _ = tick(c, &r, 100, at: holdStart + calibrationRestDuration); assert(r.calibration == .returnToLimit)
     assert(tick(c, &r, 95, at: 4000) == .discharge)
     assert(tick(c, &r, 80, at: 5000) == .hold(at: 80) && r.calibration == nil && r.state == .pause)
 }
@@ -96,7 +96,7 @@ func calibrationRunsFullCycle() {
 func calibrationFinishedOnlyWhenRestEnds() {
     var r = Runtime(); r.calibration = .rechargeFull
     var finished: [Bool] = []
-    for (pct, t) in [(100, 0.0), (100, calibrationHold - 1), (100, calibrationHold), (95, 4000), (80, 5000)] as [(Int, TimeInterval)] {
+    for (pct, t) in [(100, 0.0), (100, calibrationRestDuration - 1), (100, calibrationRestDuration), (95, 4000), (80, 5000)] as [(Int, TimeInterval)] {
         let from = r.calibration
         _ = tick(c, &r, pct, at: t)
         finished.append(calibrationFinished(from: from, to: r.calibration))
@@ -107,8 +107,8 @@ func calibrationFinishedOnlyWhenRestEnds() {
 
 func calibrationNoticeSeedsThenNotifiesOncePerResult() {
     let t0 = at(1000), t1 = at(2000)
-    assert(calibrationNotice(end: t0, handled: nil) == .seed(t0))
-    assert(calibrationNotice(end: nil, handled: nil) == .seed(.distantPast))
+    assert(calibrationNotice(end: t0, handled: nil) == .rememberWithoutBanner(t0))
+    assert(calibrationNotice(end: nil, handled: nil) == .rememberWithoutBanner(.distantPast))
     assert(calibrationNotice(end: t0, handled: .distantPast) == .notify)
     assert(calibrationNotice(end: t0, handled: t0) == .none && calibrationNotice(end: nil, handled: t0) == .none)
     assert(calibrationNotice(end: t1, handled: t0) == .notify)
@@ -125,7 +125,7 @@ func calibrationSummaryShowsBeforeAfterHealth() {
 }
 
 func heatNoticeOncePerEpisode() {
-    var latch = NoticeLatch(seenLimit: 80)
+    var latch = NoticeLatch(previousLimit: 80)
     assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
     assert(serviceNotices(from: .heatProtect, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [])
     assert(serviceNotices(from: .heatProtect, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
@@ -134,12 +134,12 @@ func heatNoticeOncePerEpisode() {
 }
 
 func heatNoticeStillSentAfterLimitNotice() {
-    var latch = NoticeLatch(limit: true, seenLimit: 80)
+    var latch = NoticeLatch(limitNoticeSent: true, previousLimit: 80)
     assert(serviceNotices(from: .charging, to: .heatProtect, adapter: true, limit: 80, latch: &latch) == [.heatProtect])
 }
 
 func limitNoticeOncePerChargingSession() {
-    var latch = NoticeLatch(seenLimit: 80)
+    var latch = NoticeLatch(previousLimit: 80)
     assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
     assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: 80, latch: &latch) == [])
     assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [])
@@ -147,14 +147,14 @@ func limitNoticeOncePerChargingSession() {
 }
 
 func unplugResetsLimitNotice() {
-    var latch = NoticeLatch(limit: true, seenLimit: 80)
-    assert(serviceNotices(from: .pause, to: .discharging, adapter: false, limit: 80, latch: &latch) == [] && !latch.limit)
+    var latch = NoticeLatch(limitNoticeSent: true, previousLimit: 80)
+    assert(serviceNotices(from: .pause, to: .discharging, adapter: false, limit: 80, latch: &latch) == [] && !latch.limitNoticeSent)
     assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: 80, latch: &latch) == [.limitReached])
 }
 
 func limitChangeRearmsLimitNotice() {
     let seenLimit = 80, loweredLimit = 70, raisedLimit = 90
-    var latch = NoticeLatch(seenLimit: seenLimit)
+    var latch = NoticeLatch(previousLimit: seenLimit)
     assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: loweredLimit, latch: &latch) == [], "pause from a lowered limit")
     assert(serviceNotices(from: .pause, to: .charging, adapter: true, limit: raisedLimit, latch: &latch) == [])
     assert(serviceNotices(from: .charging, to: .pause, adapter: true, limit: raisedLimit, latch: &latch) == [.limitReached])
@@ -180,12 +180,12 @@ func historyEventsRenderInEnglish() {
 func legacyHistoryTextMapsToEvents() {
     assert(historyText(HistoryEntry(text: "calibration done: 7100→7180 mAh, health 82.8→83.7 %, 278 cycles")) == historyText(calibrationDoneEntry))
     assert(historyText(HistoryEntry(text: "calibration done: 7180 mAh, 278 cycles")) == "Calibration complete: 7180 mAh, 278 cycles")
-    assert(parsedHistory(HistoryEntry(text: "calibration: dischargeTo10")).phase == .dischargeTo10)
-    assert(parsedHistory(HistoryEntry(text: "calibration: back to limit")).event == .calibrationEnded)
-    assert(parsedHistory(HistoryEntry(text: "calibration started")).event == .calibrationStarted)
-    let caught = parsedHistory(HistoryEntry(text: "task calibrate (caught up)"))
+    assert(parsedLegacyHistory(HistoryEntry(text: "calibration: dischargeTo10")).phase == .dischargeTo10)
+    assert(parsedLegacyHistory(HistoryEntry(text: "calibration: back to limit")).event == .calibrationEnded)
+    assert(parsedLegacyHistory(HistoryEntry(text: "calibration started")).event == .calibrationStarted)
+    let caught = parsedLegacyHistory(HistoryEntry(text: "task calibrate (caught up)"))
     assert(caught.event == .taskRun && caught.action == .calibrate && caught.caughtUpOnWake == true)
-    assert(parsedHistory(HistoryEntry(text: "task skipped (missed): topUp")).event == .taskSkipped)
+    assert(parsedLegacyHistory(HistoryEntry(text: "task skipped (missed): topUp")).event == .taskSkipped)
     assert(historyText(HistoryEntry(text: "Limit 80 %")) == "Limit 80 %", "unknown text stays as is")
 }
 
@@ -288,12 +288,12 @@ func timeToTargetIsNilOver24Hours() {
 
 func calibrationProgressReportsStepAndTarget() {
     assert(calibrationStep(.chargeFull) == (1, 5) && calibrationStep(.dischargeTo10) == (2, 5) && calibrationStep(.returnToLimit) == (5, 5))
-    assert(calibrationTarget(.dischargeTo10, limit: 80) == 10 && calibrationTarget(.returnToLimit, limit: 80) == 80 && calibrationTarget(.hold, limit: 80) == nil)
+    assert(calibrationTargetPercent(.dischargeTo10, limit: 80) == 10 && calibrationTargetPercent(.returnToLimit, limit: 80) == 80 && calibrationTargetPercent(.hold, limit: 80) == nil)
 }
 
 func calibrationRestReportsTimeLeft() {
-    assert(holdRemaining(phaseStart: at(0), now: at(1500)) == calibrationHold - 1500)
-    assert(holdRemaining(phaseStart: at(0), now: at(calibrationHold + 1400)) == 0)
+    assert(calibrationRestRemaining(phaseStart: at(0), now: at(1500)) == calibrationRestDuration - 1500)
+    assert(calibrationRestRemaining(phaseStart: at(0), now: at(calibrationRestDuration + 1400)) == 0)
 }
 
 func calibrationNeedsAdapterInChargingAndRestPhasesOnly() {
@@ -353,8 +353,16 @@ func calibrationRestCountsOnlyOnAdapter() {
     assert(!calibrationFinished(from: .hold, to: r.calibration))
     let replug: TimeInterval = 7000
     _ = tick(c, &r, 100, at: replug); assert(r.calibration == .hold)
-    _ = tick(c, &r, 100, at: replug + calibrationHold - 100); assert(r.calibration == .hold)
-    _ = tick(c, &r, 100, at: replug + calibrationHold + 100); assert(r.calibration == .returnToLimit)
+    _ = tick(c, &r, 100, at: replug + calibrationRestDuration - 100); assert(r.calibration == .hold)
+    _ = tick(c, &r, 100, at: replug + calibrationRestDuration + 100); assert(r.calibration == .returnToLimit)
+}
+
+func unpluggedCalibrationRestLeavesRuntimeUnchanged() {
+    var r = Runtime(); r.calibration = .hold; r.phaseStart = at(0)
+    _ = tick(c, &r, 100, ac: false, at: 1000)
+    let firstUnpluggedTick = r
+    _ = tick(c, &r, 100, ac: false, at: 2000)
+    assert(r == firstUnpluggedTick)
 }
 
 func calibrationRestBelow100RechargesFirst() {
@@ -363,31 +371,31 @@ func calibrationRestBelow100RechargesFirst() {
     assert(tick(c, &r, 99, at: 3800) == .charge(to: 100))
     let full: TimeInterval = 3900
     _ = tick(c, &r, 100, at: full); assert(r.calibration == .hold)
-    _ = tick(c, &r, 100, at: full + calibrationHold - 100); assert(r.calibration == .hold)
-    _ = tick(c, &r, 100, at: full + calibrationHold); assert(r.calibration == .returnToLimit)
+    _ = tick(c, &r, 100, at: full + calibrationRestDuration - 100); assert(r.calibration == .hold)
+    _ = tick(c, &r, 100, at: full + calibrationRestDuration); assert(r.calibration == .returnToLimit)
 }
 
 func calibrationRestWithoutStartBeginsOnAdapter() {
     var r = Runtime(); r.calibration = .hold
     let start: TimeInterval = 1000
     _ = tick(c, &r, 100, at: start); assert(r.calibration == .hold && r.phaseStart == at(start))
-    _ = tick(c, &r, 100, at: start + calibrationHold - 100); assert(r.calibration == .hold)
-    _ = tick(c, &r, 100, at: start + calibrationHold + 100); assert(r.calibration == .returnToLimit)
+    _ = tick(c, &r, 100, at: start + calibrationRestDuration - 100); assert(r.calibration == .hold)
+    _ = tick(c, &r, 100, at: start + calibrationRestDuration + 100); assert(r.calibration == .returnToLimit)
 }
 
 func nativeLimitRoundingIsNotAnEpisode() {
     var since: Date? = nil
-    assert(!pastLimitEpisodeStarts(.hold(at: 80), 80 + pastLimitMargin - 1, since: &since) && since == nil)
+    assert(!pastLimitEpisodeStarts(.hold(at: 80), 80 + nativeChargeLimitStepPercent - 1, since: &since) && since == nil)
 }
 
 func aboveLimitWhileNotChargingIsNotAnEpisode() {
     var since: Date? = nil
-    assert(!pastLimitEpisodeStarts(.hold(at: 80), 80 + pastLimitMargin, mA: 0, since: &since) && since == nil)
+    assert(!pastLimitEpisodeStarts(.hold(at: 80), 80 + nativeChargeLimitStepPercent, mA: 0, since: &since) && since == nil)
 }
 
 func pastLimitEpisodeStartsOnceAndEndsWhenLevelIsBack() {
     var since: Date? = nil
-    assert(pastLimitEpisodeStarts(.hold(at: 80), 80 + pastLimitMargin, at: 10, since: &since) && since == at(10))
+    assert(pastLimitEpisodeStarts(.hold(at: 80), 80 + nativeChargeLimitStepPercent, at: 10, since: &since) && since == at(10))
     assert(!pastLimitEpisodeStarts(.hold(at: 80), 99, at: 20, since: &since) && !pastLimitEpisodeStarts(.hold(at: 80), 100, mA: 0, at: 30, since: &since))
     assert(since == at(10))
     assert(!pastLimitEpisodeStarts(.hold(at: 80), 80, since: &since) && since == nil)
@@ -480,19 +488,36 @@ func weekdaysSkipWeekends() {
     assert(lastOccurrence(t, after: d("2026-10-23T10:00:00Z"), upTo: d("2026-10-26T09:30:00Z"), calendar: cal) == d("2026-10-26T09:00:00Z"))
 }
 
+func longRunningRepeatsGiveTheirLatestOccurrence() {
+    let start = d("2020-01-31T09:00:00Z"), after = d("2026-05-01T00:00:00Z")
+    func last(_ rule: Repeat, upTo: String) -> Date? {
+        lastOccurrence(ScheduledTask(action: .calibrate, repeatRule: rule, start: start), after: after, upTo: d(upTo), calendar: cal)
+    }
+    assert(last(.daily, upTo: "2026-05-20T08:00:00Z") == d("2026-05-19T09:00:00Z"))
+    assert(last(.weekly, upTo: "2026-05-20T08:00:00Z") == d("2026-05-15T09:00:00Z"))
+    assert(last(.biweekly, upTo: "2026-05-20T08:00:00Z") == d("2026-05-15T09:00:00Z"))
+    assert(last(.monthly, upTo: "2026-06-30T10:00:00Z") == d("2026-05-31T09:00:00Z"))
+    assert(last(.yearly, upTo: "2026-06-30T10:00:00Z") == nil)
+}
+
 func oneOffTaskOccursAtItsStart() {
     let t = ScheduledTask(action: .calibrate, repeatRule: .never, start: d("2026-10-23T09:00:00Z"))
     assert(lastOccurrence(t, after: d("2026-10-01T00:00:00Z"), upTo: d("2026-10-24T00:00:00Z"), calendar: cal) == d("2026-10-23T09:00:00Z"))
 }
 
 func macWattsIsLoadMinusPortsUnlessPortsExceedLoad() {
-    assert(macWatts(system: 27, ports: [1, 13]) == 13)
-    assert(macWatts(system: 10, ports: [13]) == 10)
+    assert(macWattsExcludingPorts(system: 27, ports: [1, 13]) == 13)
+    assert(macWattsExcludingPorts(system: 10, ports: [13]) == 10)
 }
 
 func powerHistoryDropsPointsOutsideWindow() {
     let older = [0.0, 100, 200].map { SoCPowerPoint(date: at($0), averagePower: pw) }
     assert(appendPowerPoint(older, SoCPowerPoint(date: at(300), averagePower: pw), window: 250) == pwHistory)
+}
+
+func powerHistoryDropsPointsDatedAfterTheNewOne() {
+    let afterClockJump = [SoCPowerPoint(date: at(400), averagePower: pw)]
+    assert(appendPowerPoint(afterClockJump, SoCPowerPoint(date: at(300), averagePower: pw), window: 250) == [SoCPowerPoint(date: at(300), averagePower: pw)])
 }
 
 func currentPowerIsNewestWhileFresh() {
@@ -765,7 +790,7 @@ func healthRangeStartsThreeMonthsOrOneYearBack() {
 
 func healthChangeNeedsTwoPointsAndBothCycleCounts() {
     let change = healthChange([hp("2026-07-01T12:00:00Z", 4260, cycles: 100), hp("2026-08-01T12:00:00Z"), hp("2026-10-01T12:00:00Z", 4200, cycles: 114)])!
-    assert(abs(change.points - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92)
+    assert(abs(change.healthPercentagePoints - -1.25) < 1e-9 && change.cycles == 14 && change.days == 92)
     assert(healthChange([hp("2026-07-01T12:00:00Z", cycles: nil), hp("2026-10-01T12:00:00Z")])?.cycles == nil)
     assert(healthChange([hp("2026-07-01T12:00:00Z")]) == nil)
 }
@@ -894,9 +919,9 @@ func keepAwakeOffAndForeverSurviveEncoding() {
 }
 
 func strayDisableSleepIsWarned() {
-    assert(unexplainedSleepDisabled(system: true, service: nil) && unexplainedSleepDisabled(system: true, service: false))
-    assert(!unexplainedSleepDisabled(system: true, service: true) && !unexplainedSleepDisabled(system: false, service: nil))
-    assert(!unexplainedSleepDisabled(system: nil, service: false) && !unexplainedSleepDisabled(system: false, service: false))
+    assert(unexplainedSleepDisabled(systemSleepDisabled: true, serviceSleepDisabled: nil) && unexplainedSleepDisabled(systemSleepDisabled: true, serviceSleepDisabled: false))
+    assert(!unexplainedSleepDisabled(systemSleepDisabled: true, serviceSleepDisabled: true) && !unexplainedSleepDisabled(systemSleepDisabled: false, serviceSleepDisabled: nil))
+    assert(!unexplainedSleepDisabled(systemSleepDisabled: nil, serviceSleepDisabled: false) && !unexplainedSleepDisabled(systemSleepDisabled: false, serviceSleepDisabled: false))
 }
 
 func reenableSleepCommandRoundTrips() {
@@ -1053,6 +1078,7 @@ let checks: [() -> Void] = [
     adapterNoticeRemindsOnceAfterReminderDelay,
     adapterNoticeOnlyInPhasesNeedingAdapter,
     calibrationRestCountsOnlyOnAdapter,
+    unpluggedCalibrationRestLeavesRuntimeUnchanged,
     calibrationRestBelow100RechargesFirst,
     calibrationRestWithoutStartBeginsOnAdapter,
     nativeLimitRoundingIsNotAnEpisode,
@@ -1069,9 +1095,11 @@ let checks: [() -> Void] = [
     ledShowsGreenAtLimitAndBlinksOrangeWhenDischarging,
     monthlyOn31stSkipsShortMonths,
     weekdaysSkipWeekends,
+    longRunningRepeatsGiveTheirLatestOccurrence,
     oneOffTaskOccursAtItsStart,
     macWattsIsLoadMinusPortsUnlessPortsExceedLoad,
     powerHistoryDropsPointsOutsideWindow,
+    powerHistoryDropsPointsDatedAfterTheNewOne,
     currentPowerIsNewestWhileFresh,
     currentPowerLastsTwoOwnIntervals,
     powerGapOverTwoIntervalsSplitsCurve,
