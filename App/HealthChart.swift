@@ -146,7 +146,7 @@ struct HealthChartSection: View {
         case .months: period = tr("%d months", span.value)
         case .years: period = span.value == 1 ? tr("1 year") : tr("%d years", span.value)
         }
-        let text = tr("%@ points in %@", signed(c.points), period)
+        let text = tr("%@ points in %@", signed(c.healthPercentagePoints), period)
         guard let n = c.cycles else { return text }
         return text + ", " + (n == 0 ? tr("no new cycle") : n == 1 ? tr("+1 cycle") : tr("+%d cycles", n))
     }

@@ -90,7 +90,7 @@ final class AppModel: ObservableObject {
         if h != lastKnownPowerHistory { lastKnownPowerHistory = h }
         powerHistoryReceivedAt = Date()
         serviceStatus = service.status
-        let unexplained = unexplainedSleepDisabled(system: systemSleepDisabled(), service: error == nil ? status?.sleepDisabled : nil)
+        let unexplained = unexplainedSleepDisabled(systemSleepDisabled: systemSleepDisabled(), serviceSleepDisabled: error == nil ? status?.sleepDisabled : nil)
         if unexplained != sleepDisabledWithoutReason { sleepDisabledWithoutReason = unexplained }
     }
 
@@ -126,7 +126,7 @@ final class AppModel: ObservableObject {
     private func notifyCalibration(_ c: CalibrationResult?) {
         let handled = UserDefaults.standard.object(forKey: notifiedKey) as? Date
         switch calibrationNotice(end: c?.end, handled: handled) {
-        case .seed(let d): UserDefaults.standard.set(d, forKey: notifiedKey)
+        case .rememberWithoutBanner(let d): UserDefaults.standard.set(d, forKey: notifiedKey)
         case .none: break
         case .notify:
             guard let c, !notifying else { return }
@@ -336,9 +336,9 @@ extension Status {
         var parts = [tr("Step %d/%d", n, of), p.label(limit: config.limit)]
         if !calibrationWaitsForAdapter {
             if p == .hold {
-                let left = holdRemaining(phaseStart: runtime.phaseStart, now: Date())
+                let left = calibrationRestRemaining(phaseStart: runtime.phaseStart, now: Date())
                 parts.append(tr("%@ min left", number((left / 60).rounded(.up))))
-            } else if let t = calibrationTarget(p, limit: config.limit), let e = eta(toPercent: t) {
+            } else if let t = calibrationTargetPercent(p, limit: config.limit), let e = eta(toPercent: t) {
                 parts.append(e)
             }
         }

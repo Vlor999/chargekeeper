@@ -23,7 +23,7 @@ struct PowerFlow: View {
 
     var sinks: [Node] {
         let ports = (s.usbCOutputPorts ?? []).filter { $0.watts > 0.1 }
-        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWatts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
+        var n = [Node(name: "MacBook", icon: "laptopcomputer", watts: max(macWattsExcludingPorts(system: s.systemWatts, ports: ports.map(\.watts)), 0.1), color: .blue)]
         n += ports.map { Node(name: $0.deviceName ?? "USB-C", icon: deviceIcon($0.deviceName), watts: $0.watts, color: .purple, detail: $0.deviceName, max: $0.negotiatedWatts) }
         if s.batteryChargeWatts > 0.1 { n.append(Node(name: tr("Battery"), icon: "battery.100percent.bolt", watts: s.batteryChargeWatts, color: .green)) }
         return n

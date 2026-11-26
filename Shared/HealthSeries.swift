@@ -1,36 +1,42 @@
 import Foundation
 
-/// Series point from a reading; nil while the gauge reports no capacity.
 func healthSample(_ b: BatterySnapshot, calibration: Bool = false) -> HealthSample? {
     guard let m = b.fullChargeCapacityMAh, m > 0, let d = b.designCapacityMAh, d > 0 else { return nil }
     return HealthSample(date: b.date, fullChargeCapacityMAh: m, nominalCapacityMAh: b.nominalCapacityMAh, designCapacityMAh: d,
                         cycleCount: b.cycleCount, fromCalibration: calibration ? true : nil)
 }
 
-/// The daily point is due when no point falls on the same calendar day.
 func healthSampleDue(_ series: [HealthSample], now: Date, calendar: Calendar = .current) -> Bool {
-    series.last { calendar.isDate($0.date, inSameDayAs: now) } == nil
+    !series.contains { calendar.isDate($0.date, inSameDayAs: now) }
 }
 
-/// Inserts the point in date order, then thins the series: daily for the `healthDailyRetentionDays` days before `now`, the first
-/// point of each week before that, calibration points kept. Over `healthMaxSamples` points, the oldest daily or weekly
-/// points go first, then the oldest calibration points.
-/// Points dated more than a day after `now` (a clock that was set ahead) are refused, and dropped from the series.
-/// One point per date: the calibration point wins over the daily point of the same tick.
 func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, calendar cal: Calendar = .current) -> [HealthSample] {
-    let latest = now.addingTimeInterval(secondsPerDay)
-    var all = series.filter { $0.date <= latest }
-    guard p.date <= latest else { return all }
+    let latestAccepted = now.addingTimeInterval(healthMaxClockAhead)
+    let current = series.filter { $0.date <= latestAccepted }
+    guard p.date <= latestAccepted, let inserted = insertingInDateOrder(p, into: current) else { return current }
+    let dailyCutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
+    return cappedDroppingCalibrationLast(thinnedToWeekly(inserted, before: dailyCutoff, calendar: cal))
+}
+
+private func insertingInDateOrder(_ p: HealthSample, into series: [HealthSample]) -> [HealthSample]? {
+    var all = series
     if let i = all.firstIndex(where: { $0.date == p.date }) {
-        guard p.fromCalibration == true, all[i].fromCalibration != true else { return all }
+        guard p.fromCalibration == true, all[i].fromCalibration != true else { return nil }
         all.remove(at: i)
     }
     all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
-    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
+    return all
+}
+
+private func thinnedToWeekly(_ series: [HealthSample], before cutoff: Date, calendar cal: Calendar) -> [HealthSample] {
     var weeks = Set<DateComponents>()
-    var kept = all.filter { s in
+    return series.filter { s in
         s.date >= cutoff || s.fromCalibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
     }
+}
+
+private func cappedDroppingCalibrationLast(_ series: [HealthSample]) -> [HealthSample] {
+    var kept = series
     var excess = kept.count - healthMaxSamples
     if excess > 0 {
         kept = kept.filter { s in
@@ -44,7 +50,6 @@ func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, cal
 
 enum HealthRange: String, CaseIterable { case threeMonths, year, all }
 
-/// First date shown by the range.
 func healthRangeStart(_ r: HealthRange, now: Date, calendar cal: Calendar = .current) -> Date {
     switch r {
     case .threeMonths: return cal.date(byAdding: .month, value: -3, to: now) ?? now
@@ -53,9 +58,8 @@ func healthRangeStart(_ r: HealthRange, now: Date, calendar cal: Calendar = .cur
     }
 }
 
-/// Change between the first and last points of the period. Health in percentage points.
 struct HealthChange: Equatable {
-    var points: Double
+    var healthPercentagePoints: Double
     var cycles: Int?
     var days: Int
 }
@@ -63,17 +67,16 @@ struct HealthChange: Equatable {
 func healthChange(_ series: [HealthSample]) -> HealthChange? {
     guard series.count >= 2, let a = series.first, let b = series.last else { return nil }
     let cycles = b.cycleCount.flatMap { y in a.cycleCount.map { y - $0 } }
-    return HealthChange(points: b.healthPercent - a.healthPercent, cycles: cycles,
+    return HealthChange(healthPercentagePoints: b.healthPercent - a.healthPercent, cycles: cycles,
                         days: Int((b.date.timeIntervalSince(a.date) / secondsPerDay).rounded()))
 }
 
 enum SpanUnit: Equatable { case days, months, years }
 
-/// Period length as shown: days under 60 days, months under 2 years (12 months reads 1 year), whole years beyond. At least 1.
 func healthSpan(days: Int) -> (value: Int, unit: SpanUnit) {
-    if days < 60 { return (max(days, 1), .days) }
-    let months = Int((Double(days) / 30.44).rounded())
+    if days < healthSpanDaysBeforeMonths { return (max(days, 1), .days) }
+    let months = Int((Double(days) / averageDaysPerMonth).rounded())
     if months == 12 { return (1, .years) }
-    if days < 730 { return (months, .months) }
-    return (Int((Double(days) / 365.25).rounded()), .years)
+    if days < healthSpanDaysBeforeYears { return (months, .months) }
+    return (Int((Double(days) / averageDaysPerYear).rounded()), .years)
 }
