@@ -9,10 +9,18 @@ enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
 }
 
-/// Diagnostic log levels, least to most severe.
 enum LogLevel: String, CaseIterable, Comparable {
     case info, warn, error
-    static func < (a: LogLevel, b: LogLevel) -> Bool { allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)! }
+
+    var severity: Int {
+        switch self {
+        case .info: return 0
+        case .warn: return 1
+        case .error: return 2
+        }
+    }
+
+    static func < (a: LogLevel, b: LogLevel) -> Bool { a.severity < b.severity }
 }
 
 /// powermetrics sampling interval chosen in Settings, in seconds; `off` stops powermetrics. A closed list: a socket
