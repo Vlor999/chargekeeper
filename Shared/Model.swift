@@ -171,14 +171,13 @@ struct BatterySnapshot: Codable, Equatable {
     var temperature: Double?
     var percent: Int
 
-    /// Full charge capacity over design capacity, in %.
     var health: Double? { ratio(maxCapacity) }
     /// Nominal capacity over design capacity, in %: close to the macOS "Maximum Capacity".
     var nominalHealth: Double? { ratio(nominalCapacity) }
 
     private func ratio(_ v: Int?) -> Double? {
         guard let v, let d = designCapacity, d > 0 else { return nil }
-        return Double(v) * 100 / Double(d)
+        return percentOfDesignCapacity(v, designCapacity: d)
     }
 }
 
@@ -191,10 +190,12 @@ struct HealthSample: Codable, Equatable {
     var cycleCount: Int?
     var calibration: Bool?  // taken when a calibration finished
 
-    /// Full charge capacity over design capacity, in %.
-    var health: Double { Double(maxCapacity) * 100 / Double(max(designCapacity, 1)) }
-    /// Nominal capacity over design capacity, in %.
-    var nominalHealth: Double? { nominalCapacity.map { Double($0) * 100 / Double(max(designCapacity, 1)) } }
+    var health: Double { percentOfDesignCapacity(maxCapacity, designCapacity: max(designCapacity, 1)) }
+    var nominalHealth: Double? { nominalCapacity.map { percentOfDesignCapacity($0, designCapacity: max(designCapacity, 1)) } }
+}
+
+private func percentOfDesignCapacity(_ capacity: Int, designCapacity: Int) -> Double {
+    Double(capacity) * 100 / Double(designCapacity)
 }
 
 struct CalibrationResult: Codable, Equatable {
