@@ -183,11 +183,11 @@ func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, wat
 
 // exception: macOS 26.4+ now and then charges to 100 % to recalibrate the gauge, a cause readable only with a private entitlement, so the episode is detected from its effect (https://github.com/Vlor999/chargekeeper/commit/baf88803900433fb05626892d550d114dee14677)
 // ponytail: 11 parameters, with the `settled` and `inControl` flags; a reading type would name them but changes the Daemon call (ticket to open)
-func pastLimitEpisode(_ a: Action, state: ChargeState, settled: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
+func pastLimitEpisode(_ a: Action, state: ChargeState, settled currentReflectsThisMode: Bool, inControl: Bool, adapter: Bool, limit: Int, percent: Int, amperage: Int?,
                       watts: Double, since: inout Date?, now: Date) -> Int? {
     guard adapter, let held = serviceHeldLevel(a, state: state, limit: limit), percent > held else { since = nil; return nil }
     let charging = milliamps(amperage: amperage, watts: watts) >= minEstimableCurrentMilliamps
-    guard since == nil, settled, inControl, percent >= held + nativeChargeLimitStepPercent, charging else { return nil }
+    guard since == nil, currentReflectsThisMode, inControl, percent >= held + nativeChargeLimitStepPercent, charging else { return nil }
     since = now
     return held
 }
