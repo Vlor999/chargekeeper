@@ -51,7 +51,8 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
     case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
-    case keepAwakeEnded  // turned itself off: time up, or `value` = battery level under the threshold
+    case keepAwakeTimeUp = "keepAwakeEnded"
+    case keepAwakeLowBattery
     case keepAwakeFailed
 }
 
@@ -99,6 +100,7 @@ struct HistoryEntry: Codable, Hashable {
         healthBeforePercent = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthBeforePercent)
         healthAfterPercent = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthAfterPercent)
         cycles = c.decodeIfKnownToThisBuild(Int.self, forKey: .cycles)
+        if event == .keepAwakeTimeUp && percent != nil { event = .keepAwakeLowBattery }
     }
 }
 

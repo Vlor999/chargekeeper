@@ -118,7 +118,7 @@ final class Daemon {
         }
 
         var until = keepAwakeUntil(s.runtime.keepAwakeUntil, now: now, adapter: rd.adapter, percent: rd.percent, minBattery: s.config.keepAwakeMinBattery)
-        if let was = s.runtime.keepAwakeUntil, until == nil { record(HistoryEntry(event: .keepAwakeEnded, percent: was > now ? rd.percent : nil)) }
+        if let was = s.runtime.keepAwakeUntil, until == nil { record(was > now ? HistoryEntry(event: .keepAwakeLowBattery, percent: rd.percent) : HistoryEntry(event: .keepAwakeTimeUp)) }
         // The assertion failed (logged once by set): off, so the menu does not show a keep awake that is not held.
         if !awake.set(until != nil) { until = nil; record(HistoryEntry(event: .keepAwakeFailed)) }
         s.runtime.keepAwakeUntil = until

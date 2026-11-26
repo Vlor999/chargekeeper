@@ -251,7 +251,7 @@ func everyHistoryTemplateAndBannerHasFrench() {
                    HistoryEntry(event: .calibrationEnded), HistoryEntry(event: .limitChanged, percent: 80), HistoryEntry(event: .heatProtect),
                    HistoryEntry(event: .heatProtect, temperature: 36), HistoryEntry(event: .taskSkipped, action: .calibrate),
                    HistoryEntry(event: .chargedPastLimit), HistoryEntry(event: .chargedPastLimit, percent: 80),
-                   HistoryEntry(event: .keepAwakeEnded), HistoryEntry(event: .keepAwakeEnded, percent: 19), HistoryEntry(event: .keepAwakeFailed)]
+                   HistoryEntry(event: .keepAwakeTimeUp), HistoryEntry(event: .keepAwakeLowBattery, percent: 19), HistoryEntry(event: .keepAwakeFailed)]
         + [CalibrationPhase.chargeFull, .dischargeTo10, .rechargeFull, .hold, .returnToLimit].map { HistoryEntry(event: .calibrationPhase, phase: $0) }
         + TaskAction.allCases.flatMap { a in [false, true].map { HistoryEntry(event: .taskRun, action: a, caughtUpOnWake: $0, percent: 60) } }
     var templates: Set<String> = []
@@ -871,8 +871,8 @@ func lidClosedKeepAwakeAddsSleepDisabledReason() {
 }
 
 func keepAwakeHistoryTexts() {
-    assert(historyText(HistoryEntry(event: .keepAwakeEnded)) == "Keep awake ended: time up")
-    assert(historyText(HistoryEntry(event: .keepAwakeEnded, percent: 19)) == "Keep awake turned off: battery at 19 %")
+    assert(historyText(HistoryEntry(event: .keepAwakeTimeUp)) == "Keep awake ended: time up")
+    assert(historyText(HistoryEntry(event: .keepAwakeLowBattery, percent: 19)) == "Keep awake turned off: battery at 19 %")
     assert(historyText(HistoryEntry(event: .keepAwakeFailed)) == "Keep awake could not start: macOS refused to block sleep")
 }
 
@@ -983,6 +983,13 @@ func renamedFieldsKeepTheirWireKeys() {
     status.usbCOutputPorts = []
     status.systemSettingsChargeLimit = 80
     assert(wireKeys(status).isSuperset(of: ["batteryWatts", "batteryAmperage", "ports", "appleChargeLimit"]))
+}
+
+func keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel() {
+    func event(_ json: String) -> HistoryEvent? { try! JSONDecoder().decode(HistoryEntry.self, from: Data(json.utf8)).event }
+    assert(event(#"{"date":0,"text":"","event":"keepAwakeEnded"}"#) == .keepAwakeTimeUp)
+    assert(event(#"{"date":0,"text":"","event":"keepAwakeEnded","value":19}"#) == .keepAwakeLowBattery)
+    assert(String(decoding: try! JSONEncoder().encode(HistoryEntry(event: .keepAwakeTimeUp)), as: UTF8.self).contains(#""keepAwakeEnded""#))
 }
 
 func legacyInstallNamesUnchanged() {
@@ -1111,6 +1118,7 @@ let checks: [() -> Void] = [
     configFromOlderServiceUsesDefaults,
     statusFromOlderServiceDecodes,
     renamedFieldsKeepTheirWireKeys,
+    keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
 ]
 for check in checks { check() }
