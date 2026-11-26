@@ -120,9 +120,9 @@ struct Config: Codable, Equatable {
 }
 
 extension Config {
-    /// Lenient for the log, power interval and keep awake fields only: a service older than them sends a config without them.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Config()
         limit = try c.decode(Int.self, forKey: .limit)
         autoDischarge = try c.decode(Bool.self, forKey: .autoDischarge)
         idle = try c.decode(Bool.self, forKey: .idle)
@@ -136,11 +136,11 @@ extension Config {
         keepLimitWhenStopped = try c.decode(Bool.self, forKey: .keepLimitWhenStopped)
         catchUpMissedTasks = try c.decode(Bool.self, forKey: .catchUpMissedTasks)
         tasks = try c.decode([ScheduledTask].self, forKey: .tasks)
-        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? true
-        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? logDaysDefault
-        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? .s5
-        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? false
-        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? keepAwakeMinBatteryDefault
+        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? defaults.logEnabled
+        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? defaults.logDays
+        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? defaults.powerInterval
+        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? defaults.keepAwakeLidClosed
+        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? defaults.keepAwakeMinBattery
     }
 }
 
