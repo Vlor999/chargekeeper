@@ -1,70 +1,58 @@
 import Charts
 import SwiftUI
 
-/// CPU, GPU and Neural Engine power over the service's last minutes (`socHistoryWindow`). Both views redraw only when
-/// a refresh brings a new history: no timeline of their own.
-private struct Component {
+private struct PowerComponent {
     let name: String
     let color: Color
     let value: (SoCPower) -> Double
-    var dashed = false
-    var short: String? = nil  // menu caption, where the full name does not fit
+    var dashedBesidesColor = false
+    var menuCaption: String? = nil
 
-    // Neural Engine is dashed so the lines differ by more than color.
-    static var all: [Component] {
-        [Component(name: "CPU", color: .viz(light: 0x2a78d6, dark: 0x3987e5), value: \.cpuWatts),
-         Component(name: "GPU", color: .viz(light: 0xeb6834, dark: 0xd95926), value: \.gpuWatts),
-         Component(name: tr("Neural Engine"), color: .viz(light: 0x1f9e6a, dark: 0x2fb67e), value: \.aneWatts, dashed: true, short: "ANE")]
+    static var all: [PowerComponent] {
+        [PowerComponent(name: "CPU", color: .viz(light: 0x2a78d6, dark: 0x3987e5), value: \.cpuWatts),
+         PowerComponent(name: "GPU", color: .viz(light: 0xeb6834, dark: 0xd95926), value: \.gpuWatts),
+         PowerComponent(name: tr("Neural Engine"), color: .viz(light: 0x1f9e6a, dark: 0x2fb67e), value: \.aneWatts, dashedBesidesColor: true, menuCaption: "ANE")]
     }
 
-    /// "CPU 0.9 W", or "CPU — W" before the first point.
-    func caption(_ p: SoCPower?, short: Bool = false) -> String {
-        "\(short ? self.short ?? name : name) " + (p.map { watts(value($0)) } ?? "\u{2014} W")
+    func caption(_ p: SoCPower?, inMenu: Bool = false) -> String {
+        "\(inMenu ? menuCaption ?? name : name) " + (p.map { watts(value($0)) } ?? noPowerValueText)
     }
 
-    /// Short line key in the component's color, dashed like its curve.
-    func key(width: CGFloat) -> some View {
-        Path { $0.move(to: CGPoint(x: 1, y: 1)); $0.addLine(to: CGPoint(x: width - 1, y: 1)) }
-            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [3, 2] : []))
-            .frame(width: width, height: 2)
+    func key(width: CGFloat) -> LineKey {
+        LineKey(color: color, dash: dashedBesidesColor ? powerKeyDash : [], width: width)
     }
 }
 
-/// The three curves on one W scale from 0 to the window's peak (at least 1 W, so idle stays flat), smoothed with
-/// monotone interpolation: no overshoot below 0 or above a measured peak. A gap (sleep, powermetrics restart) splits each
-/// curve. Before the first points: the empty frame over the last minutes.
 private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some ChartContent {
     let segments = powerSegments(history)
-    return ForEach(Component.all, id: \.name) { c in
+    return ForEach(PowerComponent.all, id: \.name) { c in
         ForEach(history.indices, id: \.self) { i in
             let p = history[i]
             LineMark(x: .value(tr("Time"), p.date), y: .value(tr("Power"), c.value(p.power)), series: .value("", "\(c.name) \(segments[i])"))
                 .interpolationMethod(.monotone)
                 .foregroundStyle(c.color)
-                .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: c.dashed ? [5, 4] : []))
+                .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: c.dashedBesidesColor ? chartCurveDash : []))
         }
     }
 }
 
-/// The window ends at `now` (the history's arrival), so a stopped feed slides out instead of looking current.
-private func powerScale(_ history: [SoCPowerPoint], now end: Date) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
+private func powerScale(_ history: [SoCPowerPoint], endingAtArrival arrival: Date) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
     let peak = history.map { max($0.power.cpuWatts, $0.power.gpuWatts, $0.power.aneWatts) }.max() ?? 0
-    return (end.addingTimeInterval(-socHistoryWindow)...end, 0...max(peak, 1))
+    return (arrival.addingTimeInterval(-socHistoryWindow)...arrival, 0...max(peak, minimumPowerScalePeakWatts))
 }
 
-/// Menu: one compact card, the latest values above the three curves, no axes.
 struct PowerGraph: View {
     let history: [SoCPowerPoint]
-    var now = Date()
+    var receivedAt = Date()
 
     var body: some View {
-        let latest = currentPower(history, now: now), scale = powerScale(history, now: now)
+        let latest = currentPower(history, now: receivedAt), scale = powerScale(history, endingAtArrival: receivedAt)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
-                ForEach(Component.all, id: \.name) { c in
+                ForEach(PowerComponent.all, id: \.name) { c in
                     HStack(spacing: 4) {
                         c.key(width: 10)
-                        Text(c.caption(latest, short: true)).monospacedDigit()
+                        Text(c.caption(latest, inMenu: true)).monospacedDigit()
                     }
                 }
             }
@@ -81,19 +69,16 @@ struct PowerGraph: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(tr("Power by component"))
-        .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
+        .chartAsSingleAccessibilityElement(label: tr("Power by component"), value: PowerComponent.all.map { $0.caption(latest) }.joined(separator: ", "))
     }
 }
 
-/// Dashboard: the three components on one axis in W, with the latest values in the legend.
 struct PowerChart: View {
     let history: [SoCPowerPoint]
-    var now = Date()
+    var receivedAt = Date()
 
     var body: some View {
-        let latest = currentPower(history, now: now), scale = powerScale(history, now: now)
+        let latest = currentPower(history, now: receivedAt), scale = powerScale(history, endingAtArrival: receivedAt)
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Power by component")).font(.caption).foregroundStyle(.secondary)
             legend(latest)
@@ -115,16 +100,13 @@ struct PowerChart: View {
                 .chartLegend(.hidden)
                 .environment(\.locale, appLocale)
                 .frame(height: 150)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(tr("Power by component"))
-                .accessibilityValue(Component.all.map { $0.caption(latest) }.joined(separator: ", "))
+                .chartAsSingleAccessibilityElement(label: tr("Power by component"), value: PowerComponent.all.map { $0.caption(latest) }.joined(separator: ", "))
         }
     }
 
-    /// Line key and latest value of each component, in text ink: identity comes from the mark, never from colored text.
     func legend(_ p: SoCPower?) -> some View {
         HStack(spacing: 14) {
-            ForEach(Component.all, id: \.name) { c in
+            ForEach(PowerComponent.all, id: \.name) { c in
                 HStack(spacing: 5) {
                     c.key(width: 16)
                     Text(c.caption(p)).monospacedDigit()

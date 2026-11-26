@@ -1,9 +1,18 @@
 import Charts
 import SwiftUI
 
-/// Battery health over time. The series comes from one request when the Battery pane opens, not from the periodic status.
+enum HealthSeries {
+    case unavailable
+    case samples([HealthSample])
+
+    var samplesOrEmpty: [HealthSample] {
+        if case .samples(let samples) = self { return samples }
+        return []
+    }
+}
+
 struct HealthChartSection: View {
-    let series: [HealthSample]?  // nil: the service did not answer
+    let series: HealthSeries
     @AppStorage("healthRange") private var range = HealthRange.year
     @State private var hovered: Date?
 
@@ -11,11 +20,10 @@ struct HealthChartSection: View {
     private static let nominal = Color.viz(light: 0xeb6834, dark: 0xd95926)
     private static let surface = Color(nsColor: .controlBackgroundColor)
     private static let line = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-    /// Nominal health is dashed so the two lines differ by more than color.
-    private static let dashed = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [5, 4])
+    private static let nominalDashedBesidesColor = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: chartCurveDash)
 
     var body: some View {
-        let all = series ?? []
+        let all = series.samplesOrEmpty
         let shown = all.filter { $0.date >= healthRangeStart(range, now: Date()) }
         Section(tr("Health over time")) {
             if all.count >= 2 {
@@ -24,7 +32,7 @@ struct HealthChartSection: View {
                 }
                 .pickerStyle(.segmented)
             }
-            if series == nil {
+            if case .unavailable = series {
                 Text(tr("Health history unavailable: the ChargeKeeper service did not answer (restart it after an update)."))
                     .font(.caption).foregroundStyle(.secondary)
             } else if shown.count < 2 {
@@ -34,11 +42,8 @@ struct HealthChartSection: View {
                 let text = healthChange(shown).map(summary)
                 VStack(alignment: .leading, spacing: 8) {
                     legend(nominal: shown.contains { $0.nominalCapacity != nil }, calibrations: shown.contains { $0.calibration == true })
-                    // One accessibility element for the whole chart: hundreds of marks are not navigable one by one.
                     chart(shown)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(tr("Health over time") + ", " + range.label)
-                        .accessibilityValue(text ?? "")
+                        .chartAsSingleAccessibilityElement(label: tr("Health over time") + ", " + range.label, value: text ?? "")
                     if let text { Text(text).font(.caption).foregroundStyle(.secondary) }
                 }
             }
@@ -56,19 +61,11 @@ struct HealthChartSection: View {
                 if let n = s.nominalHealth {
                     LineMark(x: .value(tr("Date"), s.date), y: .value(tr("Health (nominal)"), n), series: .value("", "nominal"))
                         .foregroundStyle(Self.nominal)
-                        .lineStyle(Self.dashed)
+                        .lineStyle(Self.nominalDashedBesidesColor)
                         .accessibilityHidden(true)
                 }
             }
-            // Calibration results: a dot on the health line, ringed with the surface so it stays legible on the line.
-            ForEach(Array(shown.filter { $0.calibration == true }.enumerated()), id: \.offset) { _, s in
-                PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
-                    .symbolSize(160).foregroundStyle(Self.surface)
-                    .accessibilityHidden(true)
-                PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
-                    .symbolSize(64).foregroundStyle(Self.raw)
-                    .accessibilityHidden(true)
-            }
+            calibrationDotsRingedOnHealthLine(shown)
             if let f = focus {
                 RuleMark(x: .value(tr("Date"), f.date))
                     .foregroundStyle(.secondary.opacity(0.5))
@@ -93,6 +90,17 @@ struct HealthChartSection: View {
         .chartLegend(.hidden)
         .environment(\.locale, appLocale)
         .frame(height: 170)
+    }
+
+    func calibrationDotsRingedOnHealthLine(_ shown: [HealthSample]) -> some ChartContent {
+        ForEach(Array(shown.filter { $0.calibration == true }.enumerated()), id: \.offset) { _, s in
+            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
+                .symbolSize(calibrationRingSymbolSize).foregroundStyle(Self.surface)
+                .accessibilityHidden(true)
+            PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.health))
+                .symbolSize(calibrationDotSymbolSize).foregroundStyle(Self.raw)
+                .accessibilityHidden(true)
+        }
     }
 
     func tooltip(_ s: HealthSample) -> some View {
@@ -122,18 +130,14 @@ struct HealthChartSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Short line key beside text in text ink: identity comes from the mark, never from colored text.
     func key(_ color: Color, _ label: String, dashed: Bool = false) -> some View {
         HStack(spacing: 5) {
-            Path { $0.move(to: CGPoint(x: 1, y: 1)); $0.addLine(to: CGPoint(x: 15, y: 1)) }
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [4, 3] : []))
-                .frame(width: 16, height: 2)
+            LineKey(color: color, dash: dashed ? healthKeyDash : [])
             Text(label).monospacedDigit()
         }
         .font(.caption).foregroundStyle(.secondary)
     }
 
-    /// "−1.2 points in 3 months, +14 cycles".
     func summary(_ c: HealthChange) -> String {
         let span = healthSpan(days: c.days)
         let period: String
@@ -164,15 +168,5 @@ extension HealthRange {
         case .year: return tr("1 year")
         case .all: return tr("All")
         }
-    }
-}
-
-extension Color {
-    /// Chart color stepped separately for light and dark mode.
-    static func viz(light: UInt32, dark: UInt32) -> Color {
-        func ns(_ v: UInt32) -> NSColor {
-            NSColor(srgbRed: CGFloat(v >> 16 & 0xff) / 255, green: CGFloat(v >> 8 & 0xff) / 255, blue: CGFloat(v & 0xff) / 255, alpha: 1)
-        }
-        return Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? ns(dark) : ns(light) })
     }
 }

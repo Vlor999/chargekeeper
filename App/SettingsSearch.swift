@@ -5,8 +5,7 @@ private struct SettingsTargetKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Id of the search result picked in the sidebar.
-    var settingsTarget: String? {
+    var pickedSearchResultID: String? {
         get { self[SettingsTargetKey.self] }
         set { self[SettingsTargetKey.self] = newValue }
     }
@@ -14,7 +13,7 @@ extension EnvironmentValues {
 
 private struct SettingsRow: ViewModifier {
     let id: String
-    @Environment(\.settingsTarget) private var target
+    @Environment(\.pickedSearchResultID) private var target
 
     func body(content: Content) -> some View {
         content
@@ -24,6 +23,5 @@ private struct SettingsRow: ViewModifier {
 }
 
 extension View {
-    /// Scroll anchor and highlight of the settings row with this `SettingsEntry` id.
-    func settingsRow(_ id: String) -> some View { modifier(SettingsRow(id: id)) }
+    func searchResultAnchor(_ id: String) -> some View { modifier(SettingsRow(id: id)) }
 }

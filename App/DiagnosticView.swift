@@ -1,14 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Settings > Diagnostic: the service's log settings and its latest entries. Read when the pane opens and on Reload only.
 struct DiagnosticView: View {
     @EnvironmentObject var m: AppModel
     @State private var minLevel = LogLevel.info
     @State private var lines: [LogLine]?
     @State private var error: String?
-    /// Only the latest load publishes: an earlier one finishing late is dropped.
-    @State private var generation = 0
+    @State private var latestLoadID = 0
 
     var body: some View {
         Form {
@@ -17,7 +15,7 @@ struct DiagnosticView: View {
                     Text(tr("Off")).tag(PowerInterval.off)
                     ForEach(PowerInterval.allCases.filter { $0 != .off }, id: \.self) { Text(tr("%d s", $0.rawValue)).tag($0) }
                 }
-                .settingsRow("powerInterval")
+                .searchResultAnchor("powerInterval")
             } header: {
                 Text(tr("Power by component"))
             } footer: {
@@ -26,16 +24,16 @@ struct DiagnosticView: View {
             }
             Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
-                    .settingsRow("logEnabled")
+                    .searchResultAnchor("logEnabled")
                 Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logDaysRange)
-                    .settingsRow("logDays")
+                    .searchResultAnchor("logDays")
                 LabeledContent(tr("Folder")) {
                     HStack {
                         Text(logDir).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                         Button(tr("Open Folder")) { NSWorkspace.shared.open(URL(fileURLWithPath: logDir, isDirectory: true)) }
                     }
                 }
-                .settingsRow("logFolder")
+                .searchResultAnchor("logFolder")
             } header: {
                 Text(tr("Log"))
             } footer: {
@@ -58,7 +56,7 @@ struct DiagnosticView: View {
                     }
                     .disabled(lines?.isEmpty ?? true)
                 }
-                .settingsRow("logViewer")
+                .searchResultAnchor("logViewer")
                 if m.status.map({ !$0.config.logEnabled }) == true {
                     Text(tr("Log off: no new entry.")).font(.caption).foregroundStyle(.secondary)
                 }
@@ -79,7 +77,7 @@ struct DiagnosticView: View {
             } header: {
                 Text(tr("Latest entries"))
             } footer: {
-                Text(tr("The %d most recent, newest first.", logViewLimit)).font(.caption).foregroundStyle(.secondary)
+                Text(tr("The %d most recent, newest first.", diagnosticLogViewerEntryLimit)).font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -87,15 +85,14 @@ struct DiagnosticView: View {
         .onChange(of: minLevel) { _, _ in load() }
     }
 
-    /// Files read off the main thread: a day's file can reach a few MB.
     func load() {
         let level = minLevel
-        generation += 1
-        let g = generation
+        latestLoadID += 1
+        let loadID = latestLoadID
         DispatchQueue.global(qos: .userInitiated).async {
-            let r = Result { try readLog(limit: logViewLimit, minLevel: level) }
+            let r = Result { try readLog(limit: diagnosticLogViewerEntryLimit, minLevel: level) }
             DispatchQueue.main.async {
-                guard g == generation else { return }
+                guard loadID == latestLoadID else { return }
                 switch r {
                 case .success(let l): lines = l; error = nil
                 case .failure(let e): error = e.localizedDescription
@@ -121,22 +118,10 @@ struct LogRow: View {
     }
 }
 
-/// Latest entries at `minLevel` or above, newest first, from the newest files back. Files are opened without following a
-/// link and must be regular; unreadable files and lines are skipped. No folder yet (service never logged): no entry; a folder
-/// that exists but cannot be listed: error.
 func readLog(limit: Int, minLevel: LogLevel) throws -> [LogLine] {
-    let names: [String]
-    do { names = try FileManager.default.contentsOfDirectory(atPath: logDir) } catch {
-        if FileManager.default.fileExists(atPath: logDir) { throw error }
-        return []
-    }
     var out: [LogLine] = []
-    for (_, name) in names.compactMap({ n in logFileDay(n).map { ($0, n) } }).sorted(by: { $0.0 > $1.0 }) {
-        let fd = open(logDir + "/" + name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-        guard fd >= 0 else { continue }
-        let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        var st = stat()
-        guard fstat(fd, &st) == 0, st.st_mode & S_IFMT == S_IFREG,
+    for name in try logFileNamesNewestFirst() {
+        guard let h = openRegularFileWithoutFollowingLinks(logDir + "/" + name),
               let data = try? h.read(upToCount: logMaxFileBytes + logFullReserveBytes) else { continue }
         for l in String(decoding: data, as: UTF8.self).split(separator: "\n").reversed() {
             guard let e = parseLogLine(l), e.level >= minLevel else { continue }
@@ -145,4 +130,22 @@ func readLog(limit: Int, minLevel: LogLevel) throws -> [LogLine] {
         }
     }
     return out
+}
+
+private func logFileNamesNewestFirst() throws -> [String] {
+    let names: [String]
+    do { names = try FileManager.default.contentsOfDirectory(atPath: logDir) } catch {
+        if FileManager.default.fileExists(atPath: logDir) { throw error }
+        return []
+    }
+    return names.compactMap { n in logFileDay(n).map { ($0, n) } }.sorted { $0.0 > $1.0 }.map(\.1)
+}
+
+private func openRegularFileWithoutFollowingLinks(_ path: String) -> FileHandle? {
+    let fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    guard fd >= 0 else { return nil }
+    let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    var st = stat()
+    guard fstat(fd, &st) == 0, st.st_mode & S_IFMT == S_IFREG else { return nil }
+    return h
 }
