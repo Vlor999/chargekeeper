@@ -1,7 +1,5 @@
 import AppIntents
 
-// Shortcuts actions. All go through the daemon socket.
-
 struct GetBatteryPercentage: AppIntent {
     static var title: LocalizedStringResource = "Get Battery Percentage"
     func perform() async throws -> some IntentResult & ReturnsValue<Int> { .result(value: try send(.status()).percent) }

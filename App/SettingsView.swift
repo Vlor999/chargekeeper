@@ -41,10 +41,8 @@ extension SettingsPane {
     }
 }
 
-/// Sidebar navigation like System Settings. Its inputs (the model reference, the stored pane) do not change on a
-/// status refresh, so SwiftUI re-renders only the selected pane, which observes the model, not the navigation.
 struct SettingsView: View {
-    let model: AppModel
+    let unobservedModel: AppModel
     @AppStorage("settingsPane") private var pane = SettingsPane.general
     @State private var query = ""
     @State private var target: String?
@@ -61,12 +59,12 @@ struct SettingsView: View {
         } detail: {
             SettingsPaneView(pane: pane, target: target)
                 .id(pane)
-                .environment(\.settingsTarget, target)
+                .environment(\.pickedSearchResultID, target)
                 .navigationTitle(pane.title)
         }
         .frame(width: 720, height: 480)
         .onAppear { NSApp.activate(ignoringOtherApps: true) }
-        .countedWhileOnScreen(in: model)
+        .countedWhileOnScreen(in: unobservedModel)
     }
 
     @ViewBuilder var sidebar: some View {
@@ -112,10 +110,13 @@ struct SettingsPaneView: View {
     var body: some View {
         ScrollViewReader { proxy in
             content.onChange(of: target, initial: true) { _, id in
-                // Next run loop: the pane switched with the target and its rows are not laid out yet.
-                if let id { DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) } }
+                if let id { scrollOnceRowsAreLaidOut(proxy, to: id) }
             }
         }
+    }
+
+    private func scrollOnceRowsAreLaidOut(_ proxy: ScrollViewProxy, to id: String) {
+        DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
     }
 
     @ViewBuilder var content: some View {
@@ -139,15 +140,15 @@ struct SettingsPaneView: View {
                 Text("English").tag("en")
                 Text("Français").tag("fr")
             }
-            .settingsRow("language")
+            .searchResultAnchor("language")
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
-                .settingsRow("openAtLogin")
+                .searchResultAnchor("openAtLogin")
             Section {
                 ForEach(NoticeKind.allCases) { NoticeToggle(kind: $0) }
             } header: {
-                Text(tr("Notifications")).settingsRow("notifications")
+                Text(tr("Notifications")).searchResultAnchor("notifications")
             } footer: {
                 Text(tr("Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications."))
                     .font(.caption).foregroundStyle(.secondary)
@@ -157,7 +158,7 @@ struct SettingsPaneView: View {
                 Toggle(tr("Install updates automatically"), isOn: Binding(
                     get: { u.automaticallyChecksForUpdates && u.automaticallyDownloadsUpdates },
                     set: { u.automaticallyChecksForUpdates = $0; u.automaticallyDownloadsUpdates = $0 }))
-                    .settingsRow("autoUpdate")
+                    .searchResultAnchor("autoUpdate")
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
@@ -167,7 +168,7 @@ struct SettingsPaneView: View {
                     Spacer()
                     Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
                 }
-                .settingsRow("version")
+                .searchResultAnchor("version")
             }
             Section(tr("About")) {
                 HStack {
@@ -183,7 +184,7 @@ struct SettingsPaneView: View {
                         Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
                     }
                 }
-                .settingsRow("support")
+                .searchResultAnchor("support")
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Send feedback"))
@@ -197,31 +198,34 @@ struct SettingsPaneView: View {
                         Label(tr("Give feedback"), systemImage: "bubble.left")
                     }
                 }
-                .settingsRow("feedback")
-                // Label above: the five links do not fit on one line next to it in French.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(tr("Links"))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), alignment: .leading)], alignment: .leading, spacing: 4) {
-                        Link(tr("Source code"), destination: repoURL)
-                        Link(tr("Download page"), destination: siteURL)
-                        Button(tr("Report an issue")) { NSWorkspace.shared.open(bugReportURL(config: m.status?.config)) }
-                            .buttonStyle(.link)
-                        Link(tr("Privacy"), destination: privacyURL)
-                        Link(tr("Third-party licenses"), destination: thirdPartyNoticesURL)
-                    }
-                }
-                .settingsRow("links")
+                .searchResultAnchor("feedback")
+                linksTitledAboveGrid
+                    .searchResultAnchor("links")
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
-                    .settingsRow("about")
+                    .searchResultAnchor("about")
             }
             Section {
                 Button(tr("Quit ChargeKeeper")) { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
-                    .settingsRow("quit")
+                    .searchResultAnchor("quit")
             }
         }
         .formStyle(.grouped)
+    }
+
+    var linksTitledAboveGrid: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(tr("Links"))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), alignment: .leading)], alignment: .leading, spacing: 4) {
+                Link(tr("Source code"), destination: repoURL)
+                Link(tr("Download page"), destination: landingPageURL)
+                Button(tr("Report an issue")) { NSWorkspace.shared.open(bugReportURL(config: m.status?.config)) }
+                    .buttonStyle(.link)
+                Link(tr("Privacy"), destination: privacyURL)
+                Link(tr("Third-party licenses"), destination: thirdPartyNoticesURL)
+            }
+        }
     }
 
     var charge: some View {
@@ -240,23 +244,23 @@ struct SettingsPaneView: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
                     }
                 }
-                .settingsRow("macOSBattery")
+                .searchResultAnchor("macOSBattery")
             }
             Section(tr("Discharge")) {
-                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge)).settingsRow("autoDischarge")
+                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge)).searchResultAnchor("autoDischarge")
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(tr("Idle range")) {
-                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle)).settingsRow("idle")
+                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle)).searchResultAnchor("idle")
                 Stepper(tr("Range: %d %%", m.config(\.idleRange).wrappedValue), value: m.config(\.idleRange), in: 1...30)
             }
             Section(tr("Heat protection")) {
-                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect)).settingsRow("heat")
+                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect)).searchResultAnchor("heat")
                 Stepper(tr("Max temp: %.0f °C", m.config(\.maxTemp).wrappedValue), value: m.config(\.maxTemp), in: 25...50, step: 1)
             }
             Section(tr("Shutdown")) {
-                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped)).settingsRow("keepLimit")
+                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped)).searchResultAnchor("keepLimit")
                 Text(tr("The system service applies the limit for every user account. This keeps it active if the service stops."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -266,17 +270,17 @@ struct SettingsPaneView: View {
 
     var sleep: some View {
         Form {
-            if m.strayNoSleep { SleepWarning() }
-            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).settingsRow("sleepFreeze")
-            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).settingsRow("sleepPrevent")
+            if m.sleepDisabledWithoutReason { UnexplainedSleepDisabledWarning() }
+            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).searchResultAnchor("sleepFreeze")
+            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).searchResultAnchor("sleepPrevent")
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
             Section(tr("Keep awake")) {
-                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed)).settingsRow("keepAwakeLid")
+                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed)).searchResultAnchor("keepAwakeLid")
                 Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryRange, step: 5) {
                     LabeledContent(tr("Turn off on battery below"), value: "\(m.config(\.keepAwakeMinBattery).wrappedValue) %")
                 }
-                    .settingsRow("keepAwakeBattery")
+                    .searchResultAnchor("keepAwakeBattery")
                 Text(tr("Keep awake is turned on from the menu. It prevents idle sleep; the display can still turn off."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -285,7 +289,7 @@ struct SettingsPaneView: View {
                     Button(tr("Low Power Mode: on")) { m.run(.lowPower(true)) }
                     Button(tr("off")) { m.run(.lowPower(false)) }
                 }
-                .settingsRow("energyMode")
+                .searchResultAnchor("energyMode")
                 HStack {
                     Button(tr("Performance mode: on")) { m.run(.highPower(true)) }
                     Button(tr("off")) { m.run(.highPower(false)) }
@@ -302,8 +306,8 @@ struct SettingsPaneView: View {
                 Text(tr("Color by charge state")).tag(LEDSetting.indicate)
                 Text(tr("Always off")).tag(LEDSetting.alwaysOff)
             }
-            .settingsRow("led")
-            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge)).settingsRow("ledBlink")
+            .searchResultAnchor("led")
+            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge)).searchResultAnchor("ledBlink")
             Text(tr("Green: limit reached · Orange: charging or discharging toward the limit."))
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -333,7 +337,6 @@ extension TaskAction {
 }
 
 extension HistoryEntry {
-    /// SF Symbol and tint of the entry; free text from an older service gets a neutral clock.
     var symbol: (name: String, color: Color) {
         let e = parsedHistory(self)
         switch e.event {
@@ -390,8 +393,8 @@ struct ScheduleView: View {
                     Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
                     Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
-                .settingsRow("tasks")
-                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks)).settingsRow("catchUp")
+                .searchResultAnchor("tasks")
+                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks)).searchResultAnchor("catchUp")
             }
             Section {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
@@ -404,7 +407,7 @@ struct ScheduleView: View {
                     }
                 }
             } header: {
-                Text(tr("History")).settingsRow("history")
+                Text(tr("History")).searchResultAnchor("history")
             }
         }
         .formStyle(.grouped)
@@ -417,7 +420,7 @@ struct ScheduleView: View {
 
 struct BatteryView: View {
     @EnvironmentObject var m: AppModel
-    @State private var series: [HealthSample]?
+    @State private var series = HealthSeries.unavailable
     @State private var fetched = false
     @State private var fetchedCalibration: Date?
 
@@ -426,7 +429,7 @@ struct BatteryView: View {
             if let b = m.status?.battery {
                 if fetched { HealthChartSection(series: series) }
                 Section(tr("Battery health")) {
-                    row(tr("Health"), percent(b.health)).settingsRow("health")
+                    row(tr("Health"), percent(b.health)).searchResultAnchor("health")
                     row(tr("Health (nominal)"), percent(b.nominalHealth))
                     row(tr("Full charge capacity"), mAh(b.maxCapacity))
                     row(tr("Nominal capacity"), mAh(b.nominalCapacity))
@@ -436,7 +439,7 @@ struct BatteryView: View {
             }
             if let c = m.status?.lastCalibration {
                 Section(tr("Last calibration")) {
-                    row(tr("Date"), dateTime(c.end)).settingsRow("lastCalibration")
+                    row(tr("Date"), dateTime(c.end)).searchResultAnchor("lastCalibration")
                     row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
                     row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
                     row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
@@ -452,15 +455,14 @@ struct BatteryView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: fetch)
-        .onChange(of: m.status?.battery != nil) { _, has in if has && !fetched { fetch() } }
-        .onChange(of: m.status?.lastCalibration?.end) { _, end in if fetched, end != nil, end != fetchedCalibration { fetch() } }
+        .onAppear(perform: loadHealthSeries)
+        .onChange(of: m.status?.battery != nil) { _, has in if has && !fetched { loadHealthSeries() } }
+        .onChange(of: m.status?.lastCalibration?.end) { _, end in if fetched, end != nil, end != fetchedCalibration { loadHealthSeries() } }
     }
 
-    /// Once when the pane opens with battery data, then after each new calibration result.
-    func fetch() {
+    func loadHealthSeries() {
         guard m.status?.battery != nil else { return }
-        series = m.healthHistory()
+        series = m.fetchHealthSeries()
         fetched = true
         fetchedCalibration = m.status?.lastCalibration?.end
     }

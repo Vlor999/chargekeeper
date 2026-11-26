@@ -1,6 +1,5 @@
 import Foundation
 
-/// UI language: "system", "en" or "fr", stored in the app's defaults (Settings > General).
 let languageKey = "language"
 
 var appLanguage: String {
@@ -9,7 +8,6 @@ var appLanguage: String {
     return Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "fr" : "en"
 }
 
-/// English is the source text; French comes from the table below. Placeholders follow String(format:).
 func tr(_ en: String, _ args: CVarArg...) -> String { tr(en, args) }
 
 func tr(_ en: String, _ args: [CVarArg]) -> String {
@@ -17,43 +15,36 @@ func tr(_ en: String, _ args: [CVarArg]) -> String {
     return args.isEmpty ? s : String(format: s, arguments: args)
 }
 
-/// Locale for dates and numbers, always in the language of the text: the Mac's preferred language with its region when it
-/// is that language ("en-GB" dates for English), the bare language otherwise (English text on a German Mac).
 var appLocale: Locale { uiLocale(language: appLanguage, preferred: Locale.preferredLanguages.first) }
 
 func uiLocale(language: String, preferred: String?) -> Locale {
     Locale(identifier: preferred.map { $0.hasPrefix(language) ? $0 : language } ?? language)
 }
 
-/// Number in the UI language ("82.8" in English, "82,8" in French), without grouping like the mAh values elsewhere.
 func number(_ v: Double, decimals: Int = 0) -> String {
     v.formatted(.number.precision(.fractionLength(decimals)).grouping(.never).locale(appLocale))
 }
 
-/// "31.2 °C" / "31,2 °C"; "--" when unknown.
 func celsius(_ v: Double?) -> String { v.map { number($0, decimals: 1) + " °C" } ?? "--" }
 
-/// "13.3 W" / "13,3 W".
 func watts(_ v: Double) -> String { number(v, decimals: 1) + " W" }
 
-/// Date and time in the UI language: "Oct 30, 2026 at 9:41 AM" / "30 oct. 2026 à 09:41".
 func dateTime(_ d: Date) -> String { d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(appLocale)) }
 
-/// Rounded duration: "~25 min", "~1 h 05 min".
 func approxDuration(_ t: TimeInterval) -> String {
     let m = max(Int((t / 60).rounded()), 1)
     return m < 60 ? tr("~%@ min", number(Double(m))) : tr("~%@ h %@ min", number(Double(m / 60)), String(format: "%02d", m % 60))
 }
 
-/// History entry in the UI language. Units stay on the line of their number.
 func localizedHistory(_ e: HistoryEntry) -> String {
-    historyText(e, { tr($0, $1) }, { number($0, decimals: $1) })
-        .replacingOccurrences(of: #" (%|mAh|°C)"#, with: "\u{00A0}$1", options: .regularExpression)
+    keepingUnitsWithNumbers(historyText(e, { tr($0, $1) }, { number($0, decimals: $1) }))
 }
 
-/// Internal so make check can assert that every template has a French entry.
+private func keepingUnitsWithNumbers(_ s: String) -> String {
+    s.replacingOccurrences(of: #" (%|mAh|°C)"#, with: "\u{00A0}$1", options: .regularExpression)
+}
+
 let french: [String: String] = [
-    // Menu
     "Dashboard": "Tableau de bord",
     "Settings…": "Réglages…",
     "Check for Updates…": "Rechercher des mises à jour…",
@@ -78,7 +69,6 @@ let french: [String: String] = [
     "Pause": "Suspendre",
     "Native limit unavailable: SMC control only": "Limite native indisponible : contrôle SMC uniquement",
     "Connecting…": "Connexion…",
-    // States
     "Charging": "En charge",
     "Charging paused": "Charge suspendue",
     "Idle": "Au repos",
@@ -100,7 +90,6 @@ let french: [String: String] = [
     "~%@ h %@ min": "~%@ h %@ min",
     "Before: %@": "Avant : %@",
     "Plug in the adapter to continue calibration": "Branchez l'adaptateur pour poursuivre la calibration",
-    // Power flow
     "Power flow": "Flux de puissance",
     "How to read the power flow": "Comment lire le flux de puissance",
     "Left: where the power comes from. The adapter (or a display that charges the Mac), and the battery when it helps.":
@@ -123,7 +112,6 @@ let french: [String: String] = [
     " (adapter %d W)": " (adaptateur %d W)",
     " · charging from the Mac: %@": " · rechargé par le Mac : %@",
     "Show in menu": "Afficher dans le menu",
-    // Settings
     "Sleep": "Suspension",
     "Charge": "Charge",
     "MagSafe LED": "LED MagSafe",
@@ -166,7 +154,6 @@ let french: [String: String] = [
     "Range: %d %%": "Plage : %d %%",
     "Stop charging when the battery is too hot": "Arrêter la charge si la batterie est trop chaude",
     "Max temp: %.0f °C": "Temp. max : %.0f °C",
-    "Startup": "Démarrage",
     "Open at login": "Ouvrir à la connexion",
     "Shutdown": "Arrêt",
     "Keep the limit when the service stops": "Garder la limite quand le service s'arrête",
@@ -201,7 +188,6 @@ let french: [String: String] = [
     "Blinking orange while discharging": "Orange clignotant pendant la décharge",
     "Green: limit reached · Orange: charging or discharging toward the limit.":
         "Vert : limite atteinte · Orange : charge ou décharge vers la limite.",
-    // Diagnostic
     "Diagnostic": "Diagnostic",
     "Sampling interval": "Intervalle de mesure",
     "Off": "Désactivé",
@@ -226,7 +212,6 @@ let french: [String: String] = [
     "No entry": "Aucune entrée",
     "Latest entries": "Dernières entrées",
     "The %d most recent, newest first.": "Les %d plus récentes, la plus récente en haut.",
-    // Schedule
     "Set charge limit": "Définir la limite de recharge",
     "Pause charging": "Suspendre la charge",
     "Discharge to": "Décharger jusqu'à",
@@ -280,7 +265,6 @@ let french: [String: String] = [
     "Action": "Action",
     "Repeat": "Répétition",
     "Value: %d %%": "Valeur : %d %%",
-    // History
     "Calibration started": "Calibration démarrée",
     "Calibration stopped": "Calibration arrêtée",
     "Calibration over: back at the limit": "Fin de la calibration : retour à la limite",
@@ -314,7 +298,6 @@ let french: [String: String] = [
     "Turn off Optimized Battery Charging in System Settings > Battery: it can conflict with ChargeKeeper's limit.":
         "Désactivez « Recharge optimisée de la batterie » dans Réglages Système > Batterie : elle peut entrer en conflit avec la limite de ChargeKeeper.",
     "Open Battery Settings": "Ouvrir les réglages Batterie",
-    // Notifications
     "Notifications": "Notifications",
     "Heat protection paused charging": "Charge suspendue par la protection thermique",
     "Charge limit reached": "Limite de recharge atteinte",
@@ -327,7 +310,6 @@ let french: [String: String] = [
     "Battery at %@ %%. Charging paused at the limit.": "Batterie à %@ %%. Charge suspendue à la limite.",
     "Capacity: %@ → %@ mAh": "Capacité : %@ → %@ mAh",
     "Health: %@ → %@ %%": "Santé : %@ → %@ %%",
-    // Settings search
     "Scheduled tasks": "Tâches planifiées",
     "Search": "Rechercher",
     "No results": "Aucun résultat",

@@ -1,25 +1,42 @@
 import Foundation
 
-/// Maintainer's support page (Buy Me a Coffee).
 let buyMeACoffeeURL = URL(string: "https://buymeacoffee.com/Vlor999")!
 
-/// App repository: source code, issues and discussions.
 let repoURL = URL(string: "https://github.com/Vlor999/chargekeeper")!
-/// Landing page with the download button.
-let siteURL = URL(string: "https://vlor999.github.io/chargekeeper/")!
+let landingPageURL = URL(string: "https://vlor999.github.io/chargekeeper/")!
 let privacyURL = URL(string: "https://vlor999.github.io/chargekeeper/#privacy")!
 let thirdPartyNoticesURL = URL(string: "https://github.com/Vlor999/chargekeeper/blob/main/THIRD_PARTY_NOTICES.md")!
-/// Discussion category opened by "Send feedback" (GitHub slug).
-let feedbackDiscussionCategory = "ideas"
-/// Issue form opened by "Report an issue" (`.github/ISSUE_TEMPLATE/bug.yml`).
-let bugIssueTemplate = "bug.yml"
-/// Longest prefilled address: beyond it, GitHub or the browser rejects it.
+let feedbackDiscussionCategorySlug = "ideas"
+let bugIssueFormFile = "bug.yml"
 let githubPrefillMaxURLLength = 8_000
 
-/// Entries shown by the Diagnostic pane's log viewer, newest first.
-let logViewLimit = 500
+let diagnosticLogViewerEntryLimit = 500
 
-/// Menu bar icon side, in points.
-let menuIconSize: CGFloat = 18
-/// Gap kept between the menu window and the screen edges, in points.
-let menuScreenMargin = 8.0
+let menuIconSidePoints: CGFloat = 18
+let menuIconGridUnits: CGFloat = 24
+let menuIconGaugeStartDegrees: CGFloat = 135
+let menuIconGaugeSweepDegrees: CGFloat = 270
+let menuScreenMarginPoints = 8.0
+
+let rtldDefault = UnsafeMutableRawPointer(bitPattern: -2)
+let statusItemWindowClassName = "NSStatusBarWindow"
+
+let animationFrameIntervalSeconds = 1.0 / 30
+let flowDeviceNamesMinWidthPoints: CGFloat = 400
+let flowNamedSinkLabelColumnPoints: CGFloat = 180
+let flowCaptionLineHeightPoints = 14.0
+let flowCrestPeriodSeconds = 1.4
+let flowCrestTravelRatio = 1.3
+let flowCrestStartRatio = -0.15
+let flowCrestHalfWidthRatio: CGFloat = 0.25
+let flowMarqueePauseSeconds = 1.5
+let flowMarqueeSpeedPointsPerSecond = 25.0
+let flowMarqueeSpacingPoints: CGFloat = 24
+
+let chartCurveDash: [CGFloat] = [5, 4]
+let powerKeyDash: [CGFloat] = [3, 2]
+let healthKeyDash: [CGFloat] = [4, 3]
+let minimumPowerScalePeakWatts = 1.0
+let noPowerValueText = "\u{2014} W"
+let calibrationRingSymbolSize: CGFloat = 160
+let calibrationDotSymbolSize: CGFloat = 64

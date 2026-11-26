@@ -1,4 +1,3 @@
-/* Shortcuts actions (App Intents), shown in the system language. */
 "Get Battery Percentage" = "Obtenir le pourcentage de la batterie";
 "Get Charge Limit" = "Obtenir la limite de recharge";
 "Get State" = "Obtenir l'état";

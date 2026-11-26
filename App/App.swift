@@ -8,19 +8,18 @@ import os
 @main
 struct ChargeKeeperApp: App {
     @StateObject var model = AppModel()
-    // Changing it rebuilds every view (`.id`) so all tr() strings switch at once.
     @AppStorage(languageKey) var language = "system"
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView().environmentObject(model).localized(language).background(MenuCentering())
+            MenuView().environmentObject(model).localized(language).background(MenuCenteredUnderStatusItem())
         } label: {
             MenuIconLabel(battery: model.battery)
         }
         .menuBarExtraStyle(.window)
         Window(tr("Dashboard"), id: "dashboard") { DashboardView().environmentObject(model).localized(language) }
             .windowResizability(.contentSize)
-        Settings { SettingsView(model: model).environmentObject(model).localized(language) }
+        Settings { SettingsView(unobservedModel: model).environmentObject(model).localized(language) }
     }
 }
 
@@ -30,49 +29,49 @@ final class AppModel: ObservableObject {
     @Published var serviceStatus: SMAppService.Status = .notRegistered
     let battery = BatteryLevel()
     let service = SMAppService.daemon(plistName: "com.vlor999.jauge.daemon.plist")
-    /// Downloaded update waiting for the app to quit; the menu offers to install it now.
-    @Published var readyUpdate: (version: String, install: () -> Void)?
+    @Published var updateWaitingForQuit: UpdateWaitingForQuit?
     let updater: SPUStandardUpdaterController
-    private let watcher: UpdateWatcher  // Sparkle keeps its delegate weakly
-    private let banner = BannerDelegate()  // UNUserNotificationCenter keeps its delegate weakly
+    private let retainedUpdaterDelegate: InstallNowUpdateWatcher
+    private let retainedNotificationDelegate = ForegroundBannerDelegate()
     private var timer: Timer?
     private var refreshEvery: TimeInterval = 0
     private var calibrationToken: Int32 = 0, heatToken: Int32 = 0, limitToken: Int32 = 0, adapterToken: Int32 = 0
-    /// Open windows showing live data; polling and animation only run while > 0.
-    var visible = 0 {
+    var openWindowCount = 0 {
         didSet {
-            guard visible > 0 else { return stopRefresh() }
+            guard openWindowCount > 0 else { return stopRefresh() }
             scheduleRefresh()
             refresh()
         }
     }
-    /// The service's CPU, GPU and Neural Engine power history (300 points at most, at 1 s). Kept when the windows close, so an
-    /// opening window draws the last curves at once; its first refresh replaces them.
-    @Published private(set) var socHistory: [SoCPowerPoint] = []
-    /// When `socHistory` was received: the graphs end there, and a newest point too old for it shows no current value.
-    @Published private(set) var socAsOf = Date()
-    /// System sleep disabled with no reason from the service; checked at each refresh, so only while a window is open.
-    @Published private(set) var strayNoSleep = false
+    @Published private(set) var lastKnownPowerHistory: [SoCPowerPoint] = []
+    @Published private(set) var powerHistoryReceivedAt = Date()
+    @Published private(set) var sleepDisabledWithoutReason = false
 
     init() {
-        let w = UpdateWatcher()
-        watcher = w
-        updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: w, userDriverDelegate: nil)
-        w.onReady = { [weak self] in self?.readyUpdate = ($0, $1) }
-        // First launch: register the root service; macOS then asks for approval in Login Items.
-        if service.status == .notRegistered { enableService() }
-        UNUserNotificationCenter.current().delegate = banner
-        // Posted by the service when a calibration finishes: event driven, nothing runs in between.
-        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
-        notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.notice(.heat) }
-        notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.notice(.limit) }
-        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.notice(.adapter) }
+        let watcher = InstallNowUpdateWatcher()
+        retainedUpdaterDelegate = watcher
+        updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: watcher, userDriverDelegate: nil)
+        watcher.onUpdateWaitingForQuit = { [weak self] in self?.updateWaitingForQuit = UpdateWaitingForQuit(version: $0, install: $1) }
+        registerServiceOnFirstLaunch()
+        UNUserNotificationCenter.current().delegate = retainedNotificationDelegate
+        observeServiceSignals()
         refresh()
     }
 
-    /// ponytail: polling of a local socket every 1-2 s; push notifications if it ever matters
+    private func registerServiceOnFirstLaunch() {
+        if service.status == .notRegistered { enableService() }
+    }
+
+    private func observeServiceSignals() {
+        notify_register_dispatch(calibrationDoneNotification, &calibrationToken, .main) { [weak self] _ in self?.run(.status()) }
+        notify_register_dispatch(heatProtectNotification, &heatToken, .main) { [weak self] _ in self?.showLiveBanner(for: .heat) }
+        notify_register_dispatch(limitReachedNotification, &limitToken, .main) { [weak self] _ in self?.showLiveBanner(for: .limit) }
+        notify_register_dispatch(calibrationNeedsAdapterNotification, &adapterToken, .main) { [weak self] _ in self?.showLiveBanner(for: .adapter) }
+    }
+
+    // ponytail: polls the service socket every 1-2 s while a window is open; a push from the service would remove the polling (https://github.com/Vlor999/chargekeeper/issues/53)
     private func scheduleRefresh() {
-        guard visible > 0 else { return }
+        guard openWindowCount > 0 else { return }
         let every = appRefreshInterval(status?.config.powerInterval ?? .s5)
         guard timer == nil || every != refreshEvery else { return }
         refreshEvery = every
@@ -85,17 +84,17 @@ final class AppModel: ObservableObject {
         timer = nil
     }
 
-    /// With the power history: the menu and the dashboard both show it (Settings only adds a few KB per refresh).
     func refresh() {
         run(.status(soc: true))
-        // No answer (or an older service): no history rather than the last one shown as current.
-        let h = error == nil ? status?.socHistory ?? [] : []
-        if h != socHistory { socHistory = h }
-        socAsOf = Date()
+        let h = powerHistoryIfServiceAnswered
+        if h != lastKnownPowerHistory { lastKnownPowerHistory = h }
+        powerHistoryReceivedAt = Date()
         serviceStatus = service.status
-        let stray = unexplainedSleepDisabled(system: systemSleepDisabled(), service: error == nil ? status?.sleepDisabled : nil)
-        if stray != strayNoSleep { strayNoSleep = stray }
+        let unexplained = unexplainedSleepDisabled(system: systemSleepDisabled(), service: error == nil ? status?.sleepDisabled : nil)
+        if unexplained != sleepDisabledWithoutReason { sleepDisabledWithoutReason = unexplained }
     }
+
+    private var powerHistoryIfServiceAnswered: [SoCPowerPoint] { error == nil ? status?.socHistory ?? [] : [] }
 
     func enableService() {
         do { try service.register() } catch { self.error = error.localizedDescription }
@@ -105,29 +104,25 @@ final class AppModel: ObservableObject {
 
     func run(_ cmd: Command) {
         switch cmd {
-        case .calibrate(true) where NoticeKind.calibration.enabled: requestNotifications()
-        case .setConfig(let c) where NoticeKind.calibration.enabled && c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotifications()
+        case .calibrate(true) where NoticeKind.calibration.enabled: requestNotificationPermission()
+        case .setConfig(let c) where NoticeKind.calibration.enabled && c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotificationPermission()
         default: break
         }
         do { status = try send(cmd); error = nil } catch { self.error = error.localizedDescription }
         if let s = status { notifyCalibration(s.lastCalibration) }
     }
 
-    /// Battery health series, asked when the Battery pane opens. nil when the service does not answer (not running, or older
-    /// than this request until it restarts).
-    func healthHistory() -> [HealthSample]? {
-        (try? send(.healthHistory))?.healthHistory
+    func fetchHealthSeries() -> HealthSeries {
+        (try? send(.healthHistory))?.healthHistory.map(HealthSeries.samples) ?? .unavailable
     }
 
-    /// Asked when a calibration is started or scheduled, not at launch. No prompt once the user has answered.
-    func requestNotifications() {
+    func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     private let notifiedKey = "lastNotifiedCalibration"
     private var notifying = false
 
-    /// Once per calibration: on the service's signal, or at the next status if the app was not running then.
     private func notifyCalibration(_ c: CalibrationResult?) {
         let handled = UserDefaults.standard.object(forKey: notifiedKey) as? Date
         switch calibrationNotice(end: c?.end, handled: handled) {
@@ -135,14 +130,18 @@ final class AppModel: ObservableObject {
         case .none: break
         case .notify:
             guard let c, !notifying else { return }
-            guard NoticeKind.calibration.enabled else { return self.handled(c.end) }
+            guard NoticeKind.calibration.enabled else { return markCalibrationNotified(c.end) }
             notifying = true
-            deliver("calibration", content(c)) { if $0 { self.handled(c.end) } else { self.notifying = false } }
+            deliverAfterAskingPermission("calibration", content(c)) {
+                switch $0 {
+                case .delivered, .denied: self.markCalibrationNotified(c.end)
+                case .failed: self.notifying = false
+                }
+            }
         }
     }
 
-    /// Heat, limit and adapter banners follow the service's signal live: a signal sent while the app was not running is not replayed.
-    private func notice(_ kind: NoticeKind) {
+    private func showLiveBanner(for kind: NoticeKind) {
         guard kind.enabled else { return }
         run(.status())
         guard let s = status, error == nil else { return }
@@ -155,29 +154,27 @@ final class AppModel: ObservableObject {
             n.title = tr("Charge limit reached")
             n.body = tr("Battery at %@ %%. Charging paused at the limit.", number(Double(s.percent)))
         case .adapter:
-            // Plugged back in before the signal was handled: nothing to ask.
-            guard calibrationNeedsAdapter(s.runtime.calibration) && !s.adapter else { return }
+            guard s.calibrationWaitsForAdapter else { return }
             n.title = tr("Calibration paused")
             n.body = tr("Plug in the adapter to continue calibration.")
         case .calibration: return
         }
-        deliver(kind.rawValue, n) { _ in }
+        deliverAfterAskingPermission(kind.rawValue, n) { _ in }
     }
 
-    /// Asks for permission first: events from Shortcuts, the CLI or the schedule never asked. `done(true)` once
-    /// delivered or denied (denied counts as handled), `done(false)` on a delivery error.
-    private func deliver(_ id: String, _ content: UNNotificationContent, done: @escaping (Bool) -> Void) {
+    private enum DeliveryResult { case delivered, denied, failed }
+
+    private func deliverAfterAskingPermission(_ id: String, _ content: UNNotificationContent, done: @escaping (DeliveryResult) -> Void) {
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return DispatchQueue.main.async { done(true) } }
+            guard granted else { return DispatchQueue.main.async { done(.denied) } }
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
-                DispatchQueue.main.async { done(error == nil) }
+                DispatchQueue.main.async { done(error == nil ? .delivered : .failed) }
             }
         }
     }
 
-    /// Denied counts as handled too: no retry on every status.
-    private func handled(_ end: Date) {
+    private func markCalibrationNotified(_ end: Date) {
         UserDefaults.standard.set(end, forKey: notifiedKey)
         notifying = false
     }
@@ -192,17 +189,13 @@ final class AppModel: ObservableObject {
         return n
     }
 
-    /// Binding into the daemon's config; every edit is pushed immediately.
     func config<T>(_ kp: WritableKeyPath<Config, T>) -> Binding<T> {
         Binding(get: { self.status?.config[keyPath: kp] ?? Config()[keyPath: kp] },
                 set: { v in guard var c = self.status?.config else { return }; c[keyPath: kp] = v; self.run(.setConfig(c)) })
     }
 }
 
-/// MenuBarExtra aligns the window's left edge on the status item; this re-centres it under the item. Driven by the window's
-/// own move/resize/key notifications, and only acts while the window is on screen. The observers stay attached while the
-/// menu is closed, but nothing polls and a notification then returns at once.
-struct MenuCentering: NSViewRepresentable {
+struct MenuCenteredUnderStatusItem: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Probe() }
     func updateNSView(_ view: NSView, context: Context) {}
 
@@ -217,8 +210,7 @@ struct MenuCentering: NSViewRepresentable {
             guard let window, window !== observed else { return }
             tokens.forEach(NotificationCenter.default.removeObserver)
             observed = window
-            // didBecomeKey: if macOS places the window before ordering it in, didMove sees it hidden and skips; becoming key
-            // is the first notification once it is on screen, posted inside makeKeyAndOrderFront.
+            // exception: macOS can place the menu window before ordering it in, so didMove fires while it is hidden; didBecomeKey is the first notification once it is on screen (https://github.com/Vlor999/chargekeeper/pull/32)
             tokens = [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didBecomeKeyNotification].map {
                 NotificationCenter.default.addObserver(forName: $0, object: window, queue: nil) { [weak self] _ in self?.center() }
             }
@@ -227,12 +219,7 @@ struct MenuCentering: NSViewRepresentable {
 
         private func center() {
             guard let window, window.isVisible, !moving else { return }
-            // ponytail: finds the status item through AppKit's private NSStatusBarWindow class (one per menu bar copy; the
-            // copies not on a screen have no screen). If AppKit renames it the menu keeps the default left alignment; the
-            // upgrade path is an own NSStatusItem + NSPanel.
-            let items = NSApp.windows.filter { $0.className == "NSStatusBarWindow" && $0.screen != nil }
-            let mouse = NSEvent.mouseLocation
-            guard let item = items.first(where: { $0.screen!.frame.contains(mouse) }) ?? items.first, let screen = item.screen else {
+            guard let item = Self.statusItemWindowUnderMouse(), let screen = item.screen else {
                 if !Self.reportedMissing {
                     Self.reportedMissing = true
                     os_log(.error, "menu centering: status item window not found, menu keeps the default alignment")
@@ -240,17 +227,23 @@ struct MenuCentering: NSViewRepresentable {
                 return
             }
             let f = window.frame, i = item.frame, visible = screen.visibleFrame, scale = window.backingScaleFactor
-            let raw = centeredMenuX(width: f.width, under: i.minX...i.maxX, in: visible.minX...visible.maxX, margin: menuScreenMargin)
+            let raw = centeredMenuX(width: f.width, under: i.minX...i.maxX, in: visible.minX...visible.maxX, margin: menuScreenMarginPoints)
             let x = (raw * scale).rounded() / scale
             guard abs(x - f.minX) > 1 else { return }
             moving = true
             window.setFrameOrigin(NSPoint(x: x, y: f.minY))
             moving = false
         }
+
+        // exception: AppKit draws each menu bar copy in a window of the private class NSStatusBarWindow; if it is renamed, the menu keeps its default left alignment (https://github.com/Vlor999/chargekeeper/pull/32)
+        private static func statusItemWindowUnderMouse() -> NSWindow? {
+            let items = NSApp.windows.filter { $0.className == statusItemWindowClassName && $0.screen != nil }
+            let mouse = NSEvent.mouseLocation
+            return items.first(where: { $0.screen!.frame.contains(mouse) }) ?? items.first
+        }
     }
 }
 
-/// Banners the user can turn off in Settings > General.
 enum NoticeKind: String, CaseIterable, Identifiable {
     case calibration, adapter, heat, limit
 
@@ -269,19 +262,21 @@ enum NoticeKind: String, CaseIterable, Identifiable {
     }
 }
 
-/// Sparkle downloads updates silently and installs them when the app quits. A menu bar app rarely quits,
-/// so the update would wait for days: keep Sparkle's install-now block for the menu instead.
-final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
-    var onReady: ((String, @escaping () -> Void) -> Void)?
+struct UpdateWaitingForQuit {
+    let version: String
+    let install: () -> Void
+}
+
+final class InstallNowUpdateWatcher: NSObject, SPUUpdaterDelegate {
+    var onUpdateWaitingForQuit: ((String, @escaping () -> Void) -> Void)?
 
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
-        onReady?(item.displayVersionString, immediateInstallationBlock)
+        onUpdateWaitingForQuit?(item.displayVersionString, immediateInstallationBlock)
         return true
     }
 }
 
-/// Shows the banner even while the menu or a window has the app active.
-final class BannerDelegate: NSObject, UNUserNotificationCenterDelegate {
+final class ForegroundBannerDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
         done([.banner, .sound])
@@ -316,16 +311,16 @@ extension CalibrationPhase {
 }
 
 extension Status {
-    /// Time to reach `target` at the present battery current, as "~25 min".
-    func eta(_ target: Int) -> String? {
+    var calibrationWaitsForAdapter: Bool { calibrationNeedsAdapter(runtime.calibration) && !adapter }
+
+    func eta(toPercent target: Int) -> String? {
         timeToTarget(percent: percent, target: target, capacity: battery?.maxCapacity, amperage: batteryAmperage, watts: batteryWatts)
             .map(approxDuration)
     }
 
-    /// Menu status line: the state, then what it is heading to.
     var headline: (title: String, detail: String?) {
         let r = runtime
-        let to = { (t: Int) in eta(t).map { tr("%@ to %@ %%", $0, number(Double(t))) } }
+        let to = { (t: Int) in eta(toPercent: t).map { tr("%@ to %@ %%", $0, number(Double(t))) } }
         switch r.state {
         case .pause: return (tr("Paused"), tr("%@ %% reached", number(Double(config.limit))))
         case .charging: return (r.state.label, to(config.limit))
@@ -335,23 +330,21 @@ extension Status {
         }
     }
 
-    /// "Step 2/5 · Discharge to 10 % · ~1 h 10 min" while calibrating.
     var calibrationLine: String? {
         guard let p = runtime.calibration else { return nil }
         let (n, of) = calibrationStep(p)
         var parts = [tr("Step %d/%d", n, of), p.label(limit: config.limit)]
-        if !(calibrationNeedsAdapter(p) && !adapter) {
+        if !calibrationWaitsForAdapter {
             if p == .hold {
                 let left = holdRemaining(phaseStart: runtime.phaseStart, now: Date())
                 parts.append(tr("%@ min left", number((left / 60).rounded(.up))))
-            } else if let t = calibrationTarget(p, limit: config.limit), let e = eta(t) {
+            } else if let t = calibrationTarget(p, limit: config.limit), let e = eta(toPercent: t) {
                 parts.append(e)
             }
         }
         return parts.joined(separator: " · ")
     }
 
-    /// Capacity and health when the running calibration started.
     var calibrationBaseline: String? {
         guard runtime.calibration != nil, let b = runtime.calibrationBefore else { return nil }
         let parts = [b.maxCapacity.map { tr("%@ mAh", number(Double($0))) }, b.health.map { tr("health %@ %%", number($0, decimals: 1)) }]
@@ -371,7 +364,6 @@ extension KeepAwakeDuration {
 }
 
 extension Status {
-    /// "Awake until 15:30", "Awake until turned off"; nil when keep awake is off.
     var keepAwakeLine: String? {
         guard let until = runtime.keepAwakeUntil else { return nil }
         return until == .distantFuture ? tr("Awake until turned off")
@@ -388,8 +380,8 @@ struct MenuView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let u = m.readyUpdate { UpdateBanner(version: u.version, install: u.install); Divider() }
-            if m.strayNoSleep { SleepWarning(); Divider() }
+            if let u = m.updateWaitingForQuit { UpdateBanner(version: u.version, install: u.install); Divider() }
+            if m.sleepDisabledWithoutReason { UnexplainedSleepDisabledWarning(); Divider() }
             if let s = m.status, m.error == nil { content(s) } else { serviceSetup }
             Divider()
             HStack {
@@ -403,7 +395,6 @@ struct MenuView: View {
         .countedWhileOnScreen(in: m)
     }
 
-    /// The root service controls charging; without it the app is only a remote control.
     @ViewBuilder var serviceSetup: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(tr("Charging service is off")).font(.headline)
@@ -436,7 +427,7 @@ struct MenuView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(line).foregroundStyle(.orange)
                 if let b = s.calibrationBaseline { Text(b).foregroundStyle(.secondary) }
-                if calibrationNeedsAdapter(r.calibration) && !s.adapter {
+                if s.calibrationWaitsForAdapter {
                     Label(tr("Plug in the adapter to continue calibration"), systemImage: "powerplug.fill").foregroundStyle(.red)
                 }
             }
@@ -482,8 +473,7 @@ struct MenuView: View {
                 Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run(.keepAwake($0 ? awakeFor : nil)) }))
                     .fixedSize()
                 Spacer(minLength: 8)
-                // A new duration while on restarts it from now.
-                Picker("", selection: Binding(get: { awakeFor }, set: { awakeFor = $0; if r.keepAwakeUntil != nil { m.run(.keepAwake($0)) } })) {
+                Picker("", selection: Binding(get: { awakeFor }, set: { chooseKeepAwakeDuration($0, restartingFromNowIfOn: r.keepAwakeUntil != nil) })) {
                     ForEach(KeepAwakeDuration.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .labelsHidden()
@@ -493,24 +483,25 @@ struct MenuView: View {
         }
 
         if flowInMenu { PowerFlow(s: s).frame(height: 110) }
-        if s.config.powerInterval != .off { PowerGraph(history: m.socHistory, now: m.socAsOf) }
+        if s.config.powerInterval != .off { PowerGraph(history: m.lastKnownPowerHistory, receivedAt: m.powerHistoryReceivedAt) }
         if !s.nativeLimit { Text(tr("Native limit unavailable: SMC control only")).font(.caption2).foregroundStyle(.secondary) }
+    }
+
+    private func chooseKeepAwakeDuration(_ duration: KeepAwakeDuration, restartingFromNowIfOn keepAwakeOn: Bool) {
+        awakeFor = duration
+        if keepAwakeOn { m.run(.keepAwake(duration)) }
     }
 }
 
-/// The system SleepDisabled setting (`pmset -g`), readable without privileges. nil when unknown.
-/// ponytail: IOPMCopySystemPowerSettings is exported by IOKit but not in the public headers (pmset uses it), so it is
-/// looked up at run time; if Apple removes it the warning never shows. Upgrade path: a public API if one appears.
+// exception: IOPMCopySystemPowerSettings is exported by IOKit but declared only in its private headers, so it is looked up at run time (https://github.com/apple-oss-distributions/IOKitUser/blob/main/pwr_mgt.subproj/IOPMLibPrivate.h)
 func systemSleepDisabled() -> Bool? {
     typealias Copy = @convention(c) () -> Unmanaged<CFDictionary>?
-    guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "IOPMCopySystemPowerSettings") else { return nil }  // RTLD_DEFAULT
+    guard let sym = dlsym(rtldDefault, "IOPMCopySystemPowerSettings") else { return nil }
     let settings = unsafeBitCast(sym, to: Copy.self)()?.takeRetainedValue() as? [String: Any]
     return settings?["SleepDisabled"] as? Bool
 }
 
-/// Sleep disabled while the service has no reason for it: offers to turn sleep back on, through the service when it
-/// answers, otherwise with the pmset command.
-struct SleepWarning: View {
+struct UnexplainedSleepDisabledWarning: View {
     @EnvironmentObject var m: AppModel
     static let command = "sudo pmset -a disablesleep 0"
 
@@ -551,7 +542,6 @@ struct UpdateBanner: View {
 }
 
 extension View {
-    /// Rebuilds the view tree when the language changes and formats dates in that language.
     func localized(_ language: String) -> some View {
         id(language).environment(\.locale, appLocale)
     }
