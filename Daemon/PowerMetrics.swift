@@ -118,7 +118,7 @@ final class PowerMetrics {
                 dropped = dropped || taken.dropped
                 // One sample per interval; a malformed one is skipped. Turned off: the last samples before the exit are dropped.
                 if interval != .off, let p = taken.samples.reversed().lazy.compactMap(socPower).first {
-                    let point = SoCPowerPoint(date: Date(), power: p, interval: TimeInterval(running.rawValue))
+                    let point = SoCPowerPoint(date: Date(), averagePower: p, samplingInterval: TimeInterval(running.rawValue))
                     history = appendPowerPoint(history, point, window: socHistoryRetention)
                     parsed = true
                 }

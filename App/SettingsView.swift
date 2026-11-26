@@ -231,7 +231,7 @@ struct SettingsPaneView: View {
     var charge: some View {
         Form {
             Section(tr("macOS battery settings")) {
-                if let s = m.status, let l = s.appleChargeLimit, l < s.config.limit {
+                if let s = m.status, let l = s.systemSettingsChargeLimit, l < s.config.limit {
                     Label(tr("Apple's Charge Limit is set to %@ %% in System Settings. Set it to 100 %% to let ChargeKeeper manage charging.", number(Double(l))),
                           systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
@@ -247,7 +247,7 @@ struct SettingsPaneView: View {
                 .searchResultAnchor("macOSBattery")
             }
             Section(tr("Discharge")) {
-                Toggle(tr("Automatic discharge"), isOn: m.config(\.autoDischarge)).searchResultAnchor("autoDischarge")
+                Toggle(tr("Automatic discharge"), isOn: m.config(\.drainAboveLimitOnAdapter)).searchResultAnchor("autoDischarge")
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -276,7 +276,7 @@ struct SettingsPaneView: View {
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
             Section(tr("Keep awake")) {
-                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed)).searchResultAnchor("keepAwakeLid")
+                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeWithLidClosed)).searchResultAnchor("keepAwakeLid")
                 Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryPercentRange, step: 5) {
                     LabeledContent(tr("Turn off on battery below"), value: "\(m.config(\.keepAwakeMinBattery).wrappedValue) %")
                 }
@@ -429,11 +429,11 @@ struct BatteryView: View {
             if let b = m.status?.battery {
                 if fetched { HealthChartSection(series: series) }
                 Section(tr("Battery health")) {
-                    row(tr("Health"), percent(b.health)).searchResultAnchor("health")
-                    row(tr("Health (nominal)"), percent(b.nominalHealth))
-                    row(tr("Full charge capacity"), mAh(b.maxCapacity))
-                    row(tr("Nominal capacity"), mAh(b.nominalCapacity))
-                    row(tr("Design capacity"), mAh(b.designCapacity))
+                    row(tr("Health"), percent(b.healthPercent)).searchResultAnchor("health")
+                    row(tr("Health (nominal)"), percent(b.nominalHealthPercent))
+                    row(tr("Full charge capacity"), mAh(b.fullChargeCapacityMAh))
+                    row(tr("Nominal capacity"), mAh(b.nominalCapacityMAh))
+                    row(tr("Design capacity"), mAh(b.designCapacityMAh))
                     row(tr("Cycle count"), b.cycleCount.map(String.init) ?? "--")
                 }
             }
@@ -441,11 +441,11 @@ struct BatteryView: View {
                 Section(tr("Last calibration")) {
                     row(tr("Date"), dateTime(c.end)).searchResultAnchor("lastCalibration")
                     row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
-                    row(tr("Capacity"), "\(mAh(c.before.maxCapacity)) → \(mAh(c.after.maxCapacity))")
-                    row(tr("Health"), "\(percent(c.before.health)) → \(percent(c.after.health))")
-                    row(tr("Health (nominal)"), "\(percent(c.before.nominalHealth)) → \(percent(c.after.nominalHealth))")
+                    row(tr("Capacity"), "\(mAh(c.before.fullChargeCapacityMAh)) → \(mAh(c.after.fullChargeCapacityMAh))")
+                    row(tr("Health"), "\(percent(c.before.healthPercent)) → \(percent(c.after.healthPercent))")
+                    row(tr("Health (nominal)"), "\(percent(c.before.nominalHealthPercent)) → \(percent(c.after.nominalHealthPercent))")
                     row(tr("Cycle count"), "\(c.before.cycleCount.map(String.init) ?? "--") → \(c.after.cycleCount.map(String.init) ?? "--")")
-                    row(tr("Design capacity"), mAh(c.after.designCapacity))
+                    row(tr("Design capacity"), mAh(c.after.designCapacityMAh))
                     row(tr("Temperature"), celsius(c.after.temperature))
                 }
             }

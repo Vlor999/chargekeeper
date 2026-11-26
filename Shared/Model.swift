@@ -23,12 +23,8 @@ enum LogLevel: String, CaseIterable, Comparable {
     static func < (a: LogLevel, b: LogLevel) -> Bool { a.severity < b.severity }
 }
 
-/// powermetrics sampling interval chosen in Settings, in seconds; `off` stops powermetrics. A closed list: a socket
-/// request with any other value fails to decode, so no free number reaches powermetrics' arguments.
 enum PowerInterval: Int, Codable, CaseIterable { case off = 0, s1 = 1, s2 = 2, s5 = 5, s10 = 10, s30 = 30 }
 
-/// Keep awake duration picked in the menu, in minutes; `untilOff` lasts until turned off. A closed list: a socket
-/// request with any other value fails to decode.
 enum KeepAwakeDuration: Int, Codable, CaseIterable { case m30 = 30, h1 = 60, h2 = 120, h4 = 240, untilOff = 0 }
 
 enum LEDColor: String, Codable, CaseIterable { case system, off, green, orange, orangeBlink }
@@ -59,32 +55,33 @@ enum HistoryEvent: String, Codable {
     case keepAwakeFailed
 }
 
-/// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
-/// rendering, kept for older apps and for entries written by an older service (free text only).
 struct HistoryEntry: Codable, Hashable {
     var date: Date
     var text: String
     var event: HistoryEvent?
     var phase: CalibrationPhase?
     var action: TaskAction?
-    var late: Bool?  // task run after its time (caught up on wake)
-    var value: Int?  // task value or new charge limit, in %
+    var caughtUpOnWake: Bool?
+    var percent: Int?
     var temperature: Double?
-    var capacityBefore: Int?, capacityAfter: Int?  // mAh
-    var healthBefore: Double?, healthAfter: Double?  // %
+    var capacityBeforeMAh: Int?, capacityAfterMAh: Int?
+    var healthBeforePercent: Double?, healthAfterPercent: Double?
     var cycles: Int?
 
     init(date: Date = Date(), text: String = "", event: HistoryEvent? = nil, phase: CalibrationPhase? = nil, action: TaskAction? = nil,
-         late: Bool? = nil, value: Int? = nil, temperature: Double? = nil, capacityBefore: Int? = nil, capacityAfter: Int? = nil,
-         healthBefore: Double? = nil, healthAfter: Double? = nil, cycles: Int? = nil) {
-        (self.date, self.text, self.event, self.phase, self.action, self.late, self.value, self.temperature) =
-            (date, text, event, phase, action, late, value, temperature)
-        (self.capacityBefore, self.capacityAfter, self.healthBefore, self.healthAfter, self.cycles) =
-            (capacityBefore, capacityAfter, healthBefore, healthAfter, cycles)
+         caughtUpOnWake: Bool? = nil, percent: Int? = nil, temperature: Double? = nil, capacityBeforeMAh: Int? = nil,
+         capacityAfterMAh: Int? = nil, healthBeforePercent: Double? = nil, healthAfterPercent: Double? = nil, cycles: Int? = nil) {
+        (self.date, self.text, self.event, self.phase, self.action, self.caughtUpOnWake, self.percent, self.temperature) =
+            (date, text, event, phase, action, caughtUpOnWake, percent, temperature)
+        (self.capacityBeforeMAh, self.capacityAfterMAh, self.healthBeforePercent, self.healthAfterPercent, self.cycles) =
+            (capacityBeforeMAh, capacityAfterMAh, healthBeforePercent, healthAfterPercent, cycles)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case date, text, event, phase, action, late, value, temperature, capacityBefore, capacityAfter, healthBefore, healthAfter, cycles
+        case date, text, event, phase, action, temperature, cycles
+        case caughtUpOnWake = "late", percent = "value"
+        case capacityBeforeMAh = "capacityBefore", capacityAfterMAh = "capacityAfter"
+        case healthBeforePercent = "healthBefore", healthAfterPercent = "healthAfter"
     }
 
     init(from decoder: Decoder) throws {
@@ -94,13 +91,13 @@ struct HistoryEntry: Codable, Hashable {
         event = c.decodeIfKnownToThisBuild(HistoryEvent.self, forKey: .event)
         phase = c.decodeIfKnownToThisBuild(CalibrationPhase.self, forKey: .phase)
         action = c.decodeIfKnownToThisBuild(TaskAction.self, forKey: .action)
-        late = c.decodeIfKnownToThisBuild(Bool.self, forKey: .late)
-        value = c.decodeIfKnownToThisBuild(Int.self, forKey: .value)
+        caughtUpOnWake = c.decodeIfKnownToThisBuild(Bool.self, forKey: .caughtUpOnWake)
+        percent = c.decodeIfKnownToThisBuild(Int.self, forKey: .percent)
         temperature = c.decodeIfKnownToThisBuild(Double.self, forKey: .temperature)
-        capacityBefore = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityBefore)
-        capacityAfter = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityAfter)
-        healthBefore = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthBefore)
-        healthAfter = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthAfter)
+        capacityBeforeMAh = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityBeforeMAh)
+        capacityAfterMAh = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityAfterMAh)
+        healthBeforePercent = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthBeforePercent)
+        healthAfterPercent = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthAfterPercent)
         cycles = c.decodeIfKnownToThisBuild(Int.self, forKey: .cycles)
     }
 }
@@ -113,7 +110,7 @@ private extension KeyedDecodingContainer {
 
 struct Config: Codable, Equatable {
     var limit = 80
-    var autoDischarge = false  // drain to limit whenever above it, even plugged in
+    var drainAboveLimitOnAdapter = false
     var idle = false
     var idleRange = 5
     var heatProtect = false
@@ -128,8 +125,14 @@ struct Config: Codable, Equatable {
     var logEnabled = true
     var logDays = logRetentionDaysDefault
     var powerInterval = PowerInterval.s5
-    var keepAwakeLidClosed = false  // keep awake also disables sleep, so a closed lid does not sleep
+    var keepAwakeWithLidClosed = false
     var keepAwakeMinBattery = keepAwakeMinBatteryPercentDefault
+
+    private enum CodingKeys: String, CodingKey {
+        case limit, idle, idleRange, heatProtect, maxTemp, led, ledBlinkDischarge, stopChargingDuringSleep, disableSleepUntilLimit
+        case keepLimitWhenStopped, catchUpMissedTasks, tasks, logEnabled, logDays, powerInterval, keepAwakeMinBattery
+        case drainAboveLimitOnAdapter = "autoDischarge", keepAwakeWithLidClosed = "keepAwakeLidClosed"
+    }
 }
 
 extension Config {
@@ -137,7 +140,7 @@ extension Config {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let fallbackForOlderService = Config()
         limit = try c.decode(Int.self, forKey: .limit)
-        autoDischarge = try c.decode(Bool.self, forKey: .autoDischarge)
+        drainAboveLimitOnAdapter = try c.decode(Bool.self, forKey: .drainAboveLimitOnAdapter)
         idle = try c.decode(Bool.self, forKey: .idle)
         idleRange = try c.decode(Int.self, forKey: .idleRange)
         heatProtect = try c.decode(Bool.self, forKey: .heatProtect)
@@ -152,12 +155,11 @@ extension Config {
         logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? fallbackForOlderService.logEnabled
         logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? fallbackForOlderService.logDays
         powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? fallbackForOlderService.powerInterval
-        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? fallbackForOlderService.keepAwakeLidClosed
+        keepAwakeWithLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeWithLidClosed) ?? fallbackForOlderService.keepAwakeWithLidClosed
         keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? fallbackForOlderService.keepAwakeMinBattery
     }
 }
 
-/// Daemon-owned state that survives restarts (calibration in progress, one-shot modes).
 struct Runtime: Codable, Equatable {
     var discharge = false
     var topUp = false
@@ -166,49 +168,66 @@ struct Runtime: Codable, Equatable {
     var ledOverride: LEDColor?
     var holdLevel: Int?
     var heatBlocked = false
-    var idleRecharge = false  // dropped below idle range: charge back up to limit
+    var isRefillingToLimit = false
     var heatSince: Date?
     var state: ChargeState = .charging
-    var calibrationBefore: BatterySnapshot?  // taken when the running calibration started
-    var pastLimitSince: Date?  // macOS charging past the limit against the service (gauge recalibration or other override)
-    var keepAwakeUntil: Date?  // keep awake on until this date; `.distantFuture` until turned off, nil when off
+    var calibrationStartSnapshot: BatterySnapshot?
+    var macOSPastLimitSince: Date?
+    // ponytail: `.distantFuture` stands for "until turned off" (https://github.com/Vlor999/chargekeeper/issues/56)
+    var keepAwakeUntil: Date?
+
+    private enum CodingKeys: String, CodingKey {
+        case discharge, topUp, calibration, phaseStart, ledOverride, holdLevel, heatBlocked, heatSince, state, keepAwakeUntil
+        case isRefillingToLimit = "idleRecharge", calibrationStartSnapshot = "calibrationBefore", macOSPastLimitSince = "pastLimitSince"
+    }
 }
 
-/// Battery wear at one point in time. Capacities in mAh.
 struct BatterySnapshot: Codable, Equatable {
     var date: Date
-    var maxCapacity: Int?  // full charge capacity learned by the gauge (AppleRawMaxCapacity)
-    var nominalCapacity: Int?
-    var designCapacity: Int?
+    var fullChargeCapacityMAh: Int?
+    var nominalCapacityMAh: Int?
+    var designCapacityMAh: Int?
     var cycleCount: Int?
     var temperature: Double?
     var percent: Int
 
-    var health: Double? { ratio(maxCapacity) }
-    /// Nominal capacity over design capacity, in %: close to the macOS "Maximum Capacity".
-    var nominalHealth: Double? { ratio(nominalCapacity) }
+    var healthPercent: Double? { percentOfDesign(fullChargeCapacityMAh) }
+    var nominalHealthPercent: Double? { percentOfDesign(nominalCapacityMAh) }
 
-    private func ratio(_ v: Int?) -> Double? {
-        guard let v, let d = designCapacity, d > 0 else { return nil }
-        return percentOfDesignCapacity(v, designCapacity: d)
+    private func percentOfDesign(_ capacityMAh: Int?) -> Double? {
+        guard let capacityMAh, let d = designCapacityMAh, d > 0 else { return nil }
+        return percentOfDesignCapacity(capacityMAh, designCapacityMAh: d)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, cycleCount, temperature, percent
+        case fullChargeCapacityMAh = "maxCapacity", nominalCapacityMAh = "nominalCapacity", designCapacityMAh = "designCapacity"
     }
 }
 
-/// One point of the battery health series: one per day, plus one per calibration result. Capacities in mAh.
 struct HealthSample: Codable, Equatable {
     var date: Date
-    var maxCapacity: Int
-    var nominalCapacity: Int?
-    var designCapacity: Int
+    var fullChargeCapacityMAh: Int
+    var nominalCapacityMAh: Int?
+    var designCapacityMAh: Int
     var cycleCount: Int?
-    var calibration: Bool?  // taken when a calibration finished
+    // ponytail: `nil` means false, a Bool with a lenient decode would say it (ticket to open)
+    var fromCalibration: Bool?
 
-    var health: Double { percentOfDesignCapacity(maxCapacity, designCapacity: max(designCapacity, 1)) }
-    var nominalHealth: Double? { nominalCapacity.map { percentOfDesignCapacity($0, designCapacity: max(designCapacity, 1)) } }
+    var healthPercent: Double { percentOfDesignCapacity(fullChargeCapacityMAh, designCapacityMAh: max(designCapacityMAh, 1)) }
+    var nominalHealthPercent: Double? {
+        nominalCapacityMAh.map { percentOfDesignCapacity($0, designCapacityMAh: max(designCapacityMAh, 1)) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, cycleCount
+        case fullChargeCapacityMAh = "maxCapacity", nominalCapacityMAh = "nominalCapacity", designCapacityMAh = "designCapacity"
+        case fromCalibration = "calibration"
+    }
 }
 
-private func percentOfDesignCapacity(_ capacity: Int, designCapacity: Int) -> Double {
-    Double(capacity) * 100 / Double(designCapacity)
+private func percentOfDesignCapacity(_ capacityMAh: Int, designCapacityMAh: Int) -> Double {
+    Double(capacityMAh) * 100 / Double(designCapacityMAh)
 }
 
 struct CalibrationResult: Codable, Equatable {
@@ -219,9 +238,14 @@ struct CalibrationResult: Codable, Equatable {
 }
 
 struct PortPower: Codable {
-    var name: String?  // USB device plugged straight into the port
+    var deviceName: String?
     var watts: Double
-    var maxWatts: Double?  // what the port agreed to supply (USB-PD contract, or 5 V current limit)
+    var negotiatedWatts: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case watts
+        case deviceName = "name", negotiatedWatts = "maxWatts"
+    }
 }
 
 struct SoCPower: Codable, Equatable {
@@ -230,11 +254,17 @@ struct SoCPower: Codable, Equatable {
     var aneWatts: Double
 }
 
-/// One point of the component power history: the average power since the previous point.
 struct SoCPowerPoint: Codable, Equatable {
     var date: Date
-    var power: SoCPower
-    var interval: TimeInterval?  // sampling interval in effect, in s; nil from an older service (5 s)
+    var averagePower: SoCPower
+    var samplingInterval: TimeInterval?
+
+    var effectiveSamplingInterval: TimeInterval { samplingInterval ?? assumedPowerSampleInterval }
+
+    private enum CodingKeys: String, CodingKey {
+        case date
+        case averagePower = "power", samplingInterval = "interval"
+    }
 }
 
 struct Status: Codable {
@@ -247,17 +277,24 @@ struct Status: Codable {
     var adapterWatts: Double
     var adapterRatedWatts: Int?
     var systemWatts: Double
-    var batteryWatts: Double  // >0 charging, <0 discharging
-    var batteryAmperage: Int?  // mA, >0 charging; nil from an older service
-    var ports: [PortPower]?  // USB-C power out, included in systemWatts; nil from an older service
+    var batteryChargeWatts: Double
+    var batteryChargeMilliamps: Int?
+    var usbCOutputPorts: [PortPower]?
     var nativeLimit: Bool
     var sleepDisabled: Bool
     var history: [HistoryEntry]
-    var battery: BatterySnapshot?  // nil from an older service
+    var battery: BatterySnapshot?
     var lastCalibration: CalibrationResult?
-    var appleChargeLimit: Int?  // Charge Limit set in System Settings below 100 %, on Macs where the service never sets it
-    var healthHistory: [HealthSample]?  // only in the reply to .healthHistory, to keep the periodic status small
-    var socHistory: [SoCPowerPoint]?  // only in the reply to .status(soc: true); nil from an older service
+    var systemSettingsChargeLimit: Int?
+    var healthHistory: [HealthSample]?
+    var socHistory: [SoCPowerPoint]?
+
+    private enum CodingKeys: String, CodingKey {
+        case config, runtime, percent, hardwarePercent, adapter, temperature, adapterWatts, adapterRatedWatts, systemWatts
+        case nativeLimit, sleepDisabled, history, battery, lastCalibration, healthHistory, socHistory
+        case batteryChargeWatts = "batteryWatts", batteryChargeMilliamps = "batteryAmperage", usbCOutputPorts = "ports"
+        case systemSettingsChargeLimit = "appleChargeLimit"
+    }
 }
 
 enum Command: Codable {
@@ -274,7 +311,7 @@ enum Command: Codable {
     case led(LEDColor?)
     case lowPower(Bool)
     case highPower(Bool)
-    case healthHistory  // a service older than this command closes the connection without a reply
+    case healthHistory
     case keepAwake(KeepAwakeDuration?)  // nil turns it off
     case resetSleep  // re-enable system sleep unless the service itself needs it disabled
 }

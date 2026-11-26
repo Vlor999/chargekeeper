@@ -30,7 +30,7 @@ final class Daemon {
     var lastSaved: Data?
     var notices = NoticeLatch()  // in memory: a restart can only repeat a notice after a new state change
     var adapterNotices = AdapterNoticeState()
-    var appleChargeLimit: Int?
+    var systemSettingsChargeLimit: Int?
     var lastAction: Action?  // in memory: the first tick after a restart counts as a mode change
 
     init() {
@@ -107,8 +107,8 @@ final class Daemon {
         let settled = prev == s.runtime.state && lastAction == a
         lastAction = a
         if let held = pastLimitEpisode(a, state: s.runtime.state, settled: settled, inControl: hw.inControl, adapter: rd.adapter, limit: s.config.limit, percent: rd.percent,
-                            amperage: rd.amperage, watts: rd.batteryWatts, since: &s.runtime.pastLimitSince, now: now) {
-            record(HistoryEntry(event: .chargedPastLimit, value: held))
+                            amperage: rd.amperage, watts: rd.batteryWatts, since: &s.runtime.macOSPastLimitSince, now: now) {
+            record(HistoryEntry(event: .chargedPastLimit, percent: held))
         }
         for n in serviceNotices(from: prev, to: s.runtime.state, adapter: rd.adapter, limit: s.config.limit, latch: &notices) {
             switch n {
@@ -118,7 +118,7 @@ final class Daemon {
         }
 
         var until = keepAwakeUntil(s.runtime.keepAwakeUntil, now: now, adapter: rd.adapter, percent: rd.percent, minBattery: s.config.keepAwakeMinBattery)
-        if let was = s.runtime.keepAwakeUntil, until == nil { record(HistoryEntry(event: .keepAwakeEnded, value: was > now ? rd.percent : nil)) }
+        if let was = s.runtime.keepAwakeUntil, until == nil { record(HistoryEntry(event: .keepAwakeEnded, percent: was > now ? rd.percent : nil)) }
         // The assertion failed (logged once by set): off, so the menu does not show a keep awake that is not held.
         if !awake.set(until != nil) { until = nil; record(HistoryEntry(event: .keepAwakeFailed)) }
         s.runtime.keepAwakeUntil = until
@@ -132,19 +132,19 @@ final class Daemon {
     func readAppleChargeLimit() {
         lastAppleLimitRead = Date()
         guard hw.native, hw.inhibitKey != nil else { return }
-        appleChargeLimit = userChargeLimit(enabled: Int(mcl_enabled()), limit: Int(mcl_limit()))
+        systemSettingsChargeLimit = userChargeLimit(enabled: Int(mcl_enabled()), limit: Int(mcl_limit()))
     }
 
     func snapshot(_ rd: Reading, _ date: Date = Date()) -> BatterySnapshot {
-        BatterySnapshot(date: date, maxCapacity: rd.rawMaxCapacity, nominalCapacity: rd.nominalCapacity, designCapacity: rd.designCapacity,
+        BatterySnapshot(date: date, fullChargeCapacityMAh: rd.rawMaxCapacity, nominalCapacityMAh: rd.nominalCapacity, designCapacityMAh: rd.designCapacity,
                         cycleCount: rd.cycleCount, temperature: rd.temperature, percent: rd.percent)
     }
 
     func finishCalibration(_ after: BatterySnapshot) {
-        let before = s.runtime.calibrationBefore
-        s.runtime.calibrationBefore = nil
-        record(HistoryEntry(event: .calibrationDone, capacityBefore: before?.maxCapacity, capacityAfter: after.maxCapacity,
-                            healthBefore: before?.health, healthAfter: after.health, cycles: after.cycleCount))
+        let before = s.runtime.calibrationStartSnapshot
+        s.runtime.calibrationStartSnapshot = nil
+        record(HistoryEntry(event: .calibrationDone, capacityBeforeMAh: before?.fullChargeCapacityMAh, capacityAfterMAh: after.fullChargeCapacityMAh,
+                            healthBeforePercent: before?.healthPercent, healthAfterPercent: after.healthPercent, cycles: after.cycleCount))
         if let p = healthSample(after, calibration: true) { s.healthHistory = addHealthSample(s.healthHistory, p, now: after.date) }
         // Started by an older service: no starting point to compare with.
         guard let before else { return }
@@ -160,8 +160,8 @@ final class Daemon {
             s.config.tasks[i].lastRun = o
             let late = now.timeIntervalSince(o) > 600
             let value = t.action == .setLimit || t.action == .dischargeTo ? t.value : nil
-            if late && !s.config.catchUpMissedTasks { record(HistoryEntry(event: .taskSkipped, action: t.action, value: value)); continue }
-            record(HistoryEntry(event: .taskRun, action: t.action, late: late, value: value))
+            if late && !s.config.catchUpMissedTasks { record(HistoryEntry(event: .taskSkipped, action: t.action, percent: value)); continue }
+            record(HistoryEntry(event: .taskRun, action: t.action, caughtUpOnWake: late, percent: value))
             switch t.action {
             case .setLimit: mutate(.setLimit(t.value), scheduled: true)
             case .calibrate: mutate(.calibrate(true), scheduled: true)
@@ -177,7 +177,7 @@ final class Daemon {
     /// `scheduled`: run by a task, whose history row already carries the value, so no separate limit change row.
     func mutate(_ cmd: Command, scheduled: Bool = false) {
         let limit = s.config.limit
-        defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, value: s.config.limit)) } }
+        defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, percent: s.config.limit)) } }
         switch cmd {
         case .status, .healthHistory: break
         case .resetSleep:
@@ -206,10 +206,10 @@ final class Daemon {
         case .topUp(let on): s.runtime.topUp = on
         case .calibrate(let on):
             // A restart while running keeps the original baseline, so the report covers the whole calibration.
-            let running = s.runtime.calibration != nil ? s.runtime.calibrationBefore : nil
+            let running = s.runtime.calibration != nil ? s.runtime.calibrationStartSnapshot : nil
             s.runtime.calibration = on ? .chargeFull : nil
             s.runtime.phaseStart = Date()
-            s.runtime.calibrationBefore = on ? running ?? snapshot(reading) : nil
+            s.runtime.calibrationStartSnapshot = on ? running ?? snapshot(reading) : nil
             record(HistoryEntry(event: on ? .calibrationStarted : .calibrationStopped))
         case .pause: s.config.limit = clamp(reading.percent, 20, 100); s.runtime.discharge = false
         case .led(let c): s.runtime.ledOverride = c
@@ -227,9 +227,9 @@ final class Daemon {
         }
         var out = Status(config: s.config, runtime: s.runtime, percent: reading.percent, hardwarePercent: reading.hardwarePercent,
                       adapter: reading.adapter, temperature: reading.temperature, adapterWatts: reading.adapterWatts, adapterRatedWatts: reading.adapterRatedWatts,
-                      systemWatts: reading.systemWatts, batteryWatts: reading.batteryWatts, batteryAmperage: reading.amperage, ports: reading.ports, nativeLimit: hw.native,
+                      systemWatts: reading.systemWatts, batteryChargeWatts: reading.batteryWatts, batteryChargeMilliamps: reading.amperage, usbCOutputPorts: reading.ports, nativeLimit: hw.native,
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
-                      lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
+                      lastCalibration: s.lastCalibration, systemSettingsChargeLimit: systemSettingsChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
         if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryRetention) }
         return out
@@ -362,13 +362,13 @@ func printStatus(_ s: Status) {
     let r = s.runtime
     print("battery \(s.percent)% (hardware \(s.hardwarePercent.map { "\($0)%" } ?? "--")), \(s.adapter ? "adapter" : "battery"), \(s.temperature.map { String(format: "%.1f°C", $0) } ?? "--")")
     print("state \(r.state.rawValue), limit \(s.config.limit)%\(r.discharge ? ", discharge" : "")\(r.topUp ? ", top-up" : "")\(r.calibration.map { ", calibration \($0.rawValue)" } ?? "")")
-    print(String(format: "power: adapter %.1fW, system %.1fW, battery %+.1fW", s.adapterWatts, s.systemWatts, s.batteryWatts))
-    let ports = (s.ports ?? []).filter { $0.watts > 0.1 }
+    print(String(format: "power: adapter %.1fW, system %.1fW, battery %+.1fW", s.adapterWatts, s.systemWatts, s.batteryChargeWatts))
+    let ports = (s.usbCOutputPorts ?? []).filter { $0.watts > 0.1 }
     if !ports.isEmpty {
-        print("usb-c: " + ports.map { "\($0.name ?? "device") \(String(format: "%.1fW", $0.watts))\($0.maxWatts.map { String(format: "/%gW", $0) } ?? "")" }.joined(separator: ", "))
+        print("usb-c: " + ports.map { "\($0.deviceName ?? "device") \(String(format: "%.1fW", $0.watts))\($0.negotiatedWatts.map { String(format: "/%gW", $0) } ?? "")" }.joined(separator: ", "))
     }
     if let b = s.battery {
-        print("health: \(calibrationSummary(before: nil, after: b))\(b.nominalHealth.map { String(format: " (nominal %.1f %%)", $0) } ?? ""), design \(b.designCapacity.map { "\($0) mAh" } ?? "--")")
+        print("health: \(calibrationSummary(before: nil, after: b))\(b.nominalHealthPercent.map { String(format: " (nominal %.1f %%)", $0) } ?? ""), design \(b.designCapacityMAh.map { "\($0) mAh" } ?? "--")")
     }
     if let c = s.lastCalibration {
         print("last calibration \(c.end.formatted(date: .abbreviated, time: .shortened)): \(calibrationSummary(before: c.before, after: c.after))")

@@ -70,12 +70,12 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
         return pct >= 100 ? hold(100, &r) : .charge(to: 100)
     }
 
-    if pct > c.limit && (r.discharge || c.autoDischarge) {
+    if pct > c.limit && (r.discharge || c.drainAboveLimitOnAdapter) {
         r.state = .discharging
         return .discharge
     }
     if pct >= c.limit {
-        r.idleRecharge = false
+        r.isRefillingToLimit = false
         r.state = .pause
         return hold(pct, &r)
     }
@@ -90,8 +90,8 @@ private func policy(_ c: Config, _ r: inout Runtime, _ i: Inputs) -> Action {
         r.heatBlocked = false
     }
 
-    if pct < c.limit - c.idleRange { r.idleRecharge = true }
-    if c.idle && !r.idleRecharge {
+    if pct < c.limit - c.idleRange { r.isRefillingToLimit = true }
+    if c.idle && !r.isRefillingToLimit {
         r.state = .idle
         return hold(pct, &r)
     }
@@ -233,8 +233,8 @@ func calibrationNotice(end: Date?, handled: Date?) -> CalibrationNotice {
 func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) -> String {
     func span(_ x: String?, _ y: String?) -> String? { y.map { y in x.map { "\($0)→\(y)" } ?? y } }
     func pct(_ h: Double?) -> String? { h.map { String(format: "%.1f", $0) } }
-    return [span(b?.maxCapacity.map(String.init), a.maxCapacity.map(String.init)).map { "\($0) mAh" },
-            span(pct(b?.health), pct(a.health)).map { "health \($0) %" },
+    return [span(b?.fullChargeCapacityMAh.map(String.init), a.fullChargeCapacityMAh.map(String.init)).map { "\($0) mAh" },
+            span(pct(b?.healthPercent), pct(a.healthPercent)).map { "health \($0) %" },
             a.cycleCount.map { "\($0) cycles" }].compactMap { $0 }.joined(separator: ", ")
 }
 
@@ -242,9 +242,9 @@ func calibrationSummary(before b: BatterySnapshot?, after a: BatterySnapshot) ->
 
 /// Series point from a reading; nil while the gauge reports no capacity.
 func healthSample(_ b: BatterySnapshot, calibration: Bool = false) -> HealthSample? {
-    guard let m = b.maxCapacity, m > 0, let d = b.designCapacity, d > 0 else { return nil }
-    return HealthSample(date: b.date, maxCapacity: m, nominalCapacity: b.nominalCapacity, designCapacity: d, cycleCount: b.cycleCount,
-                        calibration: calibration ? true : nil)
+    guard let m = b.fullChargeCapacityMAh, m > 0, let d = b.designCapacityMAh, d > 0 else { return nil }
+    return HealthSample(date: b.date, fullChargeCapacityMAh: m, nominalCapacityMAh: b.nominalCapacityMAh, designCapacityMAh: d,
+                        cycleCount: b.cycleCount, fromCalibration: calibration ? true : nil)
 }
 
 /// The daily point is due when no point falls on the same calendar day.
@@ -262,19 +262,19 @@ func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, cal
     var all = series.filter { $0.date <= latest }
     guard p.date <= latest else { return all }
     if let i = all.firstIndex(where: { $0.date == p.date }) {
-        guard p.calibration == true, all[i].calibration != true else { return all }
+        guard p.fromCalibration == true, all[i].fromCalibration != true else { return all }
         all.remove(at: i)
     }
     all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
     let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
     var weeks = Set<DateComponents>()
     var kept = all.filter { s in
-        s.date >= cutoff || s.calibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
+        s.date >= cutoff || s.fromCalibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
     }
     var excess = kept.count - healthMaxSamples
     if excess > 0 {
         kept = kept.filter { s in
-            guard excess > 0, s.calibration != true else { return true }
+            guard excess > 0, s.fromCalibration != true else { return true }
             excess -= 1
             return false
         }
@@ -303,7 +303,7 @@ struct HealthChange: Equatable {
 func healthChange(_ series: [HealthSample]) -> HealthChange? {
     guard series.count >= 2, let a = series.first, let b = series.last else { return nil }
     let cycles = b.cycleCount.flatMap { y in a.cycleCount.map { y - $0 } }
-    return HealthChange(points: b.health - a.health, cycles: cycles,
+    return HealthChange(points: b.healthPercent - a.healthPercent, cycles: cycles,
                         days: Int((b.date.timeIntervalSince(a.date) / secondsPerDay).rounded()))
 }
 
@@ -370,7 +370,7 @@ func unexplainedSleepDisabled(system: Bool?, service: Bool?) -> Bool { system ==
 /// System sleep disabled (a closed lid stays awake): discharging on the adapter, charging to the limit with that option
 /// on, or keep awake with the lid closed option.
 func sleepDisabledWanted(_ c: Config, _ a: Action, state: ChargeState, adapter: Bool, keepAwake: Bool) -> Bool {
-    (adapter && (a == .discharge || (c.disableSleepUntilLimit && state == .charging))) || (keepAwake && c.keepAwakeLidClosed)
+    (adapter && (a == .discharge || (c.disableSleepUntilLimit && state == .charging))) || (keepAwake && c.keepAwakeWithLidClosed)
 }
 
 // MARK: - History
@@ -419,28 +419,28 @@ func historyText(_ entry: HistoryEntry, _ t: Translate = englishTemplate, _ n: @
         case .returnToLimit: return t("Calibration: discharging back to the limit", [])
         }
     case .calibrationDone:
-        let parts = [span(e.capacityBefore, e.capacityAfter, int).map { t("%@ mAh", [$0]) },
-                     span(e.healthBefore, e.healthAfter) { n($0, 1) }.map { t("health %@ %%", [$0]) },
+        let parts = [span(e.capacityBeforeMAh, e.capacityAfterMAh, int).map { t("%@ mAh", [$0]) },
+                     span(e.healthBeforePercent, e.healthAfterPercent) { n($0, 1) }.map { t("health %@ %%", [$0]) },
                      e.cycles.map { t("%@ cycles", [int($0)]) }].compactMap { $0 }
         return parts.isEmpty ? t("Calibration complete", []) : t("Calibration complete: %@", [parts.joined(separator: ", ")])
     case .taskRun, .taskSkipped:
         guard let a = e.action else { return e.text }
         var label = t(a.title, [])
-        if let v = e.value, a == .setLimit || a == .dischargeTo { label = t("%@ (%@ %%)", [label, int(v)]) }
+        if let v = e.percent, a == .setLimit || a == .dischargeTo { label = t("%@ (%@ %%)", [label, int(v)]) }
         if e.event == .taskSkipped { return t("Missed task skipped: %@", [label]) }
-        return e.late == true ? t("Missed task run on wake: %@", [label]) : t("Scheduled task: %@", [label])
+        return e.caughtUpOnWake == true ? t("Missed task run on wake: %@", [label]) : t("Scheduled task: %@", [label])
     case .limitChanged:
-        guard let v = e.value else { return e.text }
+        guard let v = e.percent else { return e.text }
         return t("Charge limit set to %@ %%", [int(v)])
     case .calibrationNeedsAdapter: return t("Calibration: adapter unplugged, plug it in to continue", [])
     case .chargedPastLimit:
-        guard let v = e.value else { return t("macOS charged the battery above the limit", []) }
+        guard let v = e.percent else { return t("macOS charged the battery above the limit", []) }
         return t("macOS charged the battery above %@ %%", [int(v)])
     case .heatProtect:
         guard let c = e.temperature else { return t("Heat protection: charging paused", []) }
         return t("Heat protection: charging paused at %@ °C", [n(c, 1)])
     case .keepAwakeEnded:
-        guard let v = e.value else { return t("Keep awake ended: time up", []) }
+        guard let v = e.percent else { return t("Keep awake ended: time up", []) }
         return t("Keep awake turned off: battery at %@ %%", [int(v)])
     case .keepAwakeFailed: return t("Keep awake could not start: macOS refused to block sleep", [])
     }
@@ -463,13 +463,13 @@ func parsedHistory(_ e: HistoryEntry) -> HistoryEntry {
     else if s.hasPrefix("calibration: "), let p = CalibrationPhase(rawValue: String(s.dropFirst(13))) { r.event = .calibrationPhase; r.phase = p }
     else if s == "calibration done" || s.hasPrefix("calibration done: ") {
         r.event = .calibrationDone
-        if let g = match(#"(\d+)(?:→(\d+))? mAh"#) { (r.capacityBefore, r.capacityAfter) = g[1] == nil ? (nil, g[0].flatMap { Int($0) }) : (g[0].flatMap { Int($0) }, g[1].flatMap { Int($0) }) }
-        if let g = match(#"health ([\d.]+)(?:→([\d.]+))? %"#) { (r.healthBefore, r.healthAfter) = g[1] == nil ? (nil, g[0].flatMap { Double($0) }) : (g[0].flatMap { Double($0) }, g[1].flatMap { Double($0) }) }
+        if let g = match(#"(\d+)(?:→(\d+))? mAh"#) { (r.capacityBeforeMAh, r.capacityAfterMAh) = g[1] == nil ? (nil, g[0].flatMap { Int($0) }) : (g[0].flatMap { Int($0) }, g[1].flatMap { Int($0) }) }
+        if let g = match(#"health ([\d.]+)(?:→([\d.]+))? %"#) { (r.healthBeforePercent, r.healthAfterPercent) = g[1] == nil ? (nil, g[0].flatMap { Double($0) }) : (g[0].flatMap { Double($0) }, g[1].flatMap { Double($0) }) }
         r.cycles = match(#"(\d+) cycles"#)?[0].flatMap { Int($0) }
     } else if let g = match(#"^task skipped \(missed\): (\w+)$"#), let a = g[0].flatMap(TaskAction.init(rawValue:)) {
         r.event = .taskSkipped; r.action = a
     } else if let g = match(#"^task (\w+)( \(caught up\))?$"#), let a = g[0].flatMap(TaskAction.init(rawValue:)) {
-        r.event = .taskRun; r.action = a; r.late = g[1] != nil
+        r.event = .taskRun; r.action = a; r.caughtUpOnWake = g[1] != nil
     }
     return r
 }
@@ -561,18 +561,18 @@ func appRefreshInterval(_ i: PowerInterval) -> TimeInterval {
 
 /// Longest normal wait for a point: `socStaleAfterIntervals` of its own sampling interval, so a point taken at 30 s stays
 /// current as long as one taken at 1 s, relative to its interval.
-func powerMaxGap(_ p: SoCPowerPoint) -> TimeInterval { socStaleAfterIntervals * (p.interval ?? assumedPowerSampleInterval) }
+func powerMaxGap(_ p: SoCPowerPoint) -> TimeInterval { socStaleAfterIntervals * p.effectiveSamplingInterval }
 
 /// The newest power, unless it is older than its `powerMaxGap` at `now` (powermetrics stopped or the service is stuck).
 func currentPower(_ history: [SoCPowerPoint], now: Date) -> SoCPower? {
     guard let p = history.last, now.timeIntervalSince(p.date) <= powerMaxGap(p) else { return nil }
-    return p.power
+    return p.averagePower
 }
 
 /// Longest gap from point `a` to the next point `b` that is still one curve. Same interval: `powerMaxGap`. Interval
 /// change (powermetrics restarted): also the rest of the old interval, the new process's first sample and `socIntervalChangeSlack`.
 func powerMaxGap(from a: SoCPowerPoint, to b: SoCPowerPoint) -> TimeInterval {
-    let old = a.interval ?? assumedPowerSampleInterval, new = b.interval ?? assumedPowerSampleInterval
+    let old = a.effectiveSamplingInterval, new = b.effectiveSamplingInterval
     let gap = max(powerMaxGap(a), powerMaxGap(b))
     return old == new ? gap : max(gap, old + 2 * new + socIntervalChangeSlack)
 }
