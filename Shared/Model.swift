@@ -213,7 +213,7 @@ struct HealthSample: Codable, Equatable {
     var nominalCapacityMAh: Int?
     var designCapacityMAh: Int
     var cycleCount: Int?
-    // ponytail: `nil` means false, a Bool with a lenient decode would say it (ticket to open)
+    // ponytail: `nil` means false, a Bool with a lenient decode would say it (https://github.com/Vlor999/chargekeeper/issues/58)
     var fromCalibration: Bool?
 
     var healthPercent: Double { percentOfDesignCapacity(fullChargeCapacityMAh, designCapacityMAh: max(designCapacityMAh, 1)) }
