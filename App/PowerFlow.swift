@@ -74,7 +74,7 @@ struct OnScreenAnimation<Content: View>: View {
 
     var body: some View {
         Group {
-            // exception: SwiftUI does not restart a paused TimelineView, so the timeline is created when the window comes on screen instead of un-paused (https://github.com/Vlor999/chargekeeper/commit/ff585d82fedc34fcd0d1ae6805f71261d6fd59f7)
+            // exception: a closed menu bar window keeps its views alive, so the timeline exists only while the window is on screen (https://github.com/Vlor999/chargekeeper/commit/ff585d82fedc34fcd0d1ae6805f71261d6fd59f7)
             if onScreen && !reduceMotion {
                 TimelineView(.animation(minimumInterval: animationFrameIntervalSeconds)) { tl in content(tl.date.timeIntervalSinceReferenceDate) }
             } else {
