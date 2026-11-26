@@ -357,6 +357,14 @@ func calibrationRestCountsOnlyOnAdapter() {
     _ = tick(c, &r, 100, at: replug + calibrationHold + 100); assert(r.calibration == .returnToLimit)
 }
 
+func unpluggedCalibrationRestLeavesRuntimeUnchanged() {
+    var r = Runtime(); r.calibration = .hold; r.phaseStart = at(0)
+    _ = tick(c, &r, 100, ac: false, at: 1000)
+    let firstUnpluggedTick = r
+    _ = tick(c, &r, 100, ac: false, at: 2000)
+    assert(r == firstUnpluggedTick)
+}
+
 func calibrationRestBelow100RechargesFirst() {
     var r = Runtime(); r.calibration = .hold; r.phaseStart = at(0)
     assert(tick(c, &r, 99, ac: false, at: 3700) == .charge(to: 100) && r.calibration == .rechargeFull)
@@ -480,6 +488,18 @@ func weekdaysSkipWeekends() {
     assert(lastOccurrence(t, after: d("2026-10-23T10:00:00Z"), upTo: d("2026-10-26T09:30:00Z"), calendar: cal) == d("2026-10-26T09:00:00Z"))
 }
 
+func longRunningRepeatsGiveTheirLatestOccurrence() {
+    let start = d("2020-01-31T09:00:00Z"), after = d("2026-05-01T00:00:00Z")
+    func last(_ rule: Repeat, upTo: String) -> Date? {
+        lastOccurrence(ScheduledTask(action: .calibrate, repeatRule: rule, start: start), after: after, upTo: d(upTo), calendar: cal)
+    }
+    assert(last(.daily, upTo: "2026-05-20T08:00:00Z") == d("2026-05-19T09:00:00Z"))
+    assert(last(.weekly, upTo: "2026-05-20T08:00:00Z") == d("2026-05-15T09:00:00Z"))
+    assert(last(.biweekly, upTo: "2026-05-20T08:00:00Z") == d("2026-05-15T09:00:00Z"))
+    assert(last(.monthly, upTo: "2026-06-30T10:00:00Z") == d("2026-05-31T09:00:00Z"))
+    assert(last(.yearly, upTo: "2026-06-30T10:00:00Z") == nil)
+}
+
 func oneOffTaskOccursAtItsStart() {
     let t = ScheduledTask(action: .calibrate, repeatRule: .never, start: d("2026-10-23T09:00:00Z"))
     assert(lastOccurrence(t, after: d("2026-10-01T00:00:00Z"), upTo: d("2026-10-24T00:00:00Z"), calendar: cal) == d("2026-10-23T09:00:00Z"))
@@ -493,6 +513,11 @@ func macWattsIsLoadMinusPortsUnlessPortsExceedLoad() {
 func powerHistoryDropsPointsOutsideWindow() {
     let older = [0.0, 100, 200].map { SoCPowerPoint(date: at($0), averagePower: pw) }
     assert(appendPowerPoint(older, SoCPowerPoint(date: at(300), averagePower: pw), window: 250) == pwHistory)
+}
+
+func powerHistoryDropsPointsDatedAfterTheNewOne() {
+    let afterClockJump = [SoCPowerPoint(date: at(400), averagePower: pw)]
+    assert(appendPowerPoint(afterClockJump, SoCPowerPoint(date: at(300), averagePower: pw), window: 250) == [SoCPowerPoint(date: at(300), averagePower: pw)])
 }
 
 func currentPowerIsNewestWhileFresh() {
@@ -1053,6 +1078,7 @@ let checks: [() -> Void] = [
     adapterNoticeRemindsOnceAfterReminderDelay,
     adapterNoticeOnlyInPhasesNeedingAdapter,
     calibrationRestCountsOnlyOnAdapter,
+    unpluggedCalibrationRestLeavesRuntimeUnchanged,
     calibrationRestBelow100RechargesFirst,
     calibrationRestWithoutStartBeginsOnAdapter,
     nativeLimitRoundingIsNotAnEpisode,
@@ -1069,9 +1095,11 @@ let checks: [() -> Void] = [
     ledShowsGreenAtLimitAndBlinksOrangeWhenDischarging,
     monthlyOn31stSkipsShortMonths,
     weekdaysSkipWeekends,
+    longRunningRepeatsGiveTheirLatestOccurrence,
     oneOffTaskOccursAtItsStart,
     macWattsIsLoadMinusPortsUnlessPortsExceedLoad,
     powerHistoryDropsPointsOutsideWindow,
+    powerHistoryDropsPointsDatedAfterTheNewOne,
     currentPowerIsNewestWhileFresh,
     currentPowerLastsTwoOwnIntervals,
     powerGapOverTwoIntervalsSplitsCurve,
