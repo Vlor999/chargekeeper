@@ -5,6 +5,7 @@ enum ClientError: Error, LocalizedError {
     var errorDescription: String? { "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items" }
 }
 
+/// One request per connection: JSON Command + "\n" in, JSON Status + "\n" out.
 func send(_ cmd: Command) throws -> Status {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { throw ClientError.unavailable }
