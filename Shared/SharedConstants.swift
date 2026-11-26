@@ -52,3 +52,5 @@ let socWarnInterval: TimeInterval = 10 * 60
 /// Keep awake turns itself off on battery below this level, in %: the user picks within this range.
 let keepAwakeMinBatteryRange = 5...50
 let keepAwakeMinBatteryDefault = 20
+let socketLineTerminator: UInt8 = 0x0a
+let socketReadBufferBytes = 65536
