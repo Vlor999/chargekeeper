@@ -38,7 +38,7 @@ private func powerCurves(_ history: [SoCPowerPoint], lineWidth: CGFloat) -> some
 
 private func powerScale(_ history: [SoCPowerPoint], endingAtArrival arrival: Date) -> (x: ClosedRange<Date>, y: ClosedRange<Double>) {
     let peak = history.map { max($0.power.cpuWatts, $0.power.gpuWatts, $0.power.aneWatts) }.max() ?? 0
-    return (arrival.addingTimeInterval(-socHistoryWindow)...arrival, 0...max(peak, minimumPowerScalePeakWatts))
+    return (arrival.addingTimeInterval(-socHistoryRetention)...arrival, 0...max(peak, minimumPowerScalePeakWatts))
 }
 
 struct PowerGraph: View {

@@ -1,7 +1,6 @@
 import Foundation
 
 let c = Config()
-let secondsPerDay: TimeInterval = 86400
 let cal: Calendar = { var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!; return utc }()
 
 func tick(_ c: Config, _ r: inout Runtime, _ pct: Int, ac: Bool = true, temp: Double? = nil, at t: TimeInterval = 0) -> Action {
@@ -497,7 +496,7 @@ func powerHistoryDropsPointsOutsideWindow() {
 }
 
 func currentPowerIsNewestWhileFresh() {
-    let maxGapWithoutInterval = socMaxGapIntervals * powermetricsInterval
+    let maxGapWithoutInterval = socStaleAfterIntervals * assumedPowerSampleInterval
     assert(currentPower(pwHistory, now: at(300 + maxGapWithoutInterval)) == pw)
     assert(currentPower(pwHistory, now: at(300 + maxGapWithoutInterval + 1)) == nil && currentPower([], now: Date()) == nil)
 }
@@ -505,8 +504,8 @@ func currentPowerIsNewestWhileFresh() {
 func currentPowerLastsTwoOwnIntervals() {
     let interval: TimeInterval = 30
     let pw30 = [SoCPowerPoint(date: at(300), power: pw, interval: interval)]
-    assert(currentPower(pw30, now: at(300 + socMaxGapIntervals * interval)) == pw)
-    assert(currentPower(pw30, now: at(300 + socMaxGapIntervals * interval + 1)) == nil)
+    assert(currentPower(pw30, now: at(300 + socStaleAfterIntervals * interval)) == pw)
+    assert(currentPower(pw30, now: at(300 + socStaleAfterIntervals * interval + 1)) == nil)
 }
 
 func powerGapOverTwoIntervalsSplitsCurve() {
@@ -523,7 +522,7 @@ func segmentsAcrossIntervalChange(old: TimeInterval, new: TimeInterval, gap: Tim
 }
 
 func intervalChangeRestartGapDoesNotSplit() {
-    let oneToFiveRestartGap = 1 + 2 * 5 + socRestartSlack
+    let oneToFiveRestartGap = 1 + 2 * 5 + socIntervalChangeSlack
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: 11.55) == [0, 0, 0, 0])
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: oneToFiveRestartGap) == [0, 0, 0, 0])
     assert(segmentsAcrossIntervalChange(old: 1, new: 5, gap: oneToFiveRestartGap + 0.01) == [0, 0, 1, 1])
@@ -537,7 +536,7 @@ func realGapAfterIntervalChangeStillSplits() {
 }
 
 func appRefreshFollowsShortPowerIntervalElsePollInterval() {
-    assert(PowerInterval.allCases.map(appRefreshInterval) == [appPollInterval, 1, 2, 2, 2, 2])
+    assert(PowerInterval.allCases.map(appRefreshInterval) == [appMaxRefreshInterval, 1, 2, 2, 2, 2])
 }
 
 func powermetricsArgumentsFixedExceptIntervalMs() {
@@ -686,8 +685,8 @@ func healthSeriesThinsToWeeklyAfterDailyKeepDays() {
     }
     series = addHealthSample(series, hp("2025-03-05T18:00:00Z", calibration: true), now: now, calendar: cal)
     assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
-    let cutoff = now.addingTimeInterval(-Double(healthDailyDays) * secondsPerDay)
-    assert(series.filter { $0.date >= cutoff }.count == healthDailyDays + 1)
+    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
+    assert(series.filter { $0.date >= cutoff }.count == healthDailyRetentionDays + 1)
     let old = series.filter { $0.date < cutoff && $0.calibration != true }
     assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
     assert(series.contains { $0.calibration == true })
@@ -719,7 +718,7 @@ func thinningCutoffUsesNowNotInsertedPoint() {
     let daily = (0..<200).map { i in HealthSample(date: now.addingTimeInterval(-Double(i) * secondsPerDay), maxCapacity: 4200,
                                                   nominalCapacity: nil, designCapacity: 4800, cycleCount: nil, calibration: nil) }.reversed()
     let thinned = addHealthSample(Array(daily), hp("2026-03-01T12:00:00Z", calibration: true), now: now, calendar: cal)
-    let cutoff = now.addingTimeInterval(-Double(healthDailyDays) * secondsPerDay)
+    let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
     assert(thinned.filter { $0.calibration != true && $0.date < cutoff }.count <= 3)
 }
 

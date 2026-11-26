@@ -126,10 +126,10 @@ struct Config: Codable, Equatable {
     var catchUpMissedTasks = false
     var tasks: [ScheduledTask] = []
     var logEnabled = true
-    var logDays = logDaysDefault
+    var logDays = logRetentionDaysDefault
     var powerInterval = PowerInterval.s5
     var keepAwakeLidClosed = false  // keep awake also disables sleep, so a closed lid does not sleep
-    var keepAwakeMinBattery = keepAwakeMinBatteryDefault
+    var keepAwakeMinBattery = keepAwakeMinBatteryPercentDefault
 }
 
 extension Config {

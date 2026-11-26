@@ -277,7 +277,7 @@ struct SettingsPaneView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Section(tr("Keep awake")) {
                 Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeLidClosed)).searchResultAnchor("keepAwakeLid")
-                Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryRange, step: 5) {
+                Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryPercentRange, step: 5) {
                     LabeledContent(tr("Turn off on battery below"), value: "\(m.config(\.keepAwakeMinBattery).wrappedValue) %")
                 }
                     .searchResultAnchor("keepAwakeBattery")

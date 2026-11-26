@@ -190,7 +190,7 @@ final class Daemon {
             c.limit = clamp(c.limit, 20, 100)
             c.idleRange = clamp(c.idleRange, 1, 30)
             c.maxTemp = min(max(c.maxTemp, 25), 50)
-            c.logDays = clamp(c.logDays, logDaysRange.lowerBound, logDaysRange.upperBound)
+            c.logDays = clamp(c.logDays, logRetentionDaysRange.lowerBound, logRetentionDaysRange.upperBound)
             c.keepAwakeMinBattery = clampedKeepAwakeMinBattery(c.keepAwakeMinBattery)
             // powerInterval needs no clamp: a value outside `PowerInterval` fails the request's decode.
             // Clients may hold a stale lastRun; never move it backwards or a task re-runs.
@@ -231,7 +231,7 @@ final class Daemon {
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, appleChargeLimit: appleChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
-        if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryWindow) }
+        if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryRetention) }
         return out
     }
 
