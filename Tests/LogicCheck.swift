@@ -887,7 +887,7 @@ func keepAwakeSurvivesUpdateRestartOnly() {
 }
 
 func keepAwakeOffAndForeverSurviveEncoding() {
-    if case .keepAwake(nil)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.keepAwake(nil))) {} else { assert(false) }
+    if case .keepAwake(nil)? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.stopKeepAwake)) {} else { assert(false) }
     var awakeRuntime = Runtime(); awakeRuntime.keepAwakeUntil = .distantFuture
     assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(awakeRuntime)) == awakeRuntime)
     assert(try! JSONDecoder().decode(Runtime.self, from: JSONEncoder().encode(Runtime())).keepAwakeUntil == nil)
@@ -899,8 +899,8 @@ func strayDisableSleepIsWarned() {
     assert(!unexplainedSleepDisabled(system: nil, service: false) && !unexplainedSleepDisabled(system: false, service: false))
 }
 
-func resetSleepCommandRoundTrips() {
-    if case .resetSleep? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.resetSleep)) {} else { assert(false) }
+func reenableSleepCommandRoundTrips() {
+    if case .reenableSleepIfNotWanted? = try? JSONDecoder().decode(Command.self, from: JSONEncoder().encode(Command.reenableSleepIfNotWanted)) {} else { assert(false) }
 }
 
 func straySleepWarningIsTranslated() {
@@ -943,6 +943,10 @@ func wireKeys<T: Encodable>(_ v: T) -> Set<String> {
     Set((try! JSONSerialization.jsonObject(with: JSONEncoder().encode(v)) as! [String: Any]).keys)
 }
 
+func wireText(_ c: Command) -> String { String(decoding: try! JSONEncoder().encode(c), as: UTF8.self) }
+
+func decodedCommand(_ json: String) -> Command? { try? JSONDecoder().decode(Command.self, from: Data(json.utf8)) }
+
 func configFromOlderServiceUsesDefaults() {
     var expected = Config()
     expected.limit = 75
@@ -983,6 +987,17 @@ func renamedFieldsKeepTheirWireKeys() {
     status.usbCOutputPorts = []
     status.systemSettingsChargeLimit = 80
     assert(wireKeys(status).isSuperset(of: ["batteryWatts", "batteryAmperage", "ports", "appleChargeLimit"]))
+}
+
+func commandsKeepTheirWireNames() {
+    assert(wireText(.reenableSleepIfNotWanted) == #"{"resetSleep":{}}"#)
+    assert(wireText(.status(includePowerHistory: true)) == #"{"status":{"soc":true}}"#)
+    if case .reenableSleepIfNotWanted? = decodedCommand(#"{"resetSleep":{}}"#) {} else { assert(false) }
+    if case .status(includePowerHistory: true)? = decodedCommand(#"{"status":{"soc":true}}"#) {} else { assert(false) }
+}
+
+func statusRequestFromOldAppDecodes() {
+    if case .status(includePowerHistory: nil)? = decodedCommand(#"{"status":{}}"#) {} else { assert(false) }
 }
 
 func keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel() {
@@ -1110,7 +1125,7 @@ let checks: [() -> Void] = [
     keepAwakeSurvivesUpdateRestartOnly,
     keepAwakeOffAndForeverSurviveEncoding,
     strayDisableSleepIsWarned,
-    resetSleepCommandRoundTrips,
+    reenableSleepCommandRoundTrips,
     straySleepWarningIsTranslated,
     configWithoutKeepAwakeSettingsDecodesDefaults,
     keepAwakeDurationOutsideListFailsDecode,
@@ -1118,6 +1133,8 @@ let checks: [() -> Void] = [
     configFromOlderServiceUsesDefaults,
     statusFromOlderServiceDecodes,
     renamedFieldsKeepTheirWireKeys,
+    commandsKeepTheirWireNames,
+    statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
 ]

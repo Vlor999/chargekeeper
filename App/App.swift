@@ -85,7 +85,7 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        run(.status(soc: true))
+        run(.status(includePowerHistory: true))
         let h = powerHistoryIfServiceAnswered
         if h != lastKnownPowerHistory { lastKnownPowerHistory = h }
         powerHistoryReceivedAt = Date()
@@ -470,7 +470,7 @@ struct MenuView: View {
         }
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run(.keepAwake($0 ? awakeFor : nil)) }))
+                Toggle(tr("Keep awake"), isOn: Binding(get: { r.keepAwakeUntil != nil }, set: { m.run($0 ? .keepAwake(awakeFor) : .stopKeepAwake) }))
                     .fixedSize()
                 Spacer(minLength: 8)
                 Picker("", selection: Binding(get: { awakeFor }, set: { chooseKeepAwakeDuration($0, restartingFromNowIfOn: r.keepAwakeUntil != nil) })) {
@@ -510,7 +510,7 @@ struct UnexplainedSleepDisabledWarning: View {
             Label(tr("Sleep is disabled for no reason (another tool or left over from a stop)"), systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             if m.error == nil && m.status != nil {
-                Button(tr("Turn Sleep Back On")) { m.run(.resetSleep); m.refresh() }
+                Button(tr("Turn Sleep Back On")) { m.run(.reenableSleepIfNotWanted); m.refresh() }
             } else {
                 Text(tr("Run in Terminal:")).font(.caption).foregroundStyle(.secondary)
                 HStack {

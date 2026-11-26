@@ -300,9 +300,7 @@ struct Status: Codable {
 }
 
 enum Command: Codable {
-    /// `soc`: include the component power history (a chart is on screen). Encoded inside the case's object, which an
-    /// older service ignores; a request from an older app decodes as nil.
-    case status(soc: Bool? = nil)
+    case status(includePowerHistory: Bool? = nil)
     case setConfig(Config)
     case setLimit(Int)
     case discharge(Bool)
@@ -314,6 +312,17 @@ enum Command: Codable {
     case lowPower(Bool)
     case highPower(Bool)
     case healthHistory
-    case keepAwake(KeepAwakeDuration?)  // nil turns it off
-    case resetSleep  // re-enable system sleep unless the service itself needs it disabled
+    case keepAwake(KeepAwakeDuration?)
+    case reenableSleepIfNotWanted
+
+    static let stopKeepAwake = Command.keepAwake(nil)
+
+    private enum CodingKeys: String, CodingKey {
+        case status, setConfig, setLimit, discharge, dischargeTo, topUp, calibrate, pause, led, lowPower, highPower, healthHistory, keepAwake
+        case reenableSleepIfNotWanted = "resetSleep"
+    }
+
+    private enum StatusCodingKeys: String, CodingKey {
+        case includePowerHistory = "soc"
+    }
 }

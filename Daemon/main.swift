@@ -180,7 +180,7 @@ final class Daemon {
         defer { if !scheduled && s.config.limit != limit { record(HistoryEntry(event: .limitChanged, percent: s.config.limit)) } }
         switch cmd {
         case .status, .healthHistory: break
-        case .resetSleep:
+        case .reenableSleepIfNotWanted:
             // Fixed behaviour, no argument: only when none of the service's own reasons needs sleep disabled.
             let wanted = sleepDisabledWanted(s.config, lastAction ?? .hold(at: reading.percent), state: s.runtime.state, adapter: reading.adapter,
                                              keepAwake: s.runtime.keepAwakeUntil != nil)
@@ -231,7 +231,7 @@ final class Daemon {
                       sleepDisabled: sleepDisabled, history: Array(s.history.prefix(50)), battery: snapshot(reading),
                       lastCalibration: s.lastCalibration, systemSettingsChargeLimit: systemSettingsChargeLimit)
         if case .healthHistory = cmd { out.healthHistory = s.healthHistory }
-        if case .status(soc: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryRetention) }
+        if case .status(includePowerHistory: true) = cmd { out.socHistory = recentPowerPoints(power.history, now: Date(), window: socHistoryRetention) }
         return out
     }
 
