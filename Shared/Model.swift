@@ -1,58 +1,5 @@
 import Foundation
 
-// Internal names (socket, state dir, bundle ids, daemon label) keep the former name Jauge so existing installs keep working.
-let socketPath = "/var/run/jauge.sock"
-/// Darwin notification posted by the service when a calibration finishes.
-let calibrationDoneNotification = "com.vlor999.jauge.calibrationDone"
-/// Posted when heat protection pauses charging, once per heat episode.
-let heatProtectNotification = "com.vlor999.jauge.heatProtect"
-/// Posted when a calibration phase starts waiting for the adapter (at most once per 10 min), and once more after 1 h of waiting.
-let calibrationNeedsAdapterNotification = "com.vlor999.jauge.calibrationNeedsAdapter"
-/// Posted when the battery level reaches the charge limit, once per charging session.
-let limitReachedNotification = "com.vlor999.jauge.limitReached"
-/// Battery health series: one point per day for this many days, one per week before.
-let healthDailyDays = 180
-/// Battery health series cap: about 7 years at one point per week, ~100 bytes each in state.json (~52 KB).
-let healthMaxSamples = 520
-/// Diagnostic log: one file per UTC day, written by the service (root, 0644 in a root-owned 0755 folder), read by the app.
-let logDir = "/Library/Application Support/Jauge/Logs"
-let logFilePrefix = "chargekeeper-"
-let logFileExtension = ".log"
-/// Days kept, counted in whole UTC days; the user picks within this range.
-let logDaysRange = 1...90
-let logDaysDefault = 7
-/// One day's file stops growing at this size: later entries of that day are dropped after one notice line.
-let logMaxFileBytes = 5 * 1024 * 1024
-/// Room left above the cap for the notice line.
-let logFullReserveBytes = 1024
-/// CPU, GPU and Neural Engine power: powermetrics runs as long as the service, at the interval set in Settings (5 s by
-/// default, or off), even with no window open (deliberate exception: the CPU and Neural Engine energy counters only move
-/// while powermetrics samples them). Its arguments come from `powermetricsArguments(_:)`, fixed per `PowerInterval`.
-let powermetricsPath = "/usr/bin/powermetrics"
-/// Sampling period of a point from a service older than `SoCPowerPoint.interval`, and of a sample lacking its own elapsed time.
-let powermetricsInterval: TimeInterval = 5
-/// The app's status refresh while a window is open, at most this long apart; shorter when the power interval is.
-let appPollInterval: TimeInterval = 2
-/// Power history kept by the service in memory, whatever the interval: 300 points at 1 s, 10 at 30 s.
-let socHistoryWindow: TimeInterval = 5 * 60
-/// Samples missed, as a multiple of the sampling interval: a newest point older than this is no longer the current
-/// value, and a longer gap between two points (sleep, powermetrics restart) splits the curve (`powerMaxGap`).
-let socMaxGapIntervals: TimeInterval = 2
-/// Across an interval change, powermetrics restarts: its first sample came 11.5 s after the last 1 s point when switching
-/// to 5 s (M4 Pro), about two new intervals. The gap there may reach the old interval, two new ones and this slack.
-let socRestartSlack: TimeInterval = 5
-/// After powermetrics fails or exits on its own, the service waits this long before starting it again.
-let socRetryDelay: TimeInterval = 60
-/// One sample is a few KB: a partial sample past this size is dropped.
-let socMaxSampleBytes = 256 * 1024
-/// powermetrics still running this long after SIGTERM gets SIGKILL.
-let socKillGrace: TimeInterval = 5
-/// Unreadable samples are logged at most once per this period.
-let socWarnInterval: TimeInterval = 10 * 60
-/// Keep awake turns itself off on battery below this level, in %: the user picks within this range.
-let keepAwakeMinBatteryRange = 5...50
-let keepAwakeMinBatteryDefault = 20
-
 enum ChargeState: String, Codable {
     case charging = "Charging", pause = "Pause", idle = "Idle", discharging = "Discharging"
     case topup = "FullCharge", heatProtect = "HeatProtect", calibration = "Calibration", exit = "Exit"
@@ -62,10 +9,18 @@ enum CalibrationPhase: String, Codable, CaseIterable {
     case chargeFull, dischargeTo10, rechargeFull, hold, returnToLimit
 }
 
-/// Diagnostic log levels, least to most severe.
 enum LogLevel: String, CaseIterable, Comparable {
     case info, warn, error
-    static func < (a: LogLevel, b: LogLevel) -> Bool { allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)! }
+
+    var severity: Int {
+        switch self {
+        case .info: return 0
+        case .warn: return 1
+        case .error: return 2
+        }
+    }
+
+    static func < (a: LogLevel, b: LogLevel) -> Bool { a.severity < b.severity }
 }
 
 /// powermetrics sampling interval chosen in Settings, in seconds; `off` stops powermetrics. A closed list: a socket
@@ -101,7 +56,7 @@ enum HistoryEvent: String, Codable {
     case calibrationStarted, calibrationStopped, calibrationPhase, calibrationDone, calibrationEnded
     case taskRun, taskSkipped, limitChanged, heatProtect, calibrationNeedsAdapter, chargedPastLimit
     case keepAwakeEnded  // turned itself off: time up, or `value` = battery level under the threshold
-    case keepAwakeFailed  // macOS refused the sleep assertion: keep awake turned off
+    case keepAwakeFailed
 }
 
 /// One history line. The app renders `event` and its parameters in the UI language; `text` is the English
@@ -132,22 +87,27 @@ struct HistoryEntry: Codable, Hashable {
         case date, text, event, phase, action, late, value, temperature, capacityBefore, capacityAfter, healthBefore, healthAfter, cycles
     }
 
-    /// Lenient: an event or value unknown to this build (newer service) falls back to the text instead of failing the whole Status.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         date = try c.decode(Date.self, forKey: .date)
         text = try c.decode(String.self, forKey: .text)
-        event = try? c.decodeIfPresent(HistoryEvent.self, forKey: .event)
-        phase = try? c.decodeIfPresent(CalibrationPhase.self, forKey: .phase)
-        action = try? c.decodeIfPresent(TaskAction.self, forKey: .action)
-        late = try? c.decodeIfPresent(Bool.self, forKey: .late)
-        value = try? c.decodeIfPresent(Int.self, forKey: .value)
-        temperature = try? c.decodeIfPresent(Double.self, forKey: .temperature)
-        capacityBefore = try? c.decodeIfPresent(Int.self, forKey: .capacityBefore)
-        capacityAfter = try? c.decodeIfPresent(Int.self, forKey: .capacityAfter)
-        healthBefore = try? c.decodeIfPresent(Double.self, forKey: .healthBefore)
-        healthAfter = try? c.decodeIfPresent(Double.self, forKey: .healthAfter)
-        cycles = try? c.decodeIfPresent(Int.self, forKey: .cycles)
+        event = c.decodeIfKnownToThisBuild(HistoryEvent.self, forKey: .event)
+        phase = c.decodeIfKnownToThisBuild(CalibrationPhase.self, forKey: .phase)
+        action = c.decodeIfKnownToThisBuild(TaskAction.self, forKey: .action)
+        late = c.decodeIfKnownToThisBuild(Bool.self, forKey: .late)
+        value = c.decodeIfKnownToThisBuild(Int.self, forKey: .value)
+        temperature = c.decodeIfKnownToThisBuild(Double.self, forKey: .temperature)
+        capacityBefore = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityBefore)
+        capacityAfter = c.decodeIfKnownToThisBuild(Int.self, forKey: .capacityAfter)
+        healthBefore = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthBefore)
+        healthAfter = c.decodeIfKnownToThisBuild(Double.self, forKey: .healthAfter)
+        cycles = c.decodeIfKnownToThisBuild(Int.self, forKey: .cycles)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeIfKnownToThisBuild<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
+        try? decodeIfPresent(type, forKey: key)
     }
 }
 
@@ -173,9 +133,9 @@ struct Config: Codable, Equatable {
 }
 
 extension Config {
-    /// Lenient for the log, power interval and keep awake fields only: a service older than them sends a config without them.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let fallbackForOlderService = Config()
         limit = try c.decode(Int.self, forKey: .limit)
         autoDischarge = try c.decode(Bool.self, forKey: .autoDischarge)
         idle = try c.decode(Bool.self, forKey: .idle)
@@ -189,11 +149,11 @@ extension Config {
         keepLimitWhenStopped = try c.decode(Bool.self, forKey: .keepLimitWhenStopped)
         catchUpMissedTasks = try c.decode(Bool.self, forKey: .catchUpMissedTasks)
         tasks = try c.decode([ScheduledTask].self, forKey: .tasks)
-        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? true
-        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? logDaysDefault
-        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? .s5
-        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? false
-        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? keepAwakeMinBatteryDefault
+        logEnabled = try c.decodeIfPresent(Bool.self, forKey: .logEnabled) ?? fallbackForOlderService.logEnabled
+        logDays = try c.decodeIfPresent(Int.self, forKey: .logDays) ?? fallbackForOlderService.logDays
+        powerInterval = try c.decodeIfPresent(PowerInterval.self, forKey: .powerInterval) ?? fallbackForOlderService.powerInterval
+        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? fallbackForOlderService.keepAwakeLidClosed
+        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? fallbackForOlderService.keepAwakeMinBattery
     }
 }
 
@@ -224,14 +184,13 @@ struct BatterySnapshot: Codable, Equatable {
     var temperature: Double?
     var percent: Int
 
-    /// Full charge capacity over design capacity, in %.
     var health: Double? { ratio(maxCapacity) }
     /// Nominal capacity over design capacity, in %: close to the macOS "Maximum Capacity".
     var nominalHealth: Double? { ratio(nominalCapacity) }
 
     private func ratio(_ v: Int?) -> Double? {
         guard let v, let d = designCapacity, d > 0 else { return nil }
-        return Double(v) * 100 / Double(d)
+        return percentOfDesignCapacity(v, designCapacity: d)
     }
 }
 
@@ -244,10 +203,12 @@ struct HealthSample: Codable, Equatable {
     var cycleCount: Int?
     var calibration: Bool?  // taken when a calibration finished
 
-    /// Full charge capacity over design capacity, in %.
-    var health: Double { Double(maxCapacity) * 100 / Double(max(designCapacity, 1)) }
-    /// Nominal capacity over design capacity, in %.
-    var nominalHealth: Double? { nominalCapacity.map { Double($0) * 100 / Double(max(designCapacity, 1)) } }
+    var health: Double { percentOfDesignCapacity(maxCapacity, designCapacity: max(designCapacity, 1)) }
+    var nominalHealth: Double? { nominalCapacity.map { percentOfDesignCapacity($0, designCapacity: max(designCapacity, 1)) } }
+}
+
+private func percentOfDesignCapacity(_ capacity: Int, designCapacity: Int) -> Double {
+    Double(capacity) * 100 / Double(designCapacity)
 }
 
 struct CalibrationResult: Codable, Equatable {
@@ -263,7 +224,6 @@ struct PortPower: Codable {
     var maxWatts: Double?  // what the port agreed to supply (USB-PD contract, or 5 V current limit)
 }
 
-/// Apple silicon power from powermetrics, in W.
 struct SoCPower: Codable, Equatable {
     var cpuWatts: Double
     var gpuWatts: Double

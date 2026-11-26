@@ -22,18 +22,18 @@ func send(_ cmd: Command) throws -> Status {
 }
 
 func writeLine(_ fd: Int32, _ data: Data) throws {
-    let bytes = data + Data([0x0a])
+    let bytes = data + Data([socketLineTerminator])
     let n = bytes.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
     if n != bytes.count { throw ClientError.unavailable }
 }
 
 func readLine(_ fd: Int32) throws -> Data {
-    var out = Data(), buf = [UInt8](repeating: 0, count: 65536)
+    var out = Data(), buf = [UInt8](repeating: 0, count: socketReadBufferBytes)
     while true {
         let n = read(fd, &buf, buf.count)
         if n <= 0 { break }
         out.append(contentsOf: buf[0..<n])
-        if buf[n - 1] == 0x0a { break }
+        if buf[n - 1] == socketLineTerminator { break }
     }
     guard !out.isEmpty else { throw ClientError.unavailable }
     return out
