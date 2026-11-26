@@ -79,22 +79,27 @@ struct HistoryEntry: Codable, Hashable {
         case date, text, event, phase, action, late, value, temperature, capacityBefore, capacityAfter, healthBefore, healthAfter, cycles
     }
 
-    /// Lenient: an event or value unknown to this build (newer service) falls back to the text instead of failing the whole Status.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         date = try c.decode(Date.self, forKey: .date)
         text = try c.decode(String.self, forKey: .text)
-        event = try? c.decodeIfPresent(HistoryEvent.self, forKey: .event)
-        phase = try? c.decodeIfPresent(CalibrationPhase.self, forKey: .phase)
-        action = try? c.decodeIfPresent(TaskAction.self, forKey: .action)
-        late = try? c.decodeIfPresent(Bool.self, forKey: .late)
-        value = try? c.decodeIfPresent(Int.self, forKey: .value)
-        temperature = try? c.decodeIfPresent(Double.self, forKey: .temperature)
-        capacityBefore = try? c.decodeIfPresent(Int.self, forKey: .capacityBefore)
-        capacityAfter = try? c.decodeIfPresent(Int.self, forKey: .capacityAfter)
-        healthBefore = try? c.decodeIfPresent(Double.self, forKey: .healthBefore)
-        healthAfter = try? c.decodeIfPresent(Double.self, forKey: .healthAfter)
-        cycles = try? c.decodeIfPresent(Int.self, forKey: .cycles)
+        event = c.lenient(HistoryEvent.self, forKey: .event)
+        phase = c.lenient(CalibrationPhase.self, forKey: .phase)
+        action = c.lenient(TaskAction.self, forKey: .action)
+        late = c.lenient(Bool.self, forKey: .late)
+        value = c.lenient(Int.self, forKey: .value)
+        temperature = c.lenient(Double.self, forKey: .temperature)
+        capacityBefore = c.lenient(Int.self, forKey: .capacityBefore)
+        capacityAfter = c.lenient(Int.self, forKey: .capacityAfter)
+        healthBefore = c.lenient(Double.self, forKey: .healthBefore)
+        healthAfter = c.lenient(Double.self, forKey: .healthAfter)
+        cycles = c.lenient(Int.self, forKey: .cycles)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func lenient<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
+        try? decodeIfPresent(type, forKey: key)
     }
 }
 
