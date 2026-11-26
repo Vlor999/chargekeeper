@@ -75,7 +75,7 @@ func readBattery() -> Reading? {
     return r
 }
 
-// ponytail: names are refreshed only when the set of charging ports changes, so a device swapped within one tick keeps the old name (ticket to open)
+// ponytail: names are refreshed only when the set of charging ports changes, so a device swapped within one tick keeps the old name (https://github.com/Vlor999/chargekeeper/issues/63)
 private var portNames: (ports: [Int], names: [Int: String]) = ([], [:])
 
 private func portNamesNeedRefresh(activePorts: [Int]) -> Bool {
@@ -100,8 +100,8 @@ private func sanitizedDeviceName(_ raw: String) -> String {
 
 private func iterationOrderIndependentPick(_ existing: String?, _ new: String) -> String { min(existing ?? new, new) }
 
-// ponytail: only devices plugged straight into a Mac port are named; a device behind a hub or dock has none (ticket to open)
-// ponytail: PortIndex of PowerOutDetails is assumed equal to usb-c-port-number (both from 1), checked on one Mac only (ticket to open)
+// ponytail: only devices plugged straight into a Mac port are named; a device behind a hub or dock has none (https://github.com/Vlor999/chargekeeper/issues/64)
+// ponytail: PortIndex of PowerOutDetails is assumed equal to usb-c-port-number (both from 1), checked on one Mac only (https://github.com/Vlor999/chargekeeper/issues/65)
 private func usbDeviceNamesByPortIndex() -> [Int: String] {
     var it: io_iterator_t = 0
     guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return [:] }
@@ -233,7 +233,7 @@ final class Backend {
         return ok
     }
 
-    // ponytail: the ACLC value for orangeBlink (6) is unverified on MagSafe 2 (ticket to open)
+    // ponytail: the ACLC value for orangeBlink (6) is unverified on MagSafe 2 (https://github.com/Vlor999/chargekeeper/issues/66)
     func setLED(_ c: LEDColor) {
         guard lastLED != c, smc_has(SMCKey.chargerLED) != 0 else { return }
         let v: UInt8 = switch c { case .system: 0; case .off: 1; case .green: 3; case .orange: 4; case .orangeBlink: 6 }

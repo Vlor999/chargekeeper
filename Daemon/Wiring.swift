@@ -77,7 +77,7 @@ func runDaemon() -> Never {
     let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let built = { (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate]) as? Date }
     let startedFrom = built()
-    // ponytail: the battery is polled every serviceTickInterval; IOPSNotificationCreateRunLoopSource would cut latency and wakeups (ticket to open)
+    // ponytail: the battery is polled every serviceTickInterval; IOPSNotificationCreateRunLoopSource would cut latency and wakeups (https://github.com/Vlor999/chargekeeper/issues/62)
     keep.append(Timer.scheduledTimer(withTimeInterval: serviceTickInterval, repeats: true) { _ in
         if built() != startedFrom { daemon.exitForUpdate() }
         daemon.tick()
