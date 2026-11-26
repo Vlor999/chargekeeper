@@ -1,14 +1,10 @@
 #!/bin/sh
-# Release packaging. CI runs: package.sh sign → notarize + staple the app → package.sh dmg → notarize + staple the dmg.
-#   package.sh sign   re-sign Sparkle's nested helpers, then the app (Developer ID, hardened runtime, timestamp)
-#   package.sh dmg    build/ChargeKeeper-<version>.dmg from the (stapled) app, signed
 set -eu
 APP=build/Build/Products/Release/ChargeKeeper.app
 ID=${APPLE_SIGNING_IDENTITY:-Developer ID Application}
 cs() { codesign -f -s "$ID" -o runtime --timestamp "$@"; }
 
-case ${1:-} in
-sign)
+sign_sparkle_helpers_then_app() {
     F=$APP/Contents/Frameworks/Sparkle.framework/Versions/B
     cs "$F/XPCServices/Installer.xpc"
     cs --preserve-metadata=entitlements "$F/XPCServices/Downloader.xpc"
@@ -18,8 +14,9 @@ sign)
     cs --identifier com.vlor999.jauge.service "$APP/Contents/MacOS/chargekeeperctl"
     cs "$APP"
     codesign --verify --deep --strict "$APP"
-    ;;
-dmg)
+}
+
+build_signed_dmg_from_stapled_app() {
     V=$(cat VERSION)
     D=build/dmg
     rm -rf "$D" && mkdir -p "$D"
@@ -28,6 +25,10 @@ dmg)
     hdiutil create -quiet -volname ChargeKeeper -srcfolder "$D" -ov -format UDZO "build/ChargeKeeper-$V.dmg"
     codesign -f -s "$ID" --timestamp "build/ChargeKeeper-$V.dmg"
     echo "build/ChargeKeeper-$V.dmg"
-    ;;
+}
+
+case ${1:-} in
+sign) sign_sparkle_helpers_then_app ;;
+dmg) build_signed_dmg_from_stapled_app ;;
 *) echo "usage: $0 sign|dmg"; exit 1 ;;
 esac

@@ -1,6 +1,5 @@
 name: Release
 
-# push to main: release if the VERSION is not published yet
 on:
   push:
     branches: [main]
@@ -11,6 +10,7 @@ permissions:
 
 jobs:
   version:
+    name: Is VERSION unreleased
     runs-on: ubuntu-latest
     outputs:
       new: ${{ steps.check.outputs.new }}
@@ -24,7 +24,6 @@ jobs:
 
   release:
     needs: version
-    # workflow_dispatch: manual rerun of a failed release
     if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     permissions:
@@ -39,12 +38,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_SECRETS == 'true'
 
-      # Third-party code (XcodeGen, Sparkle) is fetched before the certificate is imported.
-      - name: Install XcodeGen
+      - name: Install XcodeGen before secrets
         if: env.HAS_SECRETS == 'true'
         run: scripts/install-xcodegen.sh
 
-      - name: Prepare project
+      - name: Check, generate project and fetch Sparkle before secrets
         if: env.HAS_SECRETS == 'true'
         run: |
           make check
@@ -66,7 +64,11 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$PW" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/cert.p12"
-          # Developer ID G2 intermediate is not preinstalled on runners: without it the identity is invalid
+
+      - name: Install Developer ID G2 intermediate, missing on runners
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          KC=$RUNNER_TEMP/build.keychain-db
           curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/g2.cer"
           security import "$RUNNER_TEMP/g2.cer" -k "$KC"
           security find-identity -v -p codesigning "$KC" | grep -q "Developer ID Application" || { security find-identity -p codesigning "$KC"; exit 1; }
@@ -120,8 +122,8 @@ jobs:
         if: always() && env.HAS_SECRETS == 'true'
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
 
-  # Homebrew cask (Vlor999/homebrew-tap): written only when the HOMEBREW_TAP_TOKEN secret exists
   homebrew:
+    name: Update Homebrew cask in Vlor999/homebrew-tap if HOMEBREW_TAP_TOKEN is set
     needs: release
     runs-on: ubuntu-latest
     env:
@@ -157,13 +159,11 @@ jobs:
             app "ChargeKeeper.app"
             binary "#{appdir}/ChargeKeeper.app/Contents/MacOS/chargekeeperctl"
 
-            # Internal ids keep the former name Jauge.
             uninstall launchctl: "com.vlor999.jauge.daemon", quit: "com.vlor999.jauge"
             zap trash: ["/Library/Application Support/Jauge", "~/Library/Preferences/com.vlor999.jauge.plist"]
           end
           RUBY
           cd tap
-          # Former token: brew migrates existing "jauge" installs to "chargekeeper".
           git rm -q --ignore-unmatch Casks/jauge.rb
           [ -f cask_renames.json ] || echo '{}' > cask_renames.json
           jq '. + {"jauge": "chargekeeper"}' cask_renames.json > "$RUNNER_TEMP/renames.json"

@@ -1,8 +1,7 @@
 VERSION := $(shell cat VERSION)
-# Sparkle compares CFBundleVersion: 1.2.3 -> 10203
-BUILD := $(shell awk -F. '{print $$1*10000+$$2*100+$$3}' VERSION)
+BUNDLE_VERSION := $(shell awk -F. '{print $$1*10000+$$2*100+$$3}' VERSION)
 XB = xcodebuild -project ChargeKeeper.xcodeproj -configuration Release -derivedDataPath build -quiet \
-	MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$(BUILD) $(XB_FLAGS)
+	MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$(BUNDLE_VERSION) $(XB_FLAGS)
 
 all: project build
 
@@ -11,7 +10,6 @@ all: project build
 build:
 	$(XB) -scheme ChargeKeeper build
 
-# Generates the Xcode project and fetches packages (CI runs this before loading signing secrets).
 project:
 	xcodegen generate --quiet
 	xcodebuild -resolvePackageDependencies -project ChargeKeeper.xcodeproj -scheme ChargeKeeper -derivedDataPath build -quiet

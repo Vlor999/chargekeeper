@@ -2,6 +2,9 @@
 
 Push to `main` with a `VERSION` that has no release yet → `release.yml` builds, signs, notarizes, publishes `ChargeKeeper-<version>.dmg` + `appcast.xml`, then updates the Homebrew cask.
 
+- `CFBundleVersion` is `BUNDLE_VERSION` in the `Makefile`: `1.2.3` → `10203`, because Sparkle compares it to order updates.
+- The service binary is signed with the identifier `com.vlor999.jauge.service` (`--identifier` in `project.yml` and `scripts/package.sh`): launchd identifies the daemon by its signed identifier.
+
 ## Former name (Jauge)
 
 The app was renamed from Jauge (1.0.7 and earlier). What stays and what moves:
@@ -48,6 +51,10 @@ gh secret set SPARKLE_PRIVATE_KEY < /tmp/ed.key && rm /tmp/ed.key
 ```
 
 The matching public key is `SUPublicEDKey` in `project.yml`. Losing the private key means existing installs can no longer verify updates.
+
+## Updating dependencies
+
+Dependabot bumps the GitHub Actions only. Sparkle is pinned by commit in `project.yml` (XcodeGen), which Dependabot cannot read: bump the revision and its version tag by hand.
 
 ## Rerun a release
 
