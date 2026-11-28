@@ -682,6 +682,15 @@ func powerFlowLabelsSpreadWithinHeight() {
     assert(spreadLabels([100, 108], gap: 14, height: 110) == [89, 103])
 }
 
+func firstPowerFlowLabelsStayInsideChart() {
+    assert(spreadLabels([2, 3, 4], gap: 14, height: 200) == [7, 21, 35])
+}
+
+func crowdedPowerFlowLabelsOverlapEvenlyWithinHeight() {
+    assert(spreadLabels([5, 5, 5, 5], gap: 14, height: 40) == [5, 15, 25, 35])
+    assert(spreadLabels([3], gap: 14, height: 10) == [5])
+}
+
 func deviceIconMatchesAppleNamesElseGeneric() {
     assert(deviceIcon("iPhone") == "iphone" && deviceIcon("AirPods Charging Case") == "airpods" && deviceIcon(nil) == "cable.connector")
 }
@@ -1231,6 +1240,8 @@ let checks: [() -> Void] = [
     flowBandIsKeptOnlyWhenItsSourceSideExceedsHalfAPoint,
     flowSharesThatDoNotSumExactlyStillPairEveryNode,
     flowCrestStartsBeforeTheSourceAndWrapsEachPeriod,
+    firstPowerFlowLabelsStayInsideChart,
+    crowdedPowerFlowLabelsOverlapEvenlyWithinHeight,
 ]
 for check in checks { check() }
 print("logic ok")
