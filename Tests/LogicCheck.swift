@@ -24,7 +24,7 @@ func pastLimitEpisodeStarts(_ a: Action, _ pct: Int, _ st: ChargeState = .pause,
                             since: &since, now: at(s))
 }
 
-func hp(_ s: String, _ m: Int = 4200, cycles: Int? = 100, calibration: Bool? = nil) -> HealthSample {
+func hp(_ s: String, _ m: Int = 4200, cycles: Int? = 100, calibration: Bool = false) -> HealthSample {
     HealthSample(date: d(s), fullChargeCapacityMAh: m, nominalCapacityMAh: m + 100, designCapacityMAh: 4800, cycleCount: cycles, fromCalibration: calibration)
 }
 
@@ -688,7 +688,7 @@ func deviceIconMatchesAppleNamesElseGeneric() {
 
 func healthSampleNeedsBothCapacities() {
     let snap = BatterySnapshot(date: d("2026-10-01T12:00:00Z"), fullChargeCapacityMAh: 4200, nominalCapacityMAh: 4300, designCapacityMAh: 4800, cycleCount: 100, temperature: nil, percent: 80)
-    assert(healthSample(snap)?.healthPercent == 87.5 && healthSample(snap)?.fromCalibration == nil && healthSample(snap, calibration: true)?.fromCalibration == true)
+    assert(healthSample(snap)?.healthPercent == 87.5 && healthSample(snap)?.fromCalibration == false && healthSample(snap, calibration: true)?.fromCalibration == true)
     var noDesign = snap; noDesign.designCapacityMAh = 0
     assert(healthSample(noDesign) == nil)
 }
@@ -705,28 +705,28 @@ func healthSeriesThinsToWeeklyAfterDailyKeepDays() {
     var series: [HealthSample] = []
     var day = d("2025-01-01T12:00:00Z")
     while day <= now {
-        series = addHealthSample(series, HealthSample(date: day, fullChargeCapacityMAh: 4200, nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil), now: day, calendar: cal)
+        series = addHealthSample(series, HealthSample(date: day, fullChargeCapacityMAh: 4200, nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: false), now: day, calendar: cal)
         day = day.addingTimeInterval(secondsPerDay)
     }
     series = addHealthSample(series, hp("2025-03-05T18:00:00Z", calibration: true), now: now, calendar: cal)
     assert(zip(series, series.dropFirst()).allSatisfy { $0.date <= $1.date })
     let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
     assert(series.filter { $0.date >= cutoff }.count == healthDailyRetentionDays + 1)
-    let old = series.filter { $0.date < cutoff && $0.fromCalibration != true }
+    let old = series.filter { $0.date < cutoff && !$0.fromCalibration }
     assert(Set(old.map { cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: $0.date) }).count == old.count && (65...67).contains(old.count))
-    assert(series.contains { $0.fromCalibration == true })
+    assert(series.contains(where: \.fromCalibration))
 }
 
-func minutePoint(_ i: Int, calibration: Bool?) -> HealthSample {
+func minutePoint(_ i: Int, calibration: Bool) -> HealthSample {
     HealthSample(date: d("2026-01-01T00:00:00Z").addingTimeInterval(Double(i) * 60), fullChargeCapacityMAh: 4200, nominalCapacityMAh: nil, designCapacityMAh: 4800,
                  cycleCount: nil, fromCalibration: calibration)
 }
 
 func healthSeriesCapDropsDailyBeforeCalibration() {
     let capNow = d("2026-01-02T00:00:00Z"), pointCount = 600
-    var series = (0..<pointCount).reduce([]) { s, i in addHealthSample(s, minutePoint(i, calibration: i % 2 == 0 ? true : nil), now: capNow, calendar: cal) }
-    assert(series.count == healthMaxSamples && series.filter { $0.fromCalibration == true }.count == pointCount / 2)
-    assert(series.last?.date == minutePoint(pointCount - 1, calibration: nil).date && series.first?.date == minutePoint(0, calibration: true).date)
+    var series = (0..<pointCount).reduce([]) { s, i in addHealthSample(s, minutePoint(i, calibration: i % 2 == 0), now: capNow, calendar: cal) }
+    assert(series.count == healthMaxSamples && series.filter(\.fromCalibration).count == pointCount / 2)
+    assert(series.last?.date == minutePoint(pointCount - 1, calibration: false).date && series.first?.date == minutePoint(0, calibration: true).date)
     series = (0..<pointCount).reduce([]) { s, i in addHealthSample(s, minutePoint(i, calibration: true), now: capNow, calendar: cal) }
     assert(series.count == healthMaxSamples && series.first?.date == minutePoint(pointCount - healthMaxSamples, calibration: true).date, "oldest first")
 }
@@ -741,10 +741,20 @@ func healthSeriesRefusesFutureDatedPoints() {
 func thinningCutoffUsesNowNotInsertedPoint() {
     let now = d("2026-10-01T12:00:00Z")
     let daily = (0..<200).map { i in HealthSample(date: now.addingTimeInterval(-Double(i) * secondsPerDay), fullChargeCapacityMAh: 4200,
-                                                  nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil) }.reversed()
+                                                  nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: false) }.reversed()
     let thinned = addHealthSample(Array(daily), hp("2026-03-01T12:00:00Z", calibration: true), now: now, calendar: cal)
     let cutoff = now.addingTimeInterval(-Double(healthDailyRetentionDays) * secondsPerDay)
-    assert(thinned.filter { $0.fromCalibration != true && $0.date < cutoff }.count <= 3)
+    assert(thinned.filter { !$0.fromCalibration && $0.date < cutoff }.count <= 3)
+}
+
+func healthSampleCalibrationFlagDecodesFalseWithoutKey() {
+    let saved = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(hp("2026-10-01T12:00:00Z"))) as! [String: Any]
+    let beforeTheFlag = saved.filter { $0.key != "calibration" }
+    assert(try! JSONDecoder().decode(HealthSample.self, from: JSONSerialization.data(withJSONObject: beforeTheFlag)).fromCalibration == false)
+    for flag in [true, false] {
+        let sample = hp("2026-10-01T12:00:00Z", calibration: flag)
+        assert(try! JSONDecoder().decode(HealthSample.self, from: JSONEncoder().encode(sample)).fromCalibration == flag)
+    }
 }
 
 func calibrationPointReplacesDailyPointOfSameTick() {
@@ -780,7 +790,7 @@ func olderHealthPayloadsDecode() {
     assert(try! JSONDecoder().decode(Status.self, from: JSONSerialization.data(withJSONObject: olderService)).healthHistory == nil)
     let noFlag = #"{"date":0,"maxCapacity":4200,"designCapacity":4800}"#.data(using: .utf8)!
     assert(try! JSONDecoder().decode(HealthSample.self, from: noFlag) == HealthSample(date: Date(timeIntervalSinceReferenceDate: 0), fullChargeCapacityMAh: 4200,
-                                                                                     nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: nil))
+                                                                                     nominalCapacityMAh: nil, designCapacityMAh: 4800, cycleCount: nil, fromCalibration: false))
 }
 
 func healthRangeStartsThreeMonthsOrOneYearBack() {
@@ -1161,6 +1171,7 @@ let checks: [() -> Void] = [
     configFromOlderServiceUsesDefaults,
     statusFromOlderServiceDecodes,
     renamedFieldsKeepTheirWireKeys,
+    healthSampleCalibrationFlagDecodesFalseWithoutKey,
     commandsKeepTheirWireNames,
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
