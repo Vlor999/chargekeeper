@@ -271,9 +271,9 @@ func dateTimeShowsAbbreviatedDateAndShortTime() {
 func approxDurationRoundsToMinutesThenHoursAndMinutes() {
     defer { useLanguage("system") }
     useLanguage("en")
-    assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+    assert(approxDuration(1500) == "~25 min" && approxDuration(1530) == "~26 min" && approxDuration(20) == "~1 min" && approxDuration(3900) == "~1 h 05 min")
     useLanguage("fr")
-    assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+    assert(approxDuration(1500) == "~25 min" && approxDuration(1530) == "~26 min" && approxDuration(20) == "~1 min" && approxDuration(3900) == "~1 h 05 min")
 }
 
 func menuAndNotificationStringsAreTranslated() {
