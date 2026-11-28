@@ -1,9 +1,11 @@
 import Foundation
+import IOKit.ps
 import IOKit.pwr_mgt
 
 var daemon: Daemon!
 var rootPort: io_connect_t = 0
 var keep: [AnyObject] = []
+var keepAwakeEndTimer: Timer?
 
 func restrictSocketToAdmins(_ path: String) {
     chown(path, 0, getgrnam(adminGroupName)?.pointee.gr_gid ?? adminGroupFallbackGID)
@@ -37,7 +39,10 @@ func serve() {
         limitClientStall(c)
         guard let data = try? readLine(c) else { log("socket: no request read", .warn); return }
         guard let cmd = try? JSONDecoder().decode(Command.self, from: data) else { log("socket: invalid request (\(data.count) bytes)", .warn); return }
-        guard let out = try? JSONEncoder().encode(daemon.handle(cmd)) else { return }
+        if case .status = cmd { daemon.tick() }
+        let status = daemon.handle(cmd)
+        tickAtKeepAwakeEnd()
+        guard let out = try? JSONEncoder().encode(status) else { return }
         if (try? writeLine(c, out)) == nil { log("socket: reply not sent", .warn) }
     }
     src.resume()
@@ -58,6 +63,22 @@ func watchSleep() {
     if let port { CFRunLoopAddSource(CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port).takeUnretainedValue(), .defaultMode) }
 }
 
+func watchPowerSources() {
+    guard let src = IOPSNotificationCreateRunLoopSource({ _ in daemon.tick() }, nil)?.takeRetainedValue() else {
+        return log("power source notifications unavailable: battery read every \(serviceTimeCheckInterval) s only", .error)
+    }
+    CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
+}
+
+func tickAtKeepAwakeEnd() {
+    keepAwakeEndTimer?.invalidate()
+    keepAwakeEndTimer = nil
+    guard let until = daemon.s.runtime.keepAwakeUntil, until != .distantFuture else { return }
+    let t = Timer(fire: until, interval: 0, repeats: false) { _ in daemon.tick() }
+    RunLoop.main.add(t, forMode: .default)
+    keepAwakeEndTimer = t
+}
+
 func runDaemon() -> Never {
     guard getuid() == 0 else { print("daemon must run as root"); exit(1) }
     guard smc_open() == 0 else { print("cannot open AppleSMC"); exit(1) }
@@ -72,13 +93,14 @@ func runDaemon() -> Never {
     }
     serve()
     watchSleep()
+    watchPowerSources()
     daemon.tick()
+    tickAtKeepAwakeEnd()
     daemon.power.keepRunning()
     let exe = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let built = { (try? FileManager.default.attributesOfItem(atPath: exe)[.modificationDate]) as? Date }
     let startedFrom = built()
-    // ponytail: the battery is polled every serviceTickInterval; IOPSNotificationCreateRunLoopSource would cut latency and wakeups (https://github.com/Vlor999/chargekeeper/issues/62)
-    keep.append(Timer.scheduledTimer(withTimeInterval: serviceTickInterval, repeats: true) { _ in
+    keep.append(Timer.scheduledTimer(withTimeInterval: serviceTimeCheckInterval, repeats: true) { _ in
         if built() != startedFrom { daemon.exitForUpdate() }
         daemon.tick()
         daemon.power.keepRunning()

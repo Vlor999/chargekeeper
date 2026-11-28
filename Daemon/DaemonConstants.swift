@@ -2,7 +2,7 @@ import Foundation
 
 let stateDir = "/Library/Application Support/Jauge"
 let statePath = stateDir + "/state.json"
-let serviceTickInterval: TimeInterval = 5
+let serviceTimeCheckInterval: TimeInterval = 30
 let appleLimitReadInterval: TimeInterval = 10 * 60
 let nativeChargeLimitPercentRange = 80...100
 
