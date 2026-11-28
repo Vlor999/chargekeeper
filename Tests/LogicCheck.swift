@@ -1106,6 +1106,7 @@ func thinFlowNodeKeepsTheMinimumHeight() {
     let even = FlowSideLayout(watts: [1, 1], totalHeight: 106, gap: 6, minNodeHeight: 8)
     assert(even.heights == [50, 50] && even.tops == [0, 56])
     assert(FlowSideLayout(watts: [0, 1], totalHeight: 106, gap: 6, minNodeHeight: 8).heights == [8, 92])
+    assert(FlowSideLayout(watts: [1, 9.2, 89.8], totalHeight: 100, gap: 6, minNodeHeight: 8).heights == [8, 8, 72])
 }
 
 func crowdedFlowSideKeepsHalfItsHeightProportional() {
