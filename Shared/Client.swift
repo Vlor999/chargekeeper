@@ -2,9 +2,13 @@ import Foundation
 
 enum ClientError: Error, LocalizedError {
     case unavailable
-    // ponytail: a service older than the command closes the connection without a reply, reported as not running (https://github.com/Vlor999/chargekeeper/issues/59)
     case closedWithoutReply
-    var errorDescription: String? { "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items" }
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items"
+        case .closedWithoutReply: "ChargeKeeper service did not answer this request: it may be older than the app. Install the latest update, then restart the Mac."
+        }
+    }
 }
 
 func send(_ cmd: Command) throws -> Status {

@@ -1038,6 +1038,13 @@ func legacyInstallNamesUnchanged() {
                                                         "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
 }
 
+func serviceErrorsAreTranslatedAndDistinct() {
+    let notRunning = ClientError.unavailable.localizedDescription
+    let didNotAnswer = ClientError.closedWithoutReply.localizedDescription
+    for k in [notRunning, didNotAnswer] { assert(french[k] != nil, k) }
+    assert(notRunning != didNotAnswer)
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
@@ -1165,6 +1172,7 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    serviceErrorsAreTranslatedAndDistinct,
 ]
 for check in checks { check() }
 print("logic ok")

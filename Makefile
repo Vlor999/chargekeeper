@@ -16,7 +16,7 @@ project:
 
 check:
 	mkdir -p build/check && cp Tests/LogicCheck.swift build/check/main.swift
-	swiftc -swift-version 5 Shared/SharedConstants.swift Shared/Model.swift Shared/Logic.swift Shared/HealthSeries.swift Shared/KeepAwake.swift Shared/HistoryText.swift Shared/Schedule.swift Shared/PowerSamples.swift Shared/Layout.swift Shared/DiagnosticLog.swift App/Strings.swift App/SettingsIndex.swift build/check/main.swift -o build/check/logic && build/check/logic
+	swiftc -swift-version 5 Shared/SharedConstants.swift Shared/Model.swift Shared/Logic.swift Shared/HealthSeries.swift Shared/KeepAwake.swift Shared/HistoryText.swift Shared/Schedule.swift Shared/PowerSamples.swift Shared/Layout.swift Shared/DiagnosticLog.swift Shared/Client.swift App/Strings.swift App/SettingsIndex.swift build/check/main.swift -o build/check/logic && build/check/logic
 
 clean:
 	rm -rf build ChargeKeeper.xcodeproj

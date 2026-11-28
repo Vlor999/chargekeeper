@@ -58,6 +58,10 @@ let french: [String: String] = [
     "Starting the service…": "Démarrage du service…",
     "ChargeKeeper needs a system service to control charging.": "ChargeKeeper a besoin d'un service système pour piloter la charge.",
     "Turn On Service": "Activer le service",
+    "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items":
+        "Le service ChargeKeeper ne tourne pas : ouvrez ChargeKeeper et activez-le dans Réglages Système > Ouverture",
+    "ChargeKeeper service did not answer this request: it may be older than the app. Install the latest update, then restart the Mac.":
+        "Le service ChargeKeeper n'a pas répondu à cette demande : il est peut-être plus ancien que l'app. Installez la dernière mise à jour, puis redémarrez le Mac.",
     "Hardware %@ · %@": "Matériel %@ · %@",
     "Hardware %@ · %@ · Limit %d %%": "Matériel %@ · %@ · Limite %d %%",
     "Charge limit": "Limite de recharge",
