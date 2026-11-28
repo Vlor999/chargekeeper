@@ -811,13 +811,17 @@ func healthChartStringsAreTranslated() {
 
 func settingsSearchIgnoresAccentsCaseAndRequiresAllWords() {
     let ids = { (q: String) in searchSettings(q).map(\.id) }
-    assert(ids("login") == ["openAtLogin"] && ids("connexion") == ["openAtLogin"])
-    assert(ids("REVEIL") == ["catchUp"] && ids("réveil") == ids("reveil"))
-    assert(ids("niveau veille") == ["sleepFreeze"] && ids("login quit").isEmpty && ids("  ").isEmpty)
+    assert(ids("login") == [SettingsRowID.openAtLogin] && ids("connexion") == [.openAtLogin])
+    assert(ids("REVEIL") == [.catchUp] && ids("réveil") == ids("reveil"))
+    assert(ids("niveau veille") == [.sleepFreeze] && ids("login quit").isEmpty && ids("  ").isEmpty)
 }
 
 func settingsIndexIdsAreUnique() {
     assert(Set(settingsIndex.map(\.id)).count == settingsIndex.count)
+}
+
+func everySettingsRowIDHasAnIndexEntry() {
+    assert(Set(settingsIndex.map(\.id)) == Set(SettingsRowID.allCases))
 }
 
 func settingsIndexIsTranslated() {
@@ -1136,6 +1140,7 @@ let checks: [() -> Void] = [
     healthChartStringsAreTranslated,
     settingsSearchIgnoresAccentsCaseAndRequiresAllWords,
     settingsIndexIdsAreUnique,
+    everySettingsRowIDHasAnIndexEntry,
     settingsIndexIsTranslated,
     logFileNameRoundTripsPerUtcDay,
     foreignLogFileNamesAreRejected,

@@ -15,7 +15,7 @@ struct DiagnosticView: View {
                     Text(tr("Off")).tag(PowerInterval.off)
                     ForEach(PowerInterval.allCases.filter { $0 != .off }, id: \.self) { Text(tr("%d s", $0.rawValue)).tag($0) }
                 }
-                .searchResultAnchor("powerInterval")
+                .searchResultAnchor(.powerInterval)
             } header: {
                 Text(tr("Power by component"))
             } footer: {
@@ -24,16 +24,16 @@ struct DiagnosticView: View {
             }
             Section {
                 Toggle(tr("Keep a diagnostic log"), isOn: m.config(\.logEnabled))
-                    .searchResultAnchor("logEnabled")
+                    .searchResultAnchor(.logEnabled)
                 Stepper(m.config(\.logDays).wrappedValue == 1 ? tr("Keep: 1 day") : tr("Keep: %d days", m.config(\.logDays).wrappedValue), value: m.config(\.logDays), in: logRetentionDaysRange)
-                    .searchResultAnchor("logDays")
+                    .searchResultAnchor(.logDays)
                 LabeledContent(tr("Folder")) {
                     HStack {
                         Text(logDir).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                         Button(tr("Open Folder")) { NSWorkspace.shared.open(URL(fileURLWithPath: logDir, isDirectory: true)) }
                     }
                 }
-                .searchResultAnchor("logFolder")
+                .searchResultAnchor(.logFolder)
             } header: {
                 Text(tr("Log"))
             } footer: {
@@ -56,7 +56,7 @@ struct DiagnosticView: View {
                     }
                     .disabled(lines?.isEmpty ?? true)
                 }
-                .searchResultAnchor("logViewer")
+                .searchResultAnchor(.logViewer)
                 if m.status.map({ !$0.config.logEnabled }) == true {
                     Text(tr("Log off: no new entry.")).font(.caption).foregroundStyle(.secondary)
                 }

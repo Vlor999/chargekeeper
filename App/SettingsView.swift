@@ -45,7 +45,7 @@ struct SettingsView: View {
     let unobservedModel: AppModel
     @AppStorage("settingsPane") private var pane = SettingsPane.general
     @State private var query = ""
-    @State private var target: String?
+    @State private var target: SettingsRowID?
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -105,7 +105,7 @@ struct SettingsView: View {
 struct SettingsPaneView: View {
     @EnvironmentObject var m: AppModel
     let pane: SettingsPane
-    let target: String?
+    let target: SettingsRowID?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -115,7 +115,7 @@ struct SettingsPaneView: View {
         }
     }
 
-    private func scrollOnceRowsAreLaidOut(_ proxy: ScrollViewProxy, to id: String) {
+    private func scrollOnceRowsAreLaidOut(_ proxy: ScrollViewProxy, to id: SettingsRowID) {
         DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
     }
 
@@ -140,15 +140,15 @@ struct SettingsPaneView: View {
                 Text("English").tag("en")
                 Text("Français").tag("fr")
             }
-            .searchResultAnchor("language")
+            .searchResultAnchor(.language)
             Toggle(tr("Open at login"), isOn: Binding(
                 get: { SMAppService.mainApp.status == .enabled },
                 set: { on in try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }))
-                .searchResultAnchor("openAtLogin")
+                .searchResultAnchor(.openAtLogin)
             Section {
                 ForEach(NoticeKind.allCases) { NoticeToggle(kind: $0) }
             } header: {
-                Text(tr("Notifications")).searchResultAnchor("notifications")
+                Text(tr("Notifications")).searchResultAnchor(.notifications)
             } footer: {
                 Text(tr("Shown only while ChargeKeeper is running. Allow ChargeKeeper in System Settings > Notifications."))
                     .font(.caption).foregroundStyle(.secondary)
@@ -158,7 +158,7 @@ struct SettingsPaneView: View {
                 Toggle(tr("Install updates automatically"), isOn: Binding(
                     get: { u.automaticallyChecksForUpdates && u.automaticallyDownloadsUpdates },
                     set: { u.automaticallyChecksForUpdates = $0; u.automaticallyDownloadsUpdates = $0 }))
-                    .searchResultAnchor("autoUpdate")
+                    .searchResultAnchor(.autoUpdate)
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Version %@", Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"))
@@ -168,7 +168,7 @@ struct SettingsPaneView: View {
                     Spacer()
                     Button(tr("Check for Updates…")) { m.updater.checkForUpdates(nil) }
                 }
-                .searchResultAnchor("version")
+                .searchResultAnchor(.version)
             }
             Section(tr("About")) {
                 HStack {
@@ -184,7 +184,7 @@ struct SettingsPaneView: View {
                         Label(tr("Buy me a coffee"), systemImage: "cup.and.saucer")
                     }
                 }
-                .searchResultAnchor("support")
+                .searchResultAnchor(.support)
                 HStack {
                     VStack(alignment: .leading) {
                         Text(tr("Send feedback"))
@@ -198,17 +198,17 @@ struct SettingsPaneView: View {
                         Label(tr("Give feedback"), systemImage: "bubble.left")
                     }
                 }
-                .searchResultAnchor("feedback")
+                .searchResultAnchor(.feedback)
                 linksTitledAboveGrid
-                    .searchResultAnchor("links")
+                    .searchResultAnchor(.links)
                 Text(tr("Provided as is, without warranty (MIT License). ChargeKeeper uses undocumented macOS interfaces that may change: use it at your own risk. Independent project, not affiliated with or endorsed by Apple."))
                     .font(.caption).foregroundStyle(.secondary)
-                    .searchResultAnchor("about")
+                    .searchResultAnchor(.about)
             }
             Section {
                 Button(tr("Quit ChargeKeeper")) { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
-                    .searchResultAnchor("quit")
+                    .searchResultAnchor(.quit)
             }
         }
         .formStyle(.grouped)
@@ -244,23 +244,23 @@ struct SettingsPaneView: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
                     }
                 }
-                .searchResultAnchor("macOSBattery")
+                .searchResultAnchor(.macOSBattery)
             }
             Section(tr("Discharge")) {
-                Toggle(tr("Automatic discharge"), isOn: m.config(\.drainAboveLimitOnAdapter)).searchResultAnchor("autoDischarge")
+                Toggle(tr("Automatic discharge"), isOn: m.config(\.drainAboveLimitOnAdapter)).searchResultAnchor(.autoDischarge)
                 Text(tr("Above the limit, the battery drains down to the limit even when plugged in. Paused during calibration."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(tr("Idle range")) {
-                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle)).searchResultAnchor("idle")
+                Toggle(tr("Recharge only below the idle range"), isOn: m.config(\.idle)).searchResultAnchor(.idle)
                 Stepper(tr("Range: %d %%", m.config(\.idleRange).wrappedValue), value: m.config(\.idleRange), in: 1...30)
             }
             Section(tr("Heat protection")) {
-                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect)).searchResultAnchor("heat")
+                Toggle(tr("Stop charging when the battery is too hot"), isOn: m.config(\.heatProtect)).searchResultAnchor(.heat)
                 Stepper(tr("Max temp: %.0f °C", m.config(\.maxTemp).wrappedValue), value: m.config(\.maxTemp), in: 25...50, step: 1)
             }
             Section(tr("Shutdown")) {
-                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped)).searchResultAnchor("keepLimit")
+                Toggle(tr("Keep the limit when the service stops"), isOn: m.config(\.keepLimitWhenStopped)).searchResultAnchor(.keepLimit)
                 Text(tr("The system service applies the limit for every user account. This keeps it active if the service stops."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -271,16 +271,16 @@ struct SettingsPaneView: View {
     var sleep: some View {
         Form {
             if m.sleepDisabledWithoutReason { UnexplainedSleepDisabledWarning() }
-            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).searchResultAnchor("sleepFreeze")
-            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).searchResultAnchor("sleepPrevent")
+            Toggle(tr("Freeze the charge level during sleep"), isOn: m.config(\.stopChargingDuringSleep)).searchResultAnchor(.sleepFreeze)
+            Toggle(tr("Prevent sleep until the limit is reached"), isOn: m.config(\.disableSleepUntilLimit)).searchResultAnchor(.sleepPrevent)
             Text(tr("Sleep is also prevented while discharging on the adapter (clamshell mode)."))
                 .font(.caption).foregroundStyle(.secondary)
             Section(tr("Keep awake")) {
-                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeWithLidClosed)).searchResultAnchor("keepAwakeLid")
+                Toggle(tr("Even with the lid closed"), isOn: m.config(\.keepAwakeWithLidClosed)).searchResultAnchor(.keepAwakeLid)
                 Stepper(value: m.config(\.keepAwakeMinBattery), in: keepAwakeMinBatteryPercentRange, step: 5) {
                     LabeledContent(tr("Turn off on battery below"), value: "\(m.config(\.keepAwakeMinBattery).wrappedValue) %")
                 }
-                    .searchResultAnchor("keepAwakeBattery")
+                    .searchResultAnchor(.keepAwakeBattery)
                 Text(tr("Keep awake is turned on from the menu. It prevents idle sleep; the display can still turn off."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -289,7 +289,7 @@ struct SettingsPaneView: View {
                     Button(tr("Low Power Mode: on")) { m.run(.lowPower(true)) }
                     Button(tr("off")) { m.run(.lowPower(false)) }
                 }
-                .searchResultAnchor("energyMode")
+                .searchResultAnchor(.energyMode)
                 HStack {
                     Button(tr("Performance mode: on")) { m.run(.highPower(true)) }
                     Button(tr("off")) { m.run(.highPower(false)) }
@@ -306,8 +306,8 @@ struct SettingsPaneView: View {
                 Text(tr("Color by charge state")).tag(LEDSetting.indicate)
                 Text(tr("Always off")).tag(LEDSetting.alwaysOff)
             }
-            .searchResultAnchor("led")
-            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge)).searchResultAnchor("ledBlink")
+            .searchResultAnchor(.led)
+            Toggle(tr("Blinking orange while discharging"), isOn: m.config(\.ledBlinkDischarge)).searchResultAnchor(.ledBlink)
             Text(tr("Green: limit reached · Orange: charging or discharging toward the limit."))
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -393,8 +393,8 @@ struct ScheduleView: View {
                     Button(tr("Monthly calibration")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .monthly, start: nextNine())) }
                     Button(tr("Calibration every 2 weeks")) { tasks.wrappedValue.append(ScheduledTask(action: .calibrate, repeatRule: .biweekly, start: nextNine())) }
                 }
-                .searchResultAnchor("tasks")
-                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks)).searchResultAnchor("catchUp")
+                .searchResultAnchor(.tasks)
+                Toggle(tr("Run missed tasks on wake"), isOn: m.config(\.catchUpMissedTasks)).searchResultAnchor(.catchUp)
             }
             Section {
                 ForEach(m.status?.history ?? [], id: \.self) { h in
@@ -407,7 +407,7 @@ struct ScheduleView: View {
                     }
                 }
             } header: {
-                Text(tr("History")).searchResultAnchor("history")
+                Text(tr("History")).searchResultAnchor(.history)
             }
         }
         .formStyle(.grouped)
@@ -429,7 +429,7 @@ struct BatteryView: View {
             if let b = m.status?.battery {
                 if fetched { HealthChartSection(series: series) }
                 Section(tr("Battery health")) {
-                    row(tr("Health"), percent(b.healthPercent)).searchResultAnchor("health")
+                    row(tr("Health"), percent(b.healthPercent)).searchResultAnchor(.health)
                     row(tr("Health (nominal)"), percent(b.nominalHealthPercent))
                     row(tr("Full charge capacity"), mAh(b.fullChargeCapacityMAh))
                     row(tr("Nominal capacity"), mAh(b.nominalCapacityMAh))
@@ -439,7 +439,7 @@ struct BatteryView: View {
             }
             if let c = m.status?.lastCalibration {
                 Section(tr("Last calibration")) {
-                    row(tr("Date"), dateTime(c.end)).searchResultAnchor("lastCalibration")
+                    row(tr("Date"), dateTime(c.end)).searchResultAnchor(.lastCalibration)
                     row(tr("Duration"), duration(c.end.timeIntervalSince(c.start)))
                     row(tr("Capacity"), "\(mAh(c.before.fullChargeCapacityMAh)) → \(mAh(c.after.fullChargeCapacityMAh))")
                     row(tr("Health"), "\(percent(c.before.healthPercent)) → \(percent(c.after.healthPercent))")

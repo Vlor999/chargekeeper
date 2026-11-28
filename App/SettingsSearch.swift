@@ -1,18 +1,18 @@
 import SwiftUI
 
 private struct SettingsTargetKey: EnvironmentKey {
-    static let defaultValue: String? = nil
+    static let defaultValue: SettingsRowID? = nil
 }
 
 extension EnvironmentValues {
-    var pickedSearchResultID: String? {
+    var pickedSearchResultID: SettingsRowID? {
         get { self[SettingsTargetKey.self] }
         set { self[SettingsTargetKey.self] = newValue }
     }
 }
 
 private struct SettingsRow: ViewModifier {
-    let id: String
+    let id: SettingsRowID
     @Environment(\.pickedSearchResultID) private var target
 
     func body(content: Content) -> some View {
@@ -23,5 +23,5 @@ private struct SettingsRow: ViewModifier {
 }
 
 extension View {
-    func searchResultAnchor(_ id: String) -> some View { modifier(SettingsRow(id: id)) }
+    func searchResultAnchor(_ id: SettingsRowID) -> some View { modifier(SettingsRow(id: id)) }
 }
