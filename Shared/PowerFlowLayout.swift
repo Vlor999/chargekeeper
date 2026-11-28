@@ -51,7 +51,7 @@ func flowBands(from src: FlowSideLayout, to dst: FlowSideLayout) -> [FlowBand] {
     while i < remS.count && j < remD.count {
         let w = min(remS[i], remD[j])
         let ha = w * src.pointsPerShare[i], hb = w * dst.pointsPerShare[j]
-        if ha > 0.5 { bands.append(FlowBand(source: i, sink: j, sourceTop: offS[i], sourceHeight: ha, sinkTop: offD[j], sinkHeight: hb)) }
+        if ha > 0.5 || hb > 0.5 { bands.append(FlowBand(source: i, sink: j, sourceTop: offS[i], sourceHeight: ha, sinkTop: offD[j], sinkHeight: hb)) }
         offS[i] += ha; offD[j] += hb
         remS[i] -= w; remD[j] -= w
         if remS[i] <= 1e-6 { i += 1 }

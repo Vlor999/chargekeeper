@@ -1081,9 +1081,10 @@ func flowBandUnderHalfAPointIsSkippedButKeepsItsRoom() {
     assert(bands == [FlowBand(source: 0, sink: 1, sourceTop: 0.2734375, sourceHeight: 69.7265625, sinkTop: 6.25, sinkHeight: 63.75)])
 }
 
-func flowBandIsKeptOnlyWhenItsSourceSideExceedsHalfAPoint() {
+func flowBandIsKeptWhenEitherSideExceedsHalfAPoint() {
     let atHalfAPoint = flowBands(from: FlowSideLayout(watts: [1, 127], totalHeight: 70, gap: 6), to: FlowSideLayout(watts: [128], totalHeight: 200, gap: 6))
-    assert(atHalfAPoint == [FlowBand(source: 1, sink: 0, sourceTop: 6.5, sourceHeight: 63.5, sinkTop: 1.5625, sinkHeight: 198.4375)])
+    assert(atHalfAPoint == [FlowBand(source: 0, sink: 0, sourceTop: 0, sourceHeight: 0.5, sinkTop: 0, sinkHeight: 1.5625),
+                            FlowBand(source: 1, sink: 0, sourceTop: 6.5, sourceHeight: 63.5, sinkTop: 1.5625, sinkHeight: 198.4375)])
     let justAboveHalfAPoint = flowBands(from: FlowSideLayout(watts: [1, 127], totalHeight: 102, gap: 6), to: FlowSideLayout(watts: [128], totalHeight: 64, gap: 6))
     assert(justAboveHalfAPoint == [FlowBand(source: 0, sink: 0, sourceTop: 0, sourceHeight: 0.75, sinkTop: 0, sinkHeight: 0.5),
                                    FlowBand(source: 1, sink: 0, sourceTop: 6.75, sourceHeight: 95.25, sinkTop: 0.5, sinkHeight: 63.5)])
@@ -1116,6 +1117,15 @@ func thinFlowNodeBandsFillItsBar() {
     let bands = flowBands(from: FlowSideLayout(watts: [1, 99], totalHeight: 106, gap: 6, minNodeHeight: 8), to: FlowSideLayout(watts: [100], totalHeight: 100, gap: 6, minNodeHeight: 8))
     assert(roundedToMillipoints(bands.map(\.sourceHeight)) == [8, 92] && roundedToMillipoints(bands.map(\.sourceTop)) == [0, 14])
     assert(roundedToMillipoints(bands.map(\.sinkHeight)) == [1, 99])
+}
+
+func thinFlowSinkBandsFillItsBar() {
+    let sink = FlowSideLayout(watts: [30, 0.3, 59.7], totalHeight: 110, gap: 6, minNodeHeight: 8)
+    let intoThinSink = flowBands(from: FlowSideLayout(watts: [90], totalHeight: 110, gap: 6, minNodeHeight: 8), to: sink).filter { $0.sink == 1 }
+    assert(intoThinSink.count == 1 && roundedToMillipoints([intoThinSink[0].sinkTop, intoThinSink[0].sinkHeight]) == roundedToMillipoints([sink.tops[1], 8]))
+    let raisedFirstSink = flowBands(from: FlowSideLayout(watts: [70, 5], totalHeight: 110, gap: 6, minNodeHeight: 8),
+                                    to: FlowSideLayout(watts: [0.4, 12.6, 61], totalHeight: 110, gap: 6, minNodeHeight: 8))
+    assert(roundedToMillipoints([raisedFirstSink.filter { $0.sink == 0 }.map(\.sinkHeight).reduce(0, +)]) == [8])
 }
 
 func flowCrestStartsBeforeTheSourceAndWrapsEachPeriod() {
@@ -1258,7 +1268,7 @@ let checks: [() -> Void] = [
     oneFlowSinkTakesEveryBand,
     noFlowSourceDrawsNoBand,
     flowBandUnderHalfAPointIsSkippedButKeepsItsRoom,
-    flowBandIsKeptOnlyWhenItsSourceSideExceedsHalfAPoint,
+    flowBandIsKeptWhenEitherSideExceedsHalfAPoint,
     flowSharesThatDoNotSumExactlyStillPairEveryNode,
     flowCrestStartsBeforeTheSourceAndWrapsEachPeriod,
     firstPowerFlowLabelsStayInsideChart,
@@ -1266,6 +1276,7 @@ let checks: [() -> Void] = [
     thinFlowNodeKeepsTheMinimumHeight,
     crowdedFlowSideKeepsHalfItsHeightProportional,
     thinFlowNodeBandsFillItsBar,
+    thinFlowSinkBandsFillItsBar,
 ]
 for check in checks { check() }
 print("logic ok")
