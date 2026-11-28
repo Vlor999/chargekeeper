@@ -266,9 +266,9 @@ func everyHistoryTemplateAndBannerHasFrench() {
 
 func timeToTargetFromCurrentAndCapacity() {
     let watts2000mAAt11_4V = 22.8
-    assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 2000, watts: 0) == 1800)
+    assert(timeToTarget(percent: 30, target: 50, capacity: 5000, amperage: 2000, watts: 0) == 1800)
     assert(timeToTarget(percent: 90, target: 80, capacity: 5000, amperage: -1000, watts: 0) == 1800)
-    assert(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: nil, watts: watts2000mAAt11_4V) == 1800)
+    assert(timeToTarget(percent: 30, target: 50, capacity: 5000, amperage: nil, watts: watts2000mAAt11_4V) == 1800)
 }
 
 func timeToTargetIsAtLeastOneMinute() {
@@ -284,6 +284,14 @@ func timeToTargetIsNilWhenReachedIdleWrongWayOrNoCapacity() {
 
 func timeToTargetIsNilOver24Hours() {
     assert(timeToTarget(percent: 10, target: 100, capacity: 5000, amperage: 60, watts: 0) == nil)
+}
+
+func timeToFullFromBelowTaperAddsTheTaper() {
+    assert(abs(timeToTarget(percent: 40, target: 100, capacity: 5000, amperage: 2000, watts: 0)! - 12316.2) < 1)
+}
+
+func timeToFullFromAboveTaperFollowsTheFallingCurrent() {
+    assert(abs(timeToTarget(percent: 90, target: 100, capacity: 5000, amperage: 1100, watts: 0)! - 2690.9) < 1)
 }
 
 func calibrationProgressReportsStepAndTarget() {
@@ -1165,6 +1173,8 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    timeToFullFromBelowTaperAddsTheTaper,
+    timeToFullFromAboveTaperFollowsTheFallingCurrent,
 ]
 for check in checks { check() }
 print("logic ok")

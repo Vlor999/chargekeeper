@@ -171,14 +171,32 @@ private func milliamps(amperage: Int?, watts: Double) -> Double {
     amperage.map(Double.init) ?? watts * 1000 / nominalThreeCellPackVolts
 }
 
-// ponytail: linear at the present current; charging tapers above ~80 %, so the time to 100 % reads short until the next appRefreshInterval (https://github.com/Vlor999/chargekeeper/issues/67)
+// ponytail: the display holds 99 % for about 16 min at the end of a charge, so the time to 100 % reads about 13 min short from 92 % up (https://github.com/Vlor999/chargekeeper/issues/86)
 func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
     guard let capacity, capacity > 0, target != percent else { return nil }
     let mA = milliamps(amperage: amperage, watts: watts)
-    let toGoMAh = Double(target - percent) / 100 * Double(capacity)
-    guard abs(mA) >= minEstimableCurrentMilliamps, (toGoMAh > 0) == (mA > 0) else { return nil }
-    let t = toGoMAh / mA * secondsPerHour
+    let charging = target > percent
+    guard abs(mA) >= minEstimableCurrentMilliamps, charging == (mA > 0) else { return nil }
+    let mAhPerPercent = Double(capacity) / 100
+    let hours = charging ? chargeHours(from: percent, to: target, mAhPerPercent: mAhPerPercent, milliamps: mA)
+                         : Double(target - percent) * mAhPerPercent / mA
+    let t = hours * secondsPerHour
     return t <= maxTimeEstimate ? max(t, minTimeEstimate) : nil
+}
+
+private func chargeHours(from percent: Int, to target: Int, mAhPerPercent: Double, milliamps mA: Double) -> Double {
+    let taperStartMA = mA / taperCurrentShare(atPercent: percent)
+    let fullCurrentHours = Double(max(0, min(target, chargeTaperStartPercent) - percent)) * mAhPerPercent / mA
+    guard target > chargeTaperStartPercent else { return fullCurrentHours }
+    let taperSpanMAh = Double(100 - chargeTaperStartPercent) * mAhPerPercent
+    let taperHours = taperSpanMAh / ((1 - chargeTaperEndCurrentFraction) * taperStartMA)
+        * log(taperCurrentShare(atPercent: max(percent, chargeTaperStartPercent)) / taperCurrentShare(atPercent: target))
+    return fullCurrentHours + taperHours
+}
+
+private func taperCurrentShare(atPercent p: Int) -> Double {
+    let intoTaper = Double(max(0, p - chargeTaperStartPercent)) / Double(100 - chargeTaperStartPercent)
+    return 1 - (1 - chargeTaperEndCurrentFraction) * intoTaper
 }
 
 // exception: macOS 26.4+ now and then charges to 100 % to recalibrate the gauge, a cause readable only with a private entitlement, so the episode is detected from its effect (https://github.com/Vlor999/chargekeeper/commit/baf88803900433fb05626892d550d114dee14677)
