@@ -13,6 +13,13 @@ func d(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
 
 func useLanguage(_ code: String) { UserDefaults.standard.register(defaults: [languageKey: code]) }
 
+func withPreferredLanguage(_ preferred: String, _ check: () -> Void) {
+    let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    UserDefaults.standard.setVolatileDomain(arguments.merging(["AppleLanguages": [preferred]]) { $1 }, forName: UserDefaults.argumentDomain)
+    defer { UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain) }
+    check()
+}
+
 let calibrationDoneEntry = HistoryEntry(event: .calibrationDone, capacityBeforeMAh: 7100, capacityAfterMAh: 7180, healthBeforePercent: 82.76, healthAfterPercent: 83.69, cycles: 278)
 
 let pw = SoCPower(cpuWatts: 1, gpuWatts: 0, aneWatts: 0)
@@ -230,40 +237,35 @@ func numbersDatesAndDurationsFollowFrench() {
 func numberUsesTheLanguageDecimalSeparatorWithoutGrouping() {
     defer { useLanguage("system") }
     useLanguage("en")
-    assert(number(82.8, decimals: 1) == "82.8" && number(7180) == "7180")
+    withPreferredLanguage("en-US") { assert(number(82.8, decimals: 1) == "82.8" && number(7180) == "7180") }
     useLanguage("fr")
-    assert(number(82.8, decimals: 1) == "82,8" && number(7180) == "7180")
+    withPreferredLanguage("fr-FR") { assert(number(82.8, decimals: 1) == "82,8" && number(7180) == "7180") }
 }
 
 func celsiusShowsOneDecimalOrDashesWhenUnknown() {
     defer { useLanguage("system") }
     useLanguage("en")
-    assert(celsius(31.24) == "31.2 °C" && celsius(nil) == "--")
+    withPreferredLanguage("en-US") { assert(celsius(31.24) == "31.2 °C" && celsius(nil) == "--") }
     useLanguage("fr")
-    assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--")
+    withPreferredLanguage("fr-FR") { assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--") }
 }
 
 func wattsShowOneDecimal() {
     defer { useLanguage("system") }
     useLanguage("en")
-    assert(watts(13.3) == "13.3 W")
+    withPreferredLanguage("en-US") { assert(watts(13.3) == "13.3 W") }
     useLanguage("fr")
-    assert(watts(13.3) == "13,3 W")
+    withPreferredLanguage("fr-FR") { assert(watts(13.3) == "13,3 W") }
 }
 
 func dateTimeShowsAbbreviatedDateAndShortTime() {
-    let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-    UserDefaults.standard.setVolatileDomain(["AppleLanguages": ["en-US"]], forName: UserDefaults.argumentDomain)
-    defer {
-        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
-        useLanguage("system")
-    }
+    defer { useLanguage("system") }
     var local = Calendar(identifier: .gregorian); local.timeZone = .current
     let oct30 = local.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 9, minute: 41))!
     useLanguage("en")
-    assert(dateTime(oct30) == "Oct 30, 2026 at 9:41\u{202F}AM", dateTime(oct30))
+    withPreferredLanguage("en-US") { assert(dateTime(oct30) == "Oct 30, 2026 at 9:41\u{202F}AM", dateTime(oct30)) }
     useLanguage("fr")
-    assert(dateTime(oct30) == "30 oct. 2026 à 9:41", dateTime(oct30))
+    withPreferredLanguage("fr-FR") { assert(dateTime(oct30) == "30 oct. 2026 à 9:41", dateTime(oct30)) }
 }
 
 func approxDurationRoundsToMinutesThenHoursAndMinutes() {
