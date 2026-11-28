@@ -74,7 +74,7 @@ func tickAtKeepAwakeEnd() {
     keepAwakeEndTimer?.invalidate()
     keepAwakeEndTimer = nil
     guard let until = daemon.s.runtime.keepAwakeUntil, until != .distantFuture else { return }
-    let t = Timer(fire: until, interval: 0, repeats: false) { _ in daemon.tick() }
+    let t = Timer(fire: until, interval: 0, repeats: false) { _ in daemon.tick(); tickAtKeepAwakeEnd() }
     RunLoop.main.add(t, forMode: .default)
     keepAwakeEndTimer = t
 }
