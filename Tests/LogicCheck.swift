@@ -811,9 +811,9 @@ func healthChartStringsAreTranslated() {
 
 func settingsSearchIgnoresAccentsCaseAndRequiresAllWords() {
     let ids = { (q: String) in searchSettings(q).map(\.id) }
-    assert(ids("login") == ["openAtLogin"] && ids("connexion") == ["openAtLogin"])
-    assert(ids("REVEIL") == ["catchUp"] && ids("réveil") == ids("reveil"))
-    assert(ids("niveau veille") == ["sleepFreeze"] && ids("login quit").isEmpty && ids("  ").isEmpty)
+    assert(ids("login") == [SettingsRowID.openAtLogin] && ids("connexion") == [.openAtLogin])
+    assert(ids("REVEIL") == [.catchUp] && ids("réveil") == ids("reveil"))
+    assert(ids("niveau veille") == [.sleepFreeze] && ids("login quit").isEmpty && ids("  ").isEmpty)
 }
 
 func settingsIndexIdsAreUnique() {
