@@ -171,7 +171,6 @@ private func milliamps(amperage: Int?, watts: Double) -> Double {
     amperage.map(Double.init) ?? watts * 1000 / nominalThreeCellPackVolts
 }
 
-// ponytail: the display holds 99 % for about 16 min at the end of a charge, so the time to 100 % reads about 13 min short from 92 % up (https://github.com/Vlor999/chargekeeper/issues/86)
 func timeToTarget(percent: Int, target: Int, capacity: Int?, amperage: Int?, watts: Double) -> TimeInterval? {
     guard let capacity, capacity > 0, target != percent else { return nil }
     let mA = milliamps(amperage: amperage, watts: watts)
