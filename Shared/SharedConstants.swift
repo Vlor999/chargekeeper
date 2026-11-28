@@ -20,6 +20,7 @@ let logRetentionDaysRange = 1...90
 let logRetentionDaysDefault = 7
 let logMaxBytesPerDayFile = 5 * 1024 * 1024
 let logFullNoticeReserveBytes = 1024
+let groupOrOtherWriteBits: mode_t = 0o022
 let powermetricsPath = "/usr/bin/powermetrics"
 let assumedPowerSampleInterval: TimeInterval = 5
 let appMaxRefreshInterval: TimeInterval = 2

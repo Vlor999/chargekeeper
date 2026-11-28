@@ -33,10 +33,6 @@ enum DiagnosticLog {
         _ = line.utf8CString.withUnsafeBufferPointer { Foundation.write(fd, $0.baseAddress, $0.count - 1) }
     }
 
-    private static func isRootOwnedRegularFileWithoutHardLinks(_ st: stat) -> Bool {
-        st.st_mode & S_IFMT == S_IFREG && st.st_uid == 0 && st.st_nlink == 1
-    }
-
     static func purgeExpiredFiles(_ now: Date) {
         purgedDay = logDay(now)
         guard isRootOnlyWritableFolder(logDir), let names = try? FileManager.default.contentsOfDirectory(atPath: logDir) else { return }
@@ -61,7 +57,7 @@ enum DiagnosticLog {
 
     private static func isRootOnlyWritableFolder(_ path: String) -> Bool {
         var st = stat()
-        return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFDIR && st.st_uid == 0 && st.st_mode & groupOrOtherWriteBits == 0
+        return lstat(path, &st) == 0 && isRootOwnedFolderWithoutGroupOrOtherWrite(st)
     }
 }
 
