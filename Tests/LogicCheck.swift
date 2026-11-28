@@ -1038,6 +1038,47 @@ func legacyInstallNamesUnchanged() {
                                                         "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
 }
 
+func taskMergeKeepsNewestLastRunPerTask() {
+    let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+    let current = [
+        ScheduledTask(id: a, lastRun: at(200)), ScheduledTask(id: b, lastRun: at(100)),
+        ScheduledTask(id: c, lastRun: at(300)), ScheduledTask(id: d, lastRun: nil),
+    ]
+    let incoming = [
+        ScheduledTask(id: a, value: 60, lastRun: at(100)), ScheduledTask(id: b, lastRun: at(200)),
+        ScheduledTask(id: c, lastRun: nil), ScheduledTask(id: d, lastRun: at(50)), ScheduledTask(id: UUID(), lastRun: nil),
+    ]
+    let merged = tasksKeepingNewestLastRun(incoming, current: current)
+    assert(merged.map(\.lastRun) == [at(200), at(200), at(300), at(50), nil])
+    assert(merged.map(\.id) == incoming.map(\.id) && merged[0].value == 60)
+}
+
+func fileStat(_ type: mode_t, mode: mode_t, uid: uid_t = 0, links: nlink_t = 1) -> stat {
+    var st = stat()
+    st.st_mode = type | mode
+    st.st_uid = uid
+    st.st_nlink = links
+    return st
+}
+
+func logFileMustBeRootOwnedRegularWithOneLink() {
+    assert(isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, uid: 501)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, links: 0)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, links: 2)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFLNK, mode: 0o644)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFDIR, mode: 0o755)))
+}
+
+func logFolderMustBeRootOwnedWithoutGroupOrOtherWrite() {
+    assert(isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFDIR, mode: 0o755)))
+    assert(!isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFDIR, mode: 0o755, uid: 501)))
+    assert(!isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFDIR, mode: 0o775)))
+    assert(!isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFDIR, mode: 0o757)))
+    assert(!isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFLNK, mode: 0o755)))
+    assert(!isRootOwnedFolderWithoutGroupOrOtherWrite(fileStat(S_IFREG, mode: 0o755)))
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
@@ -1165,6 +1206,9 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    taskMergeKeepsNewestLastRunPerTask,
+    logFileMustBeRootOwnedRegularWithOneLink,
+    logFolderMustBeRootOwnedWithoutGroupOrOtherWrite,
 ]
 for check in checks { check() }
 print("logic ok")

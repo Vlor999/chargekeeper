@@ -48,3 +48,11 @@ func parseLogLine<S: StringProtocol>(_ s: S) -> LogLine? {
     guard f.count >= 2, let date = ISO8601DateFormatter().date(from: String(f[0])), let level = LogLevel(rawValue: String(f[1])) else { return nil }
     return LogLine(date: date, level: level, message: f.count == 3 ? String(f[2]) : "")
 }
+
+func isRootOwnedRegularFileWithoutHardLinks(_ st: stat) -> Bool {
+    st.st_mode & S_IFMT == S_IFREG && st.st_uid == 0 && st.st_nlink == 1
+}
+
+func isRootOwnedFolderWithoutGroupOrOtherWrite(_ st: stat) -> Bool {
+    st.st_mode & S_IFMT == S_IFDIR && st.st_uid == 0 && st.st_mode & groupOrOtherWriteBits == 0
+}
