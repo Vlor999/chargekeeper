@@ -1064,6 +1064,7 @@ func fileStat(_ type: mode_t, mode: mode_t, uid: uid_t = 0, links: nlink_t = 1) 
 func logFileMustBeRootOwnedRegularWithOneLink() {
     assert(isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644)))
     assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, uid: 501)))
+    assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, links: 0)))
     assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFREG, mode: 0o644, links: 2)))
     assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFLNK, mode: 0o644)))
     assert(!isRootOwnedRegularFileWithoutHardLinks(fileStat(S_IFDIR, mode: 0o755)))
