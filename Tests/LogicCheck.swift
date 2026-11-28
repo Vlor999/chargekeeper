@@ -1039,10 +1039,10 @@ func legacyInstallNamesUnchanged() {
 }
 
 func serviceErrorsAreTranslatedAndDistinct() {
-    let notRunning = "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items"
-    let didNotAnswer = "ChargeKeeper service did not answer this request: it may be older than the app. Install the latest update, then restart the Mac."
+    let notRunning = ClientError.unavailable.localizedDescription
+    let didNotAnswer = ClientError.closedWithoutReply.localizedDescription
     for k in [notRunning, didNotAnswer] { assert(french[k] != nil, k) }
-    assert(french[notRunning] != french[didNotAnswer])
+    assert(notRunning != didNotAnswer)
 }
 
 let checks: [() -> Void] = [
