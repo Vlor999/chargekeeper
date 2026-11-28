@@ -1038,6 +1038,13 @@ func legacyInstallNamesUnchanged() {
                                                         "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
 }
 
+func serviceErrorsAreTranslatedAndDistinct() {
+    let notRunning = "ChargeKeeper service not running: open ChargeKeeper and enable it in System Settings > Login Items"
+    let didNotAnswer = "ChargeKeeper service did not answer this request: it may be older than the app. Install the latest update, then restart the Mac."
+    for k in [notRunning, didNotAnswer] { assert(french[k] != nil, k) }
+    assert(french[notRunning] != french[didNotAnswer])
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
@@ -1165,6 +1172,7 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    serviceErrorsAreTranslatedAndDistinct,
 ]
 for check in checks { check() }
 print("logic ok")

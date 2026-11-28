@@ -108,7 +108,7 @@ final class AppModel: ObservableObject {
         case .setConfig(let c) where NoticeKind.calibration.enabled && c.tasks.contains { $0.enabled && $0.action == .calibrate }: requestNotificationPermission()
         default: break
         }
-        do { status = try send(cmd); error = nil } catch { self.error = error.localizedDescription }
+        do { status = try send(cmd); error = nil } catch { self.error = tr(error.localizedDescription) }
         if let s = status { notifyCalibration(s.lastCalibration) }
     }
 
