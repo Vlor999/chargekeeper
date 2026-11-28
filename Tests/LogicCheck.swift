@@ -1038,6 +1038,52 @@ func legacyInstallNamesUnchanged() {
                                                         "com.vlor999.jauge.calibrationNeedsAdapter", "com.vlor999.jauge.limitReached"])
 }
 
+func flowSideStacksSharesWithGaps() {
+    let side = FlowSideLayout(watts: [30, 10], totalHeight: 106, gap: 6)
+    assert(side.shares == [0.75, 0.25] && side.height == 100 && side.tops == [0, 81])
+}
+
+func singleFlowNodeFillsItsSide() {
+    let side = FlowSideLayout(watts: [7], totalHeight: 90, gap: 6)
+    assert(side.shares == [1] && side.height == 90 && side.tops == [0])
+}
+
+func flowBandsPairSourcesWithSinksInOrder() {
+    let bands = flowBands(from: FlowSideLayout(watts: [30, 10], totalHeight: 106, gap: 6), to: FlowSideLayout(watts: [10, 30], totalHeight: 106, gap: 6))
+    assert(bands == [FlowBand(source: 0, sink: 0, sourceTop: 0, sourceHeight: 25, sinkTop: 0, sinkHeight: 25),
+                     FlowBand(source: 0, sink: 1, sourceTop: 25, sourceHeight: 50, sinkTop: 31, sinkHeight: 50),
+                     FlowBand(source: 1, sink: 1, sourceTop: 81, sourceHeight: 25, sinkTop: 81, sinkHeight: 25)])
+}
+
+func oneFlowSinkTakesEveryBand() {
+    let bands = flowBands(from: FlowSideLayout(watts: [30, 10], totalHeight: 106, gap: 6), to: FlowSideLayout(watts: [40], totalHeight: 100, gap: 6))
+    assert(bands == [FlowBand(source: 0, sink: 0, sourceTop: 0, sourceHeight: 75, sinkTop: 0, sinkHeight: 75),
+                     FlowBand(source: 1, sink: 0, sourceTop: 81, sourceHeight: 25, sinkTop: 75, sinkHeight: 25)])
+}
+
+func noFlowSourceDrawsNoBand() {
+    let empty = FlowSideLayout(watts: [], totalHeight: 100, gap: 6)
+    assert(empty.shares.isEmpty && empty.tops.isEmpty)
+    assert(flowBands(from: empty, to: FlowSideLayout(watts: [5], totalHeight: 100, gap: 6)).isEmpty)
+}
+
+func flowBandUnderHalfAPointIsSkippedButKeepsItsRoom() {
+    let bands = flowBands(from: FlowSideLayout(watts: [1], totalHeight: 70, gap: 6), to: FlowSideLayout(watts: [1, 255], totalHeight: 70, gap: 6))
+    assert(bands == [FlowBand(source: 0, sink: 1, sourceTop: 0.2734375, sourceHeight: 69.7265625, sinkTop: 6.25, sinkHeight: 63.75)])
+}
+
+func flowSharesThatDoNotSumExactlyStillPairEveryNode() {
+    let bands = flowBands(from: FlowSideLayout(watts: [1, 1, 1], totalHeight: 112, gap: 6), to: FlowSideLayout(watts: [2, 1], totalHeight: 106, gap: 6))
+    assert(bands.map { [$0.source, $0.sink] } == [[0, 0], [1, 0], [2, 1]])
+    assert(zip(bands.map(\.sinkTop), [0, 100.0 / 3, 72.666_666_666_666_67]).allSatisfy { abs($0 - $1) < 1e-9 })
+}
+
+func flowCrestStartsBeforeTheSourceAndWrapsEachPeriod() {
+    assert(flowCrest(phaseSeconds: 0, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
+    assert(flowCrest(phaseSeconds: 1.4, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
+    assert(abs(flowCrest(phaseSeconds: 0.7, fromX: 92, toX: 292).centerX - 192) < 1e-9)
+}
+
 let checks: [() -> Void] = [
     aboveLimitHoldsBelowLimitCharges,
     manualDischargeStopsAtLimit,
@@ -1165,6 +1211,14 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    flowSideStacksSharesWithGaps,
+    singleFlowNodeFillsItsSide,
+    flowBandsPairSourcesWithSinksInOrder,
+    oneFlowSinkTakesEveryBand,
+    noFlowSourceDrawsNoBand,
+    flowBandUnderHalfAPointIsSkippedButKeepsItsRoom,
+    flowSharesThatDoNotSumExactlyStillPairEveryNode,
+    flowCrestStartsBeforeTheSourceAndWrapsEachPeriod,
 ]
 for check in checks { check() }
 print("logic ok")
