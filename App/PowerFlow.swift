@@ -91,7 +91,7 @@ private struct FlowSide {
 
     init(_ nodes: [PowerFlow.Node], totalHeight: CGFloat, gap: CGFloat) {
         self.nodes = nodes
-        layout = FlowSideLayout(watts: nodes.map(\.watts), totalHeight: totalHeight, gap: gap)
+        layout = FlowSideLayout(watts: nodes.map(\.watts), totalHeight: totalHeight, gap: gap, minNodeHeight: flowNodeMinHeightPoints)
     }
 }
 
@@ -159,7 +159,7 @@ private struct FlowCanvas {
     }
 
     private func drawNodes(_ side: FlowSide, x: CGFloat, left: Bool) {
-        let heights = side.layout.shares.map { max($0 * side.layout.height, 2) }
+        let heights = side.layout.heights
         let ys = spreadLabels(zip(side.layout.tops, heights).map { $0 + $1 / 2 }, gap: flowCaptionLineHeightPoints, height: size.height)
         for (((n, top), h), y) in zip(zip(zip(side.nodes, side.layout.tops), heights), ys) {
             ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))

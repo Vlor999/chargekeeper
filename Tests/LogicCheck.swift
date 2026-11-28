@@ -1097,6 +1097,27 @@ func flowSharesThatDoNotSumExactlyStillPairEveryNode() {
     assert(subUlpRemainders.map { [$0.source, $0.sink] } == [[0, 0], [1, 0], [2, 1]] && subUlpRemainders.last?.sourceTop == 61.99999999999999)
 }
 
+func roundedToMillipoints(_ values: [Double]) -> [Double] { values.map { ($0 * 1000).rounded() / 1000 } }
+
+func thinFlowNodeKeepsTheMinimumHeight() {
+    let side = FlowSideLayout(watts: [1, 99], totalHeight: 106, gap: 6, minNodeHeight: 8)
+    assert(roundedToMillipoints(side.heights) == [8, 92] && roundedToMillipoints(side.tops) == [0, 14])
+    let even = FlowSideLayout(watts: [1, 1], totalHeight: 106, gap: 6, minNodeHeight: 8)
+    assert(even.heights == [50, 50] && even.tops == [0, 56])
+    assert(FlowSideLayout(watts: [0, 1], totalHeight: 106, gap: 6, minNodeHeight: 8).heights == [8, 92])
+}
+
+func crowdedFlowSideKeepsHalfItsHeightProportional() {
+    let side = FlowSideLayout(watts: [1, 1, 1, 1, 12], totalHeight: 64, gap: 6, minNodeHeight: 8)
+    assert(side.heights == [4, 4, 4, 4, 24])
+}
+
+func thinFlowNodeBandsFillItsBar() {
+    let bands = flowBands(from: FlowSideLayout(watts: [1, 99], totalHeight: 106, gap: 6, minNodeHeight: 8), to: FlowSideLayout(watts: [100], totalHeight: 100, gap: 6, minNodeHeight: 8))
+    assert(roundedToMillipoints(bands.map(\.sourceHeight)) == [8, 92] && roundedToMillipoints(bands.map(\.sourceTop)) == [0, 14])
+    assert(roundedToMillipoints(bands.map(\.sinkHeight)) == [1, 99])
+}
+
 func flowCrestStartsBeforeTheSourceAndWrapsEachPeriod() {
     assert(flowCrest(phaseSeconds: 0, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
     assert(flowCrest(phaseSeconds: 1.4, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
@@ -1242,6 +1263,9 @@ let checks: [() -> Void] = [
     flowCrestStartsBeforeTheSourceAndWrapsEachPeriod,
     firstPowerFlowLabelsStayInsideChart,
     crowdedPowerFlowLabelsOverlapEvenlyWithinHeight,
+    thinFlowNodeKeepsTheMinimumHeight,
+    crowdedFlowSideKeepsHalfItsHeightProportional,
+    thinFlowNodeBandsFillItsBar,
 ]
 for check in checks { check() }
 print("logic ok")

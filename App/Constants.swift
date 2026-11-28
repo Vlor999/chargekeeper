@@ -25,6 +25,7 @@ let animationFrameIntervalSeconds = 1.0 / 30
 let flowDeviceNamesMinWidthPoints: CGFloat = 400
 let flowNamedSinkLabelColumnPoints: CGFloat = 180
 let flowCaptionLineHeightPoints = 14.0
+let flowNodeMinHeightPoints = 8.0
 let flowMarqueePauseSeconds = 1.5
 let flowMarqueeSpeedPointsPerSecond = 25.0
 let flowMarqueeSpacingPoints: CGFloat = 24
