@@ -6,7 +6,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
-enum SettingsRowID {
+enum SettingsRowID: CaseIterable {
     case language, openAtLogin, notifications, autoUpdate, version, support,
          feedback, links, about, quit, macOSBattery, autoDischarge,
          idle, heat, keepLimit, sleepFreeze, sleepPrevent, keepAwakeLid,

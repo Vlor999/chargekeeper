@@ -820,6 +820,10 @@ func settingsIndexIdsAreUnique() {
     assert(Set(settingsIndex.map(\.id)).count == settingsIndex.count)
 }
 
+func everySettingsRowIDHasAnIndexEntry() {
+    assert(Set(settingsIndex.map(\.id)) == Set(SettingsRowID.allCases))
+}
+
 func settingsIndexIsTranslated() {
     for e in settingsIndex { for k in [e.label, e.description].compactMap({ $0 }) { assert(french[k] != nil, k) } }
 }
@@ -1136,6 +1140,7 @@ let checks: [() -> Void] = [
     healthChartStringsAreTranslated,
     settingsSearchIgnoresAccentsCaseAndRequiresAllWords,
     settingsIndexIdsAreUnique,
+    everySettingsRowIDHasAnIndexEntry,
     settingsIndexIsTranslated,
     logFileNameRoundTripsPerUtcDay,
     foreignLogFileNamesAreRejected,
