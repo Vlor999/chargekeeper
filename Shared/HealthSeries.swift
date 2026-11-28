@@ -3,7 +3,7 @@ import Foundation
 func healthSample(_ b: BatterySnapshot, calibration: Bool = false) -> HealthSample? {
     guard let m = b.fullChargeCapacityMAh, m > 0, let d = b.designCapacityMAh, d > 0 else { return nil }
     return HealthSample(date: b.date, fullChargeCapacityMAh: m, nominalCapacityMAh: b.nominalCapacityMAh, designCapacityMAh: d,
-                        cycleCount: b.cycleCount, fromCalibration: calibration ? true : nil)
+                        cycleCount: b.cycleCount, fromCalibration: calibration)
 }
 
 func healthSampleDue(_ series: [HealthSample], now: Date, calendar: Calendar = .current) -> Bool {
@@ -21,7 +21,7 @@ func addHealthSample(_ series: [HealthSample], _ p: HealthSample, now: Date, cal
 private func insertingInDateOrder(_ p: HealthSample, into series: [HealthSample]) -> [HealthSample]? {
     var all = series
     if let i = all.firstIndex(where: { $0.date == p.date }) {
-        guard p.fromCalibration == true, all[i].fromCalibration != true else { return nil }
+        guard p.fromCalibration, !all[i].fromCalibration else { return nil }
         all.remove(at: i)
     }
     all.insert(p, at: all.firstIndex { $0.date > p.date } ?? all.count)
@@ -31,7 +31,7 @@ private func insertingInDateOrder(_ p: HealthSample, into series: [HealthSample]
 private func thinnedToWeekly(_ series: [HealthSample], before cutoff: Date, calendar cal: Calendar) -> [HealthSample] {
     var weeks = Set<DateComponents>()
     return series.filter { s in
-        s.date >= cutoff || s.fromCalibration == true || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
+        s.date >= cutoff || s.fromCalibration || weeks.insert(cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: s.date)).inserted
     }
 }
 
@@ -40,7 +40,7 @@ private func cappedDroppingCalibrationLast(_ series: [HealthSample]) -> [HealthS
     var excess = kept.count - healthMaxSamples
     if excess > 0 {
         kept = kept.filter { s in
-            guard excess > 0, s.fromCalibration != true else { return true }
+            guard excess > 0, !s.fromCalibration else { return true }
             excess -= 1
             return false
         }

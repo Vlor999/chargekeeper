@@ -41,7 +41,7 @@ struct HealthChartSection: View {
             } else {
                 let text = healthChange(shown).map(summary)
                 VStack(alignment: .leading, spacing: 8) {
-                    legend(nominal: shown.contains { $0.nominalCapacityMAh != nil }, calibrations: shown.contains { $0.fromCalibration == true })
+                    legend(nominal: shown.contains { $0.nominalCapacityMAh != nil }, calibrations: shown.contains(where: \.fromCalibration))
                     chart(shown)
                         .chartAsSingleAccessibilityElement(label: tr("Health over time") + ", " + range.label, value: text ?? "")
                     if let text { Text(text).font(.caption).foregroundStyle(.secondary) }
@@ -93,7 +93,7 @@ struct HealthChartSection: View {
     }
 
     func calibrationDotsRingedOnHealthLine(_ shown: [HealthSample]) -> some ChartContent {
-        ForEach(Array(shown.filter { $0.fromCalibration == true }.enumerated()), id: \.offset) { _, s in
+        ForEach(Array(shown.filter(\.fromCalibration).enumerated()), id: \.offset) { _, s in
             PointMark(x: .value(tr("Date"), s.date), y: .value(tr("Health"), s.healthPercent))
                 .symbolSize(calibrationRingSymbolSize).foregroundStyle(Self.surface)
                 .accessibilityHidden(true)
@@ -109,7 +109,7 @@ struct HealthChartSection: View {
             key(Self.raw, tr("Health") + " " + percent(s.healthPercent))
             if let n = s.nominalHealthPercent { key(Self.nominal, tr("Health (nominal)") + " " + percent(n), dashed: true) }
             if let c = s.cycleCount { Text(tr("Cycle count") + " " + String(c)).font(.caption).foregroundStyle(.secondary) }
-            if s.fromCalibration == true { Text(tr("Calibration")).font(.caption).foregroundStyle(.secondary) }
+            if s.fromCalibration { Text(tr("Calibration")).font(.caption).foregroundStyle(.secondary) }
         }
         .padding(6)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))

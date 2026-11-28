@@ -213,8 +213,7 @@ struct HealthSample: Codable, Equatable {
     var nominalCapacityMAh: Int?
     var designCapacityMAh: Int
     var cycleCount: Int?
-    // ponytail: `nil` means false, a Bool with a lenient decode would say it (https://github.com/Vlor999/chargekeeper/issues/58)
-    var fromCalibration: Bool?
+    var fromCalibration: Bool
 
     var healthPercent: Double { percentOfDesignCapacity(fullChargeCapacityMAh, designCapacityMAh: max(designCapacityMAh, 1)) }
     var nominalHealthPercent: Double? {
@@ -225,6 +224,18 @@ struct HealthSample: Codable, Equatable {
         case date, cycleCount
         case fullChargeCapacityMAh = "maxCapacity", nominalCapacityMAh = "nominalCapacity", designCapacityMAh = "designCapacity"
         case fromCalibration = "calibration"
+    }
+}
+
+extension HealthSample {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(date: try c.decode(Date.self, forKey: .date),
+                  fullChargeCapacityMAh: try c.decode(Int.self, forKey: .fullChargeCapacityMAh),
+                  nominalCapacityMAh: try c.decodeIfPresent(Int.self, forKey: .nominalCapacityMAh),
+                  designCapacityMAh: try c.decode(Int.self, forKey: .designCapacityMAh),
+                  cycleCount: try c.decodeIfPresent(Int.self, forKey: .cycleCount),
+                  fromCalibration: try c.decodeIfPresent(Bool.self, forKey: .fromCalibration) ?? false)
     }
 }
 
