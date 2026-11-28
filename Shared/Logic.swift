@@ -189,7 +189,7 @@ private func chargeHours(from percent: Int, to target: Int, mAhPerPercent: Doubl
     guard target > chargeTaperStartPercent else { return fullCurrentHours }
     let taperSpanMAh = Double(100 - chargeTaperStartPercent) * mAhPerPercent
     let taperHours = taperSpanMAh / ((1 - chargeTaperEndCurrentFraction) * taperStartMA)
-        * log(taperCurrentShare(atPercent: max(percent, chargeTaperStartPercent)) / taperCurrentShare(atPercent: target))
+        * log(taperCurrentShare(atPercent: percent) / taperCurrentShare(atPercent: target))
     return fullCurrentHours + taperHours
 }
 
