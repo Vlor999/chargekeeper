@@ -227,6 +227,53 @@ func numbersDatesAndDurationsFollowFrench() {
     assert(tr("%@ to %@ %%", approxDuration(1500), "80") == "~25 min jusqu'à 80 %")
 }
 
+func numberUsesTheLanguageDecimalSeparatorWithoutGrouping() {
+    defer { useLanguage("system") }
+    useLanguage("en")
+    assert(number(82.8, decimals: 1) == "82.8" && number(7180) == "7180")
+    useLanguage("fr")
+    assert(number(82.8, decimals: 1) == "82,8" && number(7180) == "7180")
+}
+
+func celsiusShowsOneDecimalOrDashesWhenUnknown() {
+    defer { useLanguage("system") }
+    useLanguage("en")
+    assert(celsius(31.24) == "31.2 °C" && celsius(nil) == "--")
+    useLanguage("fr")
+    assert(celsius(31.24) == "31,2 °C" && celsius(nil) == "--")
+}
+
+func wattsShowOneDecimal() {
+    defer { useLanguage("system") }
+    useLanguage("en")
+    assert(watts(13.3) == "13.3 W")
+    useLanguage("fr")
+    assert(watts(13.3) == "13,3 W")
+}
+
+func dateTimeShowsAbbreviatedDateAndShortTime() {
+    let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    UserDefaults.standard.setVolatileDomain(["AppleLanguages": ["en-US"]], forName: UserDefaults.argumentDomain)
+    defer {
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        useLanguage("system")
+    }
+    var local = Calendar(identifier: .gregorian); local.timeZone = .current
+    let oct30 = local.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 9, minute: 41))!
+    useLanguage("en")
+    assert(dateTime(oct30) == "Oct 30, 2026 at 9:41\u{202F}AM", dateTime(oct30))
+    useLanguage("fr")
+    assert(dateTime(oct30) == "30 oct. 2026 à 9:41", dateTime(oct30))
+}
+
+func approxDurationRoundsToMinutesThenHoursAndMinutes() {
+    defer { useLanguage("system") }
+    useLanguage("en")
+    assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+    useLanguage("fr")
+    assert(approxDuration(1500) == "~25 min" && approxDuration(3900) == "~1 h 05 min")
+}
+
 func menuAndNotificationStringsAreTranslated() {
     useLanguage("fr")
     defer { useLanguage("system") }
@@ -1165,6 +1212,11 @@ let checks: [() -> Void] = [
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
     legacyInstallNamesUnchanged,
+    numberUsesTheLanguageDecimalSeparatorWithoutGrouping,
+    celsiusShowsOneDecimalOrDashesWhenUnknown,
+    wattsShowOneDecimal,
+    dateTimeShowsAbbreviatedDateAndShortTime,
+    approxDurationRoundsToMinutesThenHoursAndMinutes,
 ]
 for check in checks { check() }
 print("logic ok")
