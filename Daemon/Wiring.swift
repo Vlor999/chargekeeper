@@ -65,7 +65,7 @@ func watchSleep() {
 
 func watchPowerSources() {
     guard let src = IOPSNotificationCreateRunLoopSource({ _ in daemon.tick() }, nil)?.takeRetainedValue() else {
-        return log("power source notifications unavailable: battery read every \(serviceTimeCheckInterval) s only", .error)
+        return log("power source notifications unavailable: battery read every \(Int(serviceTimeCheckInterval)) s only", .error)
     }
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
 }
