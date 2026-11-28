@@ -1072,16 +1072,27 @@ func flowBandUnderHalfAPointIsSkippedButKeepsItsRoom() {
     assert(bands == [FlowBand(source: 0, sink: 1, sourceTop: 0.2734375, sourceHeight: 69.7265625, sinkTop: 6.25, sinkHeight: 63.75)])
 }
 
+func flowBandIsKeptOnlyWhenItsSourceSideExceedsHalfAPoint() {
+    let atHalfAPoint = flowBands(from: FlowSideLayout(watts: [1, 127], totalHeight: 70, gap: 6), to: FlowSideLayout(watts: [128], totalHeight: 200, gap: 6))
+    assert(atHalfAPoint == [FlowBand(source: 1, sink: 0, sourceTop: 6.5, sourceHeight: 63.5, sinkTop: 1.5625, sinkHeight: 198.4375)])
+    let justAboveHalfAPoint = flowBands(from: FlowSideLayout(watts: [1, 127], totalHeight: 102, gap: 6), to: FlowSideLayout(watts: [128], totalHeight: 64, gap: 6))
+    assert(justAboveHalfAPoint == [FlowBand(source: 0, sink: 0, sourceTop: 0, sourceHeight: 0.75, sinkTop: 0, sinkHeight: 0.5),
+                                   FlowBand(source: 1, sink: 0, sourceTop: 6.75, sourceHeight: 95.25, sinkTop: 0.5, sinkHeight: 63.5)])
+}
+
 func flowSharesThatDoNotSumExactlyStillPairEveryNode() {
     let bands = flowBands(from: FlowSideLayout(watts: [1, 1, 1], totalHeight: 112, gap: 6), to: FlowSideLayout(watts: [2, 1], totalHeight: 106, gap: 6))
     assert(bands.map { [$0.source, $0.sink] } == [[0, 0], [1, 0], [2, 1]])
     assert(zip(bands.map(\.sinkTop), [0, 100.0 / 3, 72.666_666_666_666_67]).allSatisfy { abs($0 - $1) < 1e-9 })
+    let subUlpRemainders = flowBands(from: FlowSideLayout(watts: [1, 2, 3], totalHeight: 112, gap: 6), to: FlowSideLayout(watts: [1, 1], totalHeight: 106, gap: 6))
+    assert(subUlpRemainders.map { [$0.source, $0.sink] } == [[0, 0], [1, 0], [2, 1]] && subUlpRemainders.last?.sourceTop == 61.99999999999999)
 }
 
 func flowCrestStartsBeforeTheSourceAndWrapsEachPeriod() {
     assert(flowCrest(phaseSeconds: 0, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
     assert(flowCrest(phaseSeconds: 1.4, fromX: 0, toX: 100) == FlowCrest(centerX: -15, halfWidth: 25))
-    assert(abs(flowCrest(phaseSeconds: 0.7, fromX: 92, toX: 292).centerX - 192) < 1e-9)
+    let midCycle = flowCrest(phaseSeconds: 0.7, fromX: 92, toX: 292)
+    assert(abs(midCycle.centerX - 192) < 1e-9 && midCycle.halfWidth == 50)
 }
 
 let checks: [() -> Void] = [
@@ -1217,6 +1228,7 @@ let checks: [() -> Void] = [
     oneFlowSinkTakesEveryBand,
     noFlowSourceDrawsNoBand,
     flowBandUnderHalfAPointIsSkippedButKeepsItsRoom,
+    flowBandIsKeptOnlyWhenItsSourceSideExceedsHalfAPoint,
     flowSharesThatDoNotSumExactlyStillPairEveryNode,
     flowCrestStartsBeforeTheSourceAndWrapsEachPeriod,
 ]
