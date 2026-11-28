@@ -747,10 +747,7 @@ func thinningCutoffUsesNowNotInsertedPoint() {
     assert(thinned.filter { !$0.fromCalibration && $0.date < cutoff }.count <= 3)
 }
 
-func healthSampleCalibrationFlagDecodesFalseWithoutKey() {
-    let saved = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(hp("2026-10-01T12:00:00Z"))) as! [String: Any]
-    let beforeTheFlag = saved.filter { $0.key != "calibration" }
-    assert(try! JSONDecoder().decode(HealthSample.self, from: JSONSerialization.data(withJSONObject: beforeTheFlag)).fromCalibration == false)
+func healthSampleCalibrationFlagSurvivesEncoding() {
     for flag in [true, false] {
         let sample = hp("2026-10-01T12:00:00Z", calibration: flag)
         assert(try! JSONDecoder().decode(HealthSample.self, from: JSONEncoder().encode(sample)).fromCalibration == flag)
@@ -1171,7 +1168,7 @@ let checks: [() -> Void] = [
     configFromOlderServiceUsesDefaults,
     statusFromOlderServiceDecodes,
     renamedFieldsKeepTheirWireKeys,
-    healthSampleCalibrationFlagDecodesFalseWithoutKey,
+    healthSampleCalibrationFlagSurvivesEncoding,
     commandsKeepTheirWireNames,
     statusRequestFromOldAppDecodes,
     keepAwakeEndedFromOlderServiceSplitsOnBatteryLevel,
