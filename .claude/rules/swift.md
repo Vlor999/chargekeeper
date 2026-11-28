@@ -8,7 +8,7 @@ paths:
 
 # Swift
 
-- Swift 5 language mode (`project.yml`). Main-thread code; the service runs on the main run loop (timer, socket source, sleep notifications), no locks.
+- Swift 5 language mode (`project.yml`). Main-thread code; the service runs on the main run loop (timers, socket source, sleep and power source notifications), no locks.
 - `Shared/`: code used by both the app and the service (model, pure policy, socket client). No AppKit/SwiftUI/IOKit there.
 - `Daemon/`: root service and CLI (`chargekeeperctl`). C/ObjC for SMC and private PowerUI lives in `Native.m` behind `Native.h`.
 - `App/`: SwiftUI. UI strings are English and go through `tr(...)`; add the French text to `App/Strings.swift` in the same change. Shortcuts strings go in `App/fr.lproj/Localizable.strings`.
