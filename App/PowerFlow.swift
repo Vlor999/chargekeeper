@@ -87,19 +87,11 @@ struct OnScreenAnimation<Content: View>: View {
 
 private struct FlowSide {
     let nodes: [PowerFlow.Node]
-    let sharesOfSide: [Double]
-    let height: CGFloat
-    let tops: [CGFloat]
+    let layout: FlowSideLayout
 
     init(_ nodes: [PowerFlow.Node], totalHeight: CGFloat, gap: CGFloat) {
         self.nodes = nodes
-        let total = nodes.map(\.watts).reduce(0, +)
-        let shares = nodes.map { $0.watts / total }
-        let sideHeight = totalHeight - gap * CGFloat(nodes.count - 1)
-        var y: CGFloat = 0
-        sharesOfSide = shares
-        height = sideHeight
-        tops = shares.map { let top = y; y += CGFloat($0) * sideHeight + gap; return top }
+        layout = FlowSideLayout(watts: nodes.map(\.watts), totalHeight: totalHeight, gap: gap)
     }
 }
 
@@ -132,29 +124,16 @@ private struct FlowCanvas {
     func draw() {
         guard !sources.isEmpty else { return }
         let src = FlowSide(sources, totalHeight: size.height, gap: gap), dst = FlowSide(sinks, totalHeight: size.height, gap: gap)
-        drawBandsPairedInOrder(from: src, to: dst)
+        for band in flowBands(from: src.layout, to: dst.layout) { drawBand(band, from: src.nodes[band.source], to: dst.nodes[band.sink]) }
         drawNodes(src, x: x0, left: true)
         drawNodes(dst, x: x1, left: false)
     }
 
-    private func drawBandsPairedInOrder(from src: FlowSide, to dst: FlowSide) {
-        var offS = src.tops, offD = dst.tops
-        var remS = src.sharesOfSide, remD = dst.sharesOfSide
-        var i = 0, j = 0
-        while i < src.nodes.count && j < dst.nodes.count {
-            let w = min(remS[i], remD[j])
-            let ha = CGFloat(w) * src.height, hb = CGFloat(w) * dst.height
-            if ha > 0.5 {
-                let band = bandPath(fromTop: offS[i], fromHeight: ha, toTop: offD[j], toHeight: hb)
-                ctx.fill(band, with: .linearGradient(Gradient(colors: [src.nodes[i].color.opacity(0.45), dst.nodes[j].color.opacity(0.45)]),
-                                                     startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x1, y: 0)))
-                drawCrest(in: band)
-            }
-            offS[i] += ha; offD[j] += hb
-            remS[i] -= w; remD[j] -= w
-            if remS[i] <= 1e-6 { i += 1 }
-            if remD[j] <= 1e-6 { j += 1 }
-        }
+    private func drawBand(_ band: FlowBand, from source: PowerFlow.Node, to sink: PowerFlow.Node) {
+        let path = bandPath(fromTop: band.sourceTop, fromHeight: band.sourceHeight, toTop: band.sinkTop, toHeight: band.sinkHeight)
+        ctx.fill(path, with: .linearGradient(Gradient(colors: [source.color.opacity(0.45), sink.color.opacity(0.45)]),
+                                             startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x1, y: 0)))
+        drawCrest(in: path)
     }
 
     private func bandPath(fromTop a: CGFloat, fromHeight ha: CGFloat, toTop b: CGFloat, toHeight hb: CGFloat) -> Path {
@@ -168,9 +147,8 @@ private struct FlowCanvas {
     }
 
     private func drawCrest(in band: Path) {
-        let cycleProgress = (phase / flowCrestPeriodSeconds).truncatingRemainder(dividingBy: 1)
-        let crest = CGFloat(cycleProgress) * flowCrestTravelRatio + flowCrestStartRatio
-        let x = x0 + (x1 - x0) * crest, w = (x1 - x0) * flowCrestHalfWidthRatio
+        let crest = flowCrest(phaseSeconds: phase, fromX: x0, toX: x1)
+        let x = crest.centerX, w = crest.halfWidth
         var g = ctx
         g.clip(to: band)
         g.fill(Path(CGRect(x: x - w, y: 0, width: 2 * w, height: size.height)),
@@ -181,9 +159,9 @@ private struct FlowCanvas {
     }
 
     private func drawNodes(_ side: FlowSide, x: CGFloat, left: Bool) {
-        let heights = zip(side.sharesOfSide, side.tops).map { max(CGFloat($0.0) * side.height, 2) }
-        let ys = spreadLabels(zip(side.tops, heights).map { Double($0 + $1 / 2) }, gap: flowCaptionLineHeightPoints, height: Double(size.height))
-        for (((n, top), h), y) in zip(zip(zip(side.nodes, side.tops), heights), ys) {
+        let heights = side.layout.shares.map { max($0 * side.layout.height, 2) }
+        let ys = spreadLabels(zip(side.layout.tops, heights).map { $0 + $1 / 2 }, gap: flowCaptionLineHeightPoints, height: size.height)
+        for (((n, top), h), y) in zip(zip(zip(side.nodes, side.layout.tops), heights), ys) {
             ctx.fill(Path(roundedRect: CGRect(x: left ? x : x - bar, y: top, width: bar, height: h), cornerRadius: 2), with: .color(n.color))
             let wattsText = Text("\(Image(systemName: n.icon)) \(number(n.watts, decimals: 1))\(portCeilingText(n)) W").font(.caption.monospacedDigit())
             let at = CGPoint(x: left ? x - 6 : x + 6, y: CGFloat(y))
