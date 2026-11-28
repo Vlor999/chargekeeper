@@ -294,6 +294,11 @@ func timeToFullFromAboveTaperFollowsTheFallingCurrent() {
     assert(abs(timeToTarget(percent: 90, target: 100, capacity: 5000, amperage: 1100, watts: 0)! - 2690.9) < 1)
 }
 
+func timeToLimitInsideTaperStopsAtTheLimit() {
+    assert(abs(timeToTarget(percent: 60, target: 80, capacity: 5000, amperage: 2000, watts: 0)! - 2379.8) < 1)
+    assert(abs(timeToTarget(percent: 40, target: 80, capacity: 5000, amperage: 2000, watts: 0)! - 4663.0) < 1)
+}
+
 func calibrationProgressReportsStepAndTarget() {
     assert(calibrationStep(.chargeFull) == (1, 5) && calibrationStep(.dischargeTo10) == (2, 5) && calibrationStep(.returnToLimit) == (5, 5))
     assert(calibrationTargetPercent(.dischargeTo10, limit: 80) == 10 && calibrationTargetPercent(.returnToLimit, limit: 80) == 80 && calibrationTargetPercent(.hold, limit: 80) == nil)
@@ -1175,6 +1180,7 @@ let checks: [() -> Void] = [
     legacyInstallNamesUnchanged,
     timeToFullFromBelowTaperAddsTheTaper,
     timeToFullFromAboveTaperFollowsTheFallingCurrent,
+    timeToLimitInsideTaperStopsAtTheLimit,
 ]
 for check in checks { check() }
 print("logic ok")
