@@ -21,13 +21,6 @@ enum CommandSource { case user, scheduledTask }
 func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(max(v, lo), hi) }
 func clamp(_ v: Int, to range: ClosedRange<Int>) -> Int { clamp(v, range.lowerBound, range.upperBound) }
 
-func tasksKeepingNewestLastRun(_ incoming: [ScheduledTask], current: [ScheduledTask]) -> [ScheduledTask] {
-    let currentLastRun = Dictionary(current.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
-    var tasks = incoming
-    for i in tasks.indices { if let l = currentLastRun[tasks[i].id] ?? nil, l > (tasks[i].lastRun ?? .distantPast) { tasks[i].lastRun = l } }
-    return tasks
-}
-
 final class Daemon {
     var s: Saved
     let hw = Backend()

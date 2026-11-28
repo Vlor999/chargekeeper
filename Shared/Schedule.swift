@@ -45,3 +45,10 @@ private func sameDayOfMonth(monthsAfterStart months: Int, of start: Date, calend
     c.month = monthIndex % 12 + 1
     return cal.date(from: c).flatMap { cal.component(.day, from: $0) == startComponents.day ? $0 : nil }
 }
+
+func tasksKeepingNewestLastRun(_ incoming: [ScheduledTask], current: [ScheduledTask]) -> [ScheduledTask] {
+    let currentLastRun = Dictionary(current.map { ($0.id, $0.lastRun) }, uniquingKeysWith: { a, _ in a })
+    var tasks = incoming
+    for i in tasks.indices { if let l = currentLastRun[tasks[i].id] ?? nil, l > (tasks[i].lastRun ?? .distantPast) { tasks[i].lastRun = l } }
+    return tasks
+}
